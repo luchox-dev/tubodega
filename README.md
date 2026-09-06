@@ -48,6 +48,21 @@ curl -s localhost:3000/v1/openapi.json | jq '.paths | keys'
 Si el correo existe en más de una organización, `login` responde
 `409 ambiguous-login` y hay que enviar `slug`.
 
+### Postman
+
+[`docs/postman/tubodega.postman_collection.json`](docs/postman/tubodega.postman_collection.json)
+trae todos los endpoints disponibles más una carpeta de casos de error, y
+[`tubodega.local.postman_environment.json`](docs/postman/tubodega.local.postman_environment.json)
+el entorno local. Importa ambos y ejecuta la colección en orden: el registro
+guarda `orgId`, el login guarda `accessToken` y `refreshToken`, y `slug`/`email`
+se generan únicos en cada corrida si están vacíos. Desde la terminal:
+
+```bash
+pnpm dlx newman run docs/postman/tubodega.postman_collection.json --env-var baseUrl=http://localhost:3000
+```
+
+La colección se actualiza en cada plan que añada endpoints.
+
 ## Layout
 
 ```
