@@ -27,6 +27,24 @@
       "compilerOptions": {
         "tsConfigPath": "apps/tubodega/tsconfig.app.json"
       }
+    },
+    "persistence": {
+      "type": "library",
+      "root": "libs/persistence",
+      "entryFile": "index",
+      "sourceRoot": "libs/persistence/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/persistence/tsconfig.lib.json"
+      }
+    },
+    "tenancy": {
+      "type": "library",
+      "root": "libs/tenancy",
+      "entryFile": "index",
+      "sourceRoot": "libs/tenancy/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/tenancy/tsconfig.lib.json"
+      }
     }
   }
 }

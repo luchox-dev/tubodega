@@ -6,5 +6,10 @@
     "declaration": false,
     "incremental": false
   },
-  "include": ["apps/**/*.ts", "libs/**/*.ts", "*.config.ts"]
+  "include": [
+    "apps/**/*.ts",
+    "libs/**/*.ts",
+    "test/**/*.ts",
+    "*.config.ts"
+  ]
 }

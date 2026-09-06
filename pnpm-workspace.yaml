@@ -2,7 +2,13 @@
 # key in package.json. No `packages:` key on purpose: this repo is a
 # NestJS-native monorepo with a single root package.json, not a pnpm workspace.
 
-# @swc/core ships a platform-native binary built by its install script; pnpm
-# blocks dependency build scripts by default, so it must be allowed explicitly.
+# pnpm blocks dependency build scripts by default; only the ones that ship a
+# platform-native binary the project actually needs are allowed explicitly.
 allowBuilds:
-  '@swc/core': true
+  '@swc/core': true        # SWC compiler binary (build + tests)
+  '@prisma/engines': true  # Prisma CLI engines (schema/migrations, dev only)
+  prisma: false            # its postinstall only generates a client we never use
+  '@scarf/scarf': false
+  esbuild: false
+  msgpackr-extract: false
+  workerd: false
