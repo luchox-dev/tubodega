@@ -24,7 +24,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:check": "prisma migrate diff --from-migrations libs/persistence/prisma/migrations --to-schema-datamodel libs/persistence/prisma/schema.prisma --shadow-database-url \"$SHADOW_DATABASE_URL\" --exit-code"
+    "db:check": "prisma migrate diff --from-migrations libs/persistence/prisma/migrations --to-schema libs/persistence/prisma/schema.prisma --exit-code"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

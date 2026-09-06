@@ -1,5 +1,8 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 import swc from 'unplugin-swc';
+
+const lib = (name: string) => fileURLToPath(new URL(`./libs/${name}/src/index.ts`, import.meta.url));
 
 // Integration (*.int-spec.ts), e2e (*.e2e-spec.ts) and property (*.prop-spec.ts)
 // tests: they need Postgres (docker compose up -d db). Unit tests live in
@@ -7,7 +10,14 @@ import swc from 'unplugin-swc';
 export default defineConfig({
   plugins: [swc.vite()],
   resolve: {
-    tsconfigPaths: true,
+    // Explicit aliases: tsconfig-based resolution would skip test files that
+    // the nearest libs/*/tsconfig.lib.json excludes. Keep in sync with
+    // tsconfig.json "paths" (one barrel file per library).
+    alias: {
+      '@app/common': lib('common'),
+      '@app/persistence': lib('persistence'),
+      '@app/tenancy': lib('tenancy'),
+    },
   },
   test: {
     globals: true,
