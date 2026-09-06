@@ -14,3 +14,7 @@ export * from './application/authorize.js';
 export * from './application/events.js';
 export * from './application/use-cases/create-organization.js';
 export * from './application/use-cases/authenticate.js';
+export * from './infrastructure/argon2-password-hasher.js';
+export * from './infrastructure/jose-token-issuer.js';
+export * from './infrastructure/crypto-random-token.js';
+export * from './tenancy.module.js';

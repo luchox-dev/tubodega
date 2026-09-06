@@ -48,6 +48,6 @@ EXPOSE 3000
 # 127.0.0.1, never localhost: BusyBox wget resolves localhost to [::1] while
 # the app binds IPv4 0.0.0.0.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/ || exit 1
+  CMD wget -qO- http://127.0.0.1:3000/v1/openapi.json || exit 1
 
 CMD ["node", "dist/apps/tubodega/main.js"]

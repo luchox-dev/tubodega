@@ -9,7 +9,18 @@ import { RefreshTokenDao } from './dao/refresh-token.dao.js';
 import { UserDao } from './dao/user.dao.js';
 import { UserRoleDao } from './dao/user-role.dao.js';
 
+import { KyselyOutboxEventPublisher } from './outbox/outbox-event-publisher.js';
+import { KyselyOrganizationRepository } from './repositories/organization.repository.js';
+import { KyselySessionRepository } from './repositories/session.repository.js';
+import { KyselyUserRepository } from './repositories/user.repository.js';
+
 const DAOS = [OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao];
+const ADAPTERS = [
+  KyselyOrganizationRepository,
+  KyselyUserRepository,
+  KyselySessionRepository,
+  KyselyOutboxEventPublisher,
+];
 
 /** Registered once by the root module; no domain library imports it (R-4). */
 @Module({
@@ -19,7 +30,8 @@ const DAOS = [OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEven
     KyselyUnitOfWork,
     { provide: UNIT_OF_WORK, useExisting: KyselyUnitOfWork },
     ...DAOS,
+    ...ADAPTERS,
   ],
-  exports: [KyselyFactory, TransactionContext, KyselyUnitOfWork, UNIT_OF_WORK, ...DAOS],
+  exports: [KyselyFactory, TransactionContext, KyselyUnitOfWork, UNIT_OF_WORK, ...DAOS, ...ADAPTERS],
 })
 export class PersistenceModule {}

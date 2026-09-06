@@ -20,4 +20,8 @@ export class RefreshTokenDao extends AbstractOrgDao<'refreshToken'> {
       .executeTakeFirst();
     return row ?? null;
   }
+  /** System context (refresh/logout resolve the session before an organization is fixed). */
+  async revoke(id: string, at: Date): Promise<void> {
+    await this.db.updateTable('refreshToken').set({ revokedAt: at }).where('id', '=', id).execute();
+  }
 }
