@@ -1,0 +1,8 @@
+# pnpm settings file. pnpm >= 12 reads settings from here, not from a "pnpm"
+# key in package.json. No `packages:` key on purpose: this repo is a
+# NestJS-native monorepo with a single root package.json, not a pnpm workspace.
+
+# @swc/core ships a platform-native binary built by its install script; pnpm
+# blocks dependency build scripts by default, so it must be allowed explicitly.
+allowBuilds:
+  '@swc/core': true
