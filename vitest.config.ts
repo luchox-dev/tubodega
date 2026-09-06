@@ -23,5 +23,15 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.spec.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['libs/*/src/**/*.ts', 'apps/tubodega/src/**/*.ts'],
+      exclude: ['**/*.spec.ts', '**/generated/**', '**/index.ts', '**/*.module.ts', 'apps/tubodega/src/main.ts'],
+      // Floors of docs/specs/06 §9, activated per directory as each lands (decision D-15).
+      thresholds: {
+        'libs/tenancy/src/domain/**': { lines: 95, branches: 95, functions: 95, statements: 95 },
+        'libs/tenancy/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
+      },
+    },
   },
 });
