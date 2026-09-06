@@ -2,7 +2,7 @@ import { Injectable, type CallHandler, type ExecutionContext, type NestIntercept
 import type { FastifyRequest } from 'fastify';
 import { from, lastValueFrom, type Observable } from 'rxjs';
 import { KyselyUnitOfWork, type TxScope } from '@app/persistence';
-import { requestState } from '../context/request-store.js';
+import { requestState } from './request-state.js';
 
 /**
  * Step 3 (spec 07 §3): one request, one transaction — reads included, because

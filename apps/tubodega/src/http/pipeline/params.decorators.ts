@@ -1,6 +1,6 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
-import { requestState } from './request-store.js';
+import { requestState } from './request-state.js';
 
 /** The definitive RequestContext (spec 10 §2), available after the identity interceptor. */
 export const Ctx = createParamDecorator((_data: unknown, context: ExecutionContext) => {

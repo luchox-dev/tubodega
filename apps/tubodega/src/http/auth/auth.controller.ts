@@ -1,9 +1,10 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Authenticate } from '@app/tenancy';
-import { Public } from '../auth/public.decorator.js';
-import { LoginDto, ProblemDetailsView, TokenPairView } from './dto.js';
-import { userView } from './views.js';
+import { Public } from '../pipeline/public.decorator.js';
+import { LoginDto, TokenPairView } from './auth.dto.js';
+import { ProblemDetailsView } from '../shared/shared.dto.js';
+import { userView } from '../shared/views.js';
 
 @ApiTags('auth')
 @Controller('auth')

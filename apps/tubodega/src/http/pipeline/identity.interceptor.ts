@@ -2,7 +2,7 @@ import { Inject, Injectable, type CallHandler, type ExecutionContext, type NestI
 import type { FastifyRequest } from 'fastify';
 import { from, switchMap, type Observable } from 'rxjs';
 import { InvalidCredentialsError, USER_REPOSITORY, type UserRepository } from '@app/tenancy';
-import { requestState } from '../context/request-store.js';
+import { requestState } from './request-state.js';
 
 /**
  * Step 4 (spec 07 §3): inside the transaction, with RLS active, load the user.

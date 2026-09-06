@@ -1,5 +1,5 @@
 import type { Organization, User } from '@app/tenancy';
-import type { OrganizationView, UserView } from './dto.js';
+import type { OrganizationView, UserView } from './shared.dto.js';
 
 export const userView = (u: User): UserView => ({
   id: u.id,

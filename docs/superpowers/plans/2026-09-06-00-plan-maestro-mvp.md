@@ -92,17 +92,25 @@ apps/tubodega/
     main.ts                              bootstrap: Fastify, ValidationPipe, OpenAPI, hooks
     app.module.ts                        raíz: enlaza puertos ↔ adaptadores
     http/
-      problem/problem-details.ts         forma RFC 9457; DomainErrorFilter; ValidationPipe → 400
-      context/trace-id.hook.ts           X-Request-Id → traceId (UUID válido o v7)
-      context/request-context.ts         RequestContext en AsyncLocalStorage
-      auth/auth.guard.ts, public.decorator.ts
-      tx/transaction.interceptor.ts      UnitOfWork.run + SET LOCAL + READ ONLY
-      identity/identity.interceptor.ts   carga usuario y roles dentro de la tx (T-6)
-      idempotency/idempotency.interceptor.ts, idempotency.store.ts, canonical-hash.ts
-      pagination/cursor-query.ts         limit/cursor/sort → Cursor/PageRequest; invalid-filter
-      rate-limit/rate-limit.interceptor.ts
-      openapi/openapi.ts                 documento + snapshot
-      <módulo>/*.controller.ts, *.dto.ts tenancy/, catalog/, inventory/, process/, alerts/
+      pipeline/                          los pasos de 07 §3, transversales a todo recurso:
+        trace-id.hook.ts                 X-Request-Id → traceId (UUID válido o v7)
+        request-state.ts                 estado por petición en el request de Fastify
+        params.decorators.ts             @Ctx (RequestContext definitivo), @Trace
+        public.decorator.ts, auth.guard.ts
+        transaction.interceptor.ts       runAs + set_config app.current_org + READ ONLY en GET
+        identity.interceptor.ts          carga usuario y roles dentro de la tx (T-6)
+        idempotency.interceptor.ts, idempotency.store.ts, canonical-hash.ts   (plan 2)
+        validation.pipe.ts, problem-details.ts, domain-error.filter.ts       RFC 9457
+        rate-limit.interceptor.ts                                            (plan 10)
+      shared/                            shared.dto.ts (UserView, ProblemDetailsView…), views.ts,
+                                         cursor-query.ts (limit/cursor/sort; invalid-filter)
+      openapi/openapi.controller.ts      documento generado + snapshot
+      <recurso>/                         una carpeta por recurso raíz de la URL, <recurso>.controller.ts
+                                         y <recurso>.dto.ts; subrecursos con el padre. Plan 1: organizations/,
+                                         auth/, me/. Después: users/, products/ (product-codes, batches,
+                                         product-media, import), codes/, custom-fields/, uploads/, nodes/,
+                                         movements/, stock/, process-templates/, process-instances/,
+                                         alerts/, alert-rules/
     adapters/
       tenancy/org-provisioner.adapter.ts
       catalog/movement-counter.adapter.ts, stock-checker.adapter.ts
@@ -376,7 +384,7 @@ Decisión D-13: `run()` **sin** transacción activa lanza `NoActiveTransactionEr
 **Entrega:** los pasos 1-4, 6 y 9 de [07 §3](docs/specs/07-composicion-y-contexto-de-ejecucion.md) sobre un endpoint mínimo `GET /v1/me`.
 
 **Archivos:**
-- Create: `apps/tubodega/src/http/{context/trace-id.hook.ts, context/request-context.ts, auth/auth.guard.ts, auth/public.decorator.ts, tx/transaction.interceptor.ts, identity/identity.interceptor.ts, problem/problem-details.ts, problem/domain-error.filter.ts, problem/validation.pipe.ts}`, `apps/tubodega/src/http/tenancy/me.controller.ts`, `apps/tubodega/test/edge/{trace-id.int-spec.ts, pipeline-order.int-spec.ts, problem-json.int-spec.ts}`, `test/support/e2e/{app.ts, http.ts, problem.ts}`
+- Create: `apps/tubodega/src/http/pipeline/{trace-id.hook.ts, request-state.ts, params.decorators.ts, auth.guard.ts, public.decorator.ts, transaction.interceptor.ts, identity.interceptor.ts, problem-details.ts, domain-error.filter.ts, validation.pipe.ts}`, `apps/tubodega/src/http/me/{me.controller.ts, me.dto.ts}`, `apps/tubodega/test/edge/{trace-id.int-spec.ts, pipeline-order.int-spec.ts, problem-json.int-spec.ts}`, `test/support/e2e/{app.ts, http.ts, problem.ts}`
 - Modify: `apps/tubodega/src/main.ts` (prefijo `v1`, hooks Fastify, `ValidationPipe` con `whitelist: true, forbidNonWhitelisted: false, transform: true` que emite `problem+json` `400 validation-failed` con `errors[].pointer` — cambia el `forbidNonWhitelisted: true` del scaffold por D-10), `apps/tubodega/src/app.module.ts` (registra `PersistenceModule`, `TenancyModule`, interceptores globales en orden)
 - Delete: `app.controller.ts`, `app.service.ts`, specs del scaffold, `test/app.e2e-spec.ts`
 
@@ -400,7 +408,7 @@ Decisión D-13: `run()` **sin** transacción activa lanza `NoActiveTransactionEr
 **Entrega:** `IdempotencyInterceptor` + `IdempotencyStore` con la secuencia A/B/C de [07 §5](docs/specs/07-composicion-y-contexto-de-ejecucion.md) y el hash canónico.
 
 **Archivos:**
-- Create: `apps/tubodega/src/http/idempotency/{idempotency.interceptor.ts, idempotency.store.ts, canonical-hash.ts, idempotency-exempt.decorator.ts}`, `libs/persistence/src/dao/idempotency-key.dao.ts` (`reserve(orgId, key, hash, now)`: `INSERT … ON CONFLICT DO NOTHING RETURNING *`, luego lectura si no devolvió; `takeOverAbandoned`), `apps/tubodega/src/http/idempotency/canonical-hash.spec.ts`, `apps/tubodega/test/edge/idempotency.int-spec.ts`
+- Create: `apps/tubodega/src/http/pipeline/{idempotency.interceptor.ts, idempotency.store.ts, canonical-hash.ts, idempotency-exempt.decorator.ts}`, `libs/persistence/src/dao/idempotency-key.dao.ts` (`reserve(orgId, key, hash, now)`: `INSERT … ON CONFLICT DO NOTHING RETURNING *`, luego lectura si no devolvió; `takeOverAbandoned`), `apps/tubodega/src/http/pipeline/canonical-hash.spec.ts`, `apps/tubodega/test/edge/idempotency.int-spec.ts`
 
 **Interfaces:** errores `400 missing-idempotency-key`, `409 idempotency-key-reuse`, `409 idempotency-key-in-flight`; cabecera `Idempotency-Replayed: true` en replay; `@IdempotencyExempt()` en los cuatro endpoints exentos (los `@Public()` lo son implícitamente; `logout` lo declara).
 
@@ -415,7 +423,7 @@ Decisión D-13: `run()` **sin** transacción activa lanza `NoActiveTransactionEr
 **Entrega:** los 10 endpoints de [10 §7](docs/specs/10-tenancy.md); helper de paginación/filtros; documento OpenAPI en `/v1/openapi.json` con snapshot; despachador de outbox como job.
 
 **Archivos:**
-- Create: `apps/tubodega/src/http/tenancy/{organizations.controller.ts, auth.controller.ts, users.controller.ts, me.controller.ts, *.dto.ts}`, `apps/tubodega/src/http/pagination/cursor-query.ts` (+spec), `apps/tubodega/src/http/openapi/openapi.ts`, `apps/tubodega/openapi.json`, `apps/tubodega/src/adapters/tenancy/org-provisioner.adapter.ts` (lista de sembradores vacía, D-2), `apps/tubodega/src/jobs/outbox-dispatcher.job.ts`, `apps/tubodega/test/edge/openapi.int-spec.ts`, `libs/persistence/test/outbox/dispatcher.int-spec.ts`, `test/support/e2e/tenant.ts`
+- Create: `apps/tubodega/src/http/{organizations,auth,users,me}/<recurso>.controller.ts` y `<recurso>.dto.ts`, `apps/tubodega/src/http/shared/cursor-query.ts` (+spec), `apps/tubodega/src/http/openapi/openapi.controller.ts`, `apps/tubodega/openapi.json`, `apps/tubodega/src/adapters/tenancy/org-provisioner.adapter.ts` (lista de sembradores vacía, D-2), `apps/tubodega/src/jobs/outbox-dispatcher.job.ts`, `apps/tubodega/test/edge/openapi.int-spec.ts`, `libs/persistence/test/outbox/dispatcher.int-spec.ts`, `test/support/e2e/tenant.ts`
 - Modify: `app.module.ts`, `main.ts`
 
 **Interfaces:**
@@ -497,7 +505,7 @@ Narrativa: Marta registra «Distribuidora La Esquina», invita a Diego, Juan y S
 
 **Entrega:** `MediaStorage` puerto + `DiskMediaStorage` (`MEDIA_ROOT/<orgId>/<key>`); `StageUpload`, `AttachMedia` (multipart directo → `MANAGE_CATALOG`; `storageKeys[]` → `RECORD_MOVEMENT`, D-14), `RemoveMedia`; `MediaUploadRepository.listUnclaimedBefore` (lo usa la purga de F6.2); `POST /v1/uploads` con `@fastify/multipart` (10 MB, `image/jpeg|png|webp`).
 
-**Archivos:** `libs/catalog/src/application/use-cases/{stage-upload.ts, attach-media.ts, remove-media.ts}` + specs; `libs/catalog/src/infrastructure/disk-media-storage.ts` (+spec con directorio temporal); `apps/tubodega/src/http/catalog/{uploads.controller.ts, product-media.controller.ts}`.
+**Archivos:** `libs/catalog/src/application/use-cases/{stage-upload.ts, attach-media.ts, remove-media.ts}` + specs; `libs/catalog/src/infrastructure/disk-media-storage.ts` (+spec con directorio temporal); `apps/tubodega/src/http/uploads/uploads.controller.ts`, `apps/tubodega/src/http/products/product-media.controller.ts`.
 
 **Pruebas:** aplicación — `AttachMedia` con clave inexistente/reclamada → `upload-not-found`; `claim` devuelve las que fallaron; un `OPERATOR` reclama sus claves y no puede adjuntar multipart. Integración del borde — `415 unsupported-media-type`, `413 media-too-large`. Infra — `DiskMediaStorage` `put/delete/signedUrl`.
 
@@ -521,7 +529,7 @@ Narrativa: Marta registra «Distribuidora La Esquina», invita a Diego, Juan y S
 
 **Entrega:** `NodeDao`, `KyselyNodeRepository` (`listUnder` con `path LIKE`, `updateSubtreePaths` por prefijo, todo en la misma transacción); `MovementDao` (append-only, solo `countByProduct` por ahora) y `StockBalanceDao` con `hasAnyStock` y `query` (`findPage` por `productId`/`nodeId`, `custodialOnly`, `nonZeroOnly`); adaptadores `MovementCounterAdapter`, `StockCheckerAdapter` (este último une las posiciones con `NodeRepository.findManyByIds` para dar el `path`); `OrgProvisioner` ahora siembra nodos (D-2); 7 endpoints de [12 §7](docs/specs/12-inventory.md) nodos.
 
-**Archivos:** `libs/persistence/src/dao/{node.dao.ts, movement.dao.ts, stock-balance.dao.ts}`, `libs/persistence/src/repositories/{node.repository.ts, movement.repository.ts (parcial), stock-balance.repository.ts (parcial)}`, `apps/tubodega/src/adapters/catalog/*.ts`, `apps/tubodega/src/http/inventory/nodes.controller.ts`, tests de integración.
+**Archivos:** `libs/persistence/src/dao/{node.dao.ts, movement.dao.ts, stock-balance.dao.ts}`, `libs/persistence/src/repositories/{node.repository.ts, movement.repository.ts (parcial), stock-balance.repository.ts (parcial)}`, `apps/tubodega/src/adapters/catalog/*.ts`, `apps/tubodega/src/http/nodes/{nodes.controller.ts, nodes.dto.ts}`, tests de integración.
 
 **Pruebas (integración):** N-1 y N-2 (mover `E3` de `Z1` a `Z2` recalcula `E3` y `B2`, `B3`); **detección de ciclos sobre datos reales** (I-10, [06 §5](docs/specs/06-pruebas-y-calidad.md)): mover `Z1` bajo `B2` con el repositorio Kysely → `node-cycle` y ningún `path` cambia; `node-code-taken` desde `23505`; `listUnder` usa el índice `text_pattern_ops` (`EXPLAIN`); el provisioner deja 8 nodos tras `CreateOrganization`.
 
@@ -529,7 +537,7 @@ Narrativa: Marta registra «Distribuidora La Esquina», invita a Diego, Juan y S
 
 **Entrega:** los 18 endpoints de [11 §7](docs/specs/11-catalog.md) (los de media vienen de F2.4); `PATCH /v1/custom-fields/{id}` con `If-Match` y `custom-field-type-locked` (D-10).
 
-**Archivos:** `apps/tubodega/src/http/catalog/{products.controller.ts, product-codes.controller.ts, codes.controller.ts, batches.controller.ts, custom-fields.controller.ts, import.controller.ts, *.dto.ts}`; actualizar `openapi.json`.
+**Archivos:** `apps/tubodega/src/http/products/{products.controller.ts, product-codes.controller.ts, batches.controller.ts, import.controller.ts, products.dto.ts}`, `apps/tubodega/src/http/codes/codes.controller.ts`, `apps/tubodega/src/http/custom-fields/{custom-fields.controller.ts, custom-fields.dto.ts}`; actualizar `openapi.json`.
 
 **Pruebas:** e2e de la wave. Cada endpoint aparece en el snapshot con error declarado.
 
@@ -607,7 +615,7 @@ Narrativa: Diego (ADMIN) migra la hoja de cálculo y organiza la bodega; Juan (O
 
 **Entrega:** [12 §7](docs/specs/12-inventory.md) movimientos y existencias; DTOs con decimales como cadena validados por regex `^\d{1,15}(\.\d{1,3})?$`; filtros declarados (`productId`, `nodeId`, `batchId`, `actorId`, `from`, `to`, `sort=±occurredAt`); `GET /v1/stock` con `custodialOnly`, `nonZeroOnly` (default `true`), `under`; `GET /v1/stock/custodies?overdueOnly`.
 
-**Archivos:** `apps/tubodega/src/http/inventory/{movements.controller.ts, stock.controller.ts, *.dto.ts}`, adaptadores `inventory/{product-lookup.adapter.ts, batch-lookup.adapter.ts}`; `openapi.json`.
+**Archivos:** `apps/tubodega/src/http/movements/{movements.controller.ts, movements.dto.ts}`, `apps/tubodega/src/http/stock/{stock.controller.ts, stock.dto.ts}`, adaptadores `inventory/{product-lookup.adapter.ts, batch-lookup.adapter.ts}`; `openapi.json`.
 
 ### F3.6 — Pruebas de propiedades (invariantes del sistema)
 
@@ -679,7 +687,7 @@ Nota: `template-has-instances` (409, [13 §12](docs/specs/13-process.md)) no tie
 
 ### F4.4 — Process: persistencia, adaptadores cruzados y HTTP
 
-**Entrega:** DAOs `process_template`, `process_instance`, `step_completion` (append-only); repositorios; adaptadores `apps/tubodega/src/adapters/process/*` (`ResolveCodePort` → `ResolveCode` de catalog; `FindNodePort`/`FindNodeByCode` → `NodeRepository`; `FindProductPort`; `BatchCreator` → `CreateBatch`; `MovementRecorder` → `RecordMovementBatch`; `MediaAttacher` → `AttachMedia`); provisioner siembra plantillas (D-2); 8 endpoints de [13 §10](docs/specs/13-process.md).
+**Entrega:** DAOs `process_template`, `process_instance`, `step_completion` (append-only); repositorios; adaptadores `apps/tubodega/src/adapters/process/*` (`ResolveCodePort` → `ResolveCode` de catalog; `FindNodePort`/`FindNodeByCode` → `NodeRepository`; `FindProductPort`; `BatchCreator` → `CreateBatch`; `MovementRecorder` → `RecordMovementBatch`; `MediaAttacher` → `AttachMedia`); provisioner siembra plantillas (D-2); 8 endpoints de [13 §10](docs/specs/13-process.md) en `http/process-templates/` y `http/process-instances/`.
 
 **Pruebas (integración):** type-spec: `StepCompletionDao` no tiene `update`/`upsert`/`delete` ([08 §8](docs/specs/08-acceso-a-datos.md)); P-1 (instancia con versión inexistente → `23503`); P-3 bajo concurrencia (dos `complete` al mismo paso, uno `201` y otro `409 step-already-completed`, no dos `step_completion`); **P-7**: un `CONFIRM` cuyo movimiento falla por I-4 deja la instancia `OPEN` en el paso `confirmar`, sin `step_completion` de `confirmar`, sin lote nuevo y sin `product_media`.
 
@@ -726,7 +734,7 @@ Narrativa: Juan opera con el teléfono siguiendo lo que el servidor le indica; n
 
 ### F5.3 — Alerts: persistencia, adaptadores, job y HTTP
 
-**Entrega:** `AlertDao` (`raiseMany` con `ON CONFLICT DO NOTHING` sobre el índice parcial), `KyselyAlertRepository`, `KyselyAlertRuleRepository`; adaptadores `ExpiringBatchQuery` (consulta de [14 §4](docs/specs/14-alerts.md) en `BatchDao`), `OverdueCustodyQuery` (en `MovementDao`), `AlertEnricher` (join ligero producto/lote/nodo/saldo), `OrgIterator` (`OrganizationDao.listActive`, sistema); `AlertsEvaluatorJob` (contexto de **sistema**, [07 §2](docs/specs/07-composicion-y-contexto-de-ejecucion.md): por organización `runAs({pool:'system', orgId})`, que fija `SET LOCAL app.current_org` aunque el rol salte RLS, + `pg_try_advisory_xact_lock(hashtext(orgId))`; los repositorios filtran por `orgId` como siempre); `POST /v1/alerts/evaluate` (`at` solo con `NODE_ENV=test`, si no `400 evaluate-at-not-allowed`); `GET /v1/alerts`, `/summary`, `GET/PUT /v1/alert-rules`; provisioner siembra reglas (D-2); purga de alertas a 90 días en `purge.job.ts`.
+**Entrega:** `AlertDao` (`raiseMany` con `ON CONFLICT DO NOTHING` sobre el índice parcial), `KyselyAlertRepository`, `KyselyAlertRuleRepository`; adaptadores `ExpiringBatchQuery` (consulta de [14 §4](docs/specs/14-alerts.md) en `BatchDao`), `OverdueCustodyQuery` (en `MovementDao`), `AlertEnricher` (join ligero producto/lote/nodo/saldo), `OrgIterator` (`OrganizationDao.listActive`, sistema); `AlertsEvaluatorJob` (contexto de **sistema**, [07 §2](docs/specs/07-composicion-y-contexto-de-ejecucion.md): por organización `runAs({pool:'system', orgId})`, que fija `SET LOCAL app.current_org` aunque el rol salte RLS, + `pg_try_advisory_xact_lock(hashtext(orgId))`; los repositorios filtran por `orgId` como siempre); `POST /v1/alerts/evaluate` (`at` solo con `NODE_ENV=test`, si no `400 evaluate-at-not-allowed`); `GET /v1/alerts`, `/summary`, `GET/PUT /v1/alert-rules` (en `http/alerts/` y `http/alert-rules/`); provisioner siembra reglas (D-2); purga de alertas a 90 días en `purge.job.ts`.
 
 **Pruebas (integración):** A-1 con dos evaluadores concurrentes → una alerta; resuelta y re-cumplida → se re-levanta; `EXPLAIN` de ambas consultas usa los índices parciales; dos préstamos del mismo `QUANTITY` al mismo tenedor, el primero devuelto → solo el segundo alerta; una organización con fallo no impide evaluar la siguiente.
 
@@ -768,7 +776,7 @@ Narrativa: Marta revisa la bandeja cada mañana; el sistema le dice qué se venc
 
 ### F6.3 — Rate limiting
 
-**Entrega:** interceptor de ventana deslizante por organización (D-12), cabeceras `RateLimit-*` en toda respuesta, `429 rate-limited` con `Retry-After`.
+**Entrega:** `http/pipeline/rate-limit.interceptor.ts`, ventana deslizante por organización (D-12), cabeceras `RateLimit-*` en toda respuesta, `429 rate-limited` con `Retry-After`.
 
 **Pruebas:** integración del borde con `RATE_LIMIT_PER_MINUTE=5`.
 

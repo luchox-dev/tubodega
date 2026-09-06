@@ -52,7 +52,10 @@ Si el correo existe en más de una organización, `login` responde
 
 ```
 apps/tubodega/           la aplicación HTTP: composición, borde, controllers, adaptadores cruzados
-  src/http/              traza, guard, transacción, identidad, problem+json, validación
+  src/http/pipeline/     los pasos de la petición: traza, guard, transacción, identidad, validación, problem+json
+  src/http/<recurso>/    una carpeta por recurso de la URL: organizations/, auth/, me/ … (controller + dto)
+  src/http/shared/       vistas y DTOs compartidos entre recursos
+  src/http/openapi/      el documento generado y su controller
   src/adapters/          puertos declarados por un módulo y satisfechos por otro
   test/edge, test/e2e    pruebas del borde y del contrato
 libs/common/             tipos del núcleo: Branded, Result, DomainError, Page, puertos (@app/common)

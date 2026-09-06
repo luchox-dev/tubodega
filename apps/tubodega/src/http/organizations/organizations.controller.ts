@@ -3,10 +3,11 @@ import { ApiCreatedResponse, ApiOperation, ApiResponse, ApiTags } from '@nestjs/
 import type { FastifyReply } from 'fastify';
 import type { TraceId } from '@app/common';
 import { CreateOrganization } from '@app/tenancy';
-import { Public } from '../auth/public.decorator.js';
-import { Trace } from '../context/ctx.decorator.js';
-import { CreateOrganizationDto, OrganizationCreatedView, ProblemDetailsView } from './dto.js';
-import { organizationView, userView } from './views.js';
+import { Public } from '../pipeline/public.decorator.js';
+import { Trace } from '../pipeline/params.decorators.js';
+import { CreateOrganizationDto, OrganizationCreatedView } from './organizations.dto.js';
+import { ProblemDetailsView } from '../shared/shared.dto.js';
+import { organizationView, userView } from '../shared/views.js';
 
 @ApiTags('tenancy')
 @Controller('organizations')

@@ -1,8 +1,8 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { ID_GENERATOR, type IdGenerator } from '@app/common';
-import { registerTraceIdHook } from './http/context/trace-id.hook.js';
-import { OpenApiDocument, buildOpenApi } from './http/openapi/openapi.js';
-import { buildValidationPipe } from './http/problem/validation.pipe.js';
+import { registerTraceIdHook } from './http/pipeline/trace-id.hook.js';
+import { OpenApiDocument, buildOpenApi } from './http/openapi/openapi.controller.js';
+import { buildValidationPipe } from './http/pipeline/validation.pipe.js';
 
 /**
  * Everything main.ts and the test harness must both do to an application:

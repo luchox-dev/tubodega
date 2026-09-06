@@ -1,7 +1,7 @@
 import { Controller, Get, Injectable, type INestApplication } from '@nestjs/common';
 import { ApiExcludeEndpoint } from '@nestjs/swagger';
 import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
-import { Public } from '../auth/public.decorator.js';
+import { Public } from '../pipeline/public.decorator.js';
 
 /** Holds the document generated at boot so the controller can serve it (spec 03 §10). */
 @Injectable()

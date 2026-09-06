@@ -2,7 +2,7 @@ import { Inject, Injectable, type CanActivate, type ExecutionContext } from '@ne
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { InvalidCredentialsError, TOKEN_ISSUER, TokenExpiredError, type TokenIssuer } from '@app/tenancy';
-import { requestState } from '../context/request-store.js';
+import { requestState } from './request-state.js';
 import { IS_PUBLIC } from './public.decorator.js';
 
 /**

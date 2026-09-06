@@ -1,5 +1,7 @@
 # Parte B — Plan 1: Primeros endpoints funcionales
 
+> **Nota (tras la ejecución):** la capa HTTP se reorganizó por recurso de la URL —`http/pipeline/`, `http/shared/`, `http/<recurso>/`— según [01 §3](../../specs/01-arquitectura.md). Las rutas de este documento ya reflejan el resultado final.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Que una persona pueda registrar una organización, iniciar sesión y consultar su perfil por HTTP contra Postgres real, con el borde de la aplicación (transacción, RLS, `problem+json`, `traceId`) ya en su forma definitiva.
@@ -52,11 +54,14 @@ libs/tenancy/test/builders/a-user.ts · an-organization.ts
 libs/tenancy/test/doubles/*.ts
 apps/tubodega/src/
   main.ts · app.setup.ts · app.module.ts
-  http/context/request-store.ts · trace-id.hook.ts · ctx.decorator.ts
-  http/auth/public.decorator.ts · auth.guard.ts
-  http/tx/transaction.interceptor.ts · http/identity/identity.interceptor.ts
-  http/problem/problem-details.ts · domain-error.filter.ts · validation.pipe.ts
-  http/tenancy/organizations.controller.ts · auth.controller.ts · me.controller.ts · dto.ts
+  http/pipeline/request-state.ts · trace-id.hook.ts · params.decorators.ts · public.decorator.ts · auth.guard.ts
+  http/pipeline/transaction.interceptor.ts · identity.interceptor.ts
+  http/pipeline/problem-details.ts · domain-error.filter.ts · validation.pipe.ts
+  http/shared/shared.dto.ts · views.ts
+  http/organizations/organizations.controller.ts · organizations.dto.ts
+  http/auth/auth.controller.ts · auth.dto.ts
+  http/me/me.controller.ts · me.dto.ts
+  http/openapi/openapi.controller.ts
   adapters/tenancy/org-provisioner.adapter.ts
 apps/tubodega/test/edge/pipeline.int-spec.ts
 apps/tubodega/test/e2e/p1-registro-y-login.e2e-spec.ts
@@ -875,7 +880,7 @@ issueAccess(user) { return new SignJWT({ org: user.orgId, roles: [...user.roles]
 ### Task 9: El borde — traza, guard, transacción, identidad, errores y validación
 
 **Files:**
-- Create: `apps/tubodega/src/http/context/{request-store.ts, trace-id.hook.ts, ctx.decorator.ts}`, `apps/tubodega/src/http/auth/{public.decorator.ts, auth.guard.ts}`, `apps/tubodega/src/http/tx/transaction.interceptor.ts`, `apps/tubodega/src/http/identity/identity.interceptor.ts`, `apps/tubodega/src/http/problem/{problem-details.ts, domain-error.filter.ts, validation.pipe.ts}`, `apps/tubodega/src/app.setup.ts`, `apps/tubodega/test/edge/pipeline.int-spec.ts`, `test/support/e2e/{app.ts, http.ts, problem.ts}`
+- Create: `apps/tubodega/src/http/pipeline/{request-state.ts, trace-id.hook.ts, params.decorators.ts, public.decorator.ts, auth.guard.ts, transaction.interceptor.ts, identity.interceptor.ts, problem-details.ts, domain-error.filter.ts, validation.pipe.ts}`, `apps/tubodega/src/app.setup.ts`, `apps/tubodega/test/edge/pipeline.int-spec.ts`, `test/support/e2e/{app.ts, http.ts, problem.ts}`
 - Modify: `apps/tubodega/src/main.ts`, `apps/tubodega/src/app.module.ts`
 - Delete: `apps/tubodega/src/app.controller.ts`, `app.controller.spec.ts`, `app.service.ts`, `apps/tubodega/test/app.e2e-spec.ts`
 
@@ -947,7 +952,7 @@ catch(exception: unknown, host: ArgumentsHost) {
 ### Task 10: Endpoints — `POST /v1/organizations`, `POST /v1/auth/login`, `GET /v1/me`, OpenAPI
 
 **Files:**
-- Create: `apps/tubodega/src/http/tenancy/{organizations.controller.ts, auth.controller.ts, me.controller.ts, dto.ts}`, `apps/tubodega/src/adapters/tenancy/org-provisioner.adapter.ts`, `apps/tubodega/src/http/openapi/openapi.ts`
+- Create: `apps/tubodega/src/http/{organizations,auth,me}/<recurso>.controller.ts` y `<recurso>.dto.ts`, `apps/tubodega/src/http/shared/{shared.dto.ts, views.ts}`, `apps/tubodega/src/adapters/tenancy/org-provisioner.adapter.ts`, `apps/tubodega/src/http/openapi/openapi.controller.ts`
 - Modify: `apps/tubodega/src/app.module.ts`, `apps/tubodega/src/app.setup.ts`, `apps/tubodega/src/main.ts`
 
 **Interfaces:**

@@ -50,7 +50,13 @@ casos de uso con dobles y cambiar de motor de persistencia sin tocar una regla.
 ## 3. Mapa de librerías
 
 ```
-apps/tubodega/src/        composición HTTP: controllers, guards, interceptores, OpenAPI
+apps/tubodega/src/        composición HTTP; nadie depende de ella
+  http/pipeline/          los pasos de la petición de [07 §3]: traza, guard, transacción, identidad,
+                          idempotencia, validación, problem+json, rate limit; decoradores @Ctx/@Trace
+  http/shared/            DTOs y vistas compartidos entre recursos; paginación
+  http/<recurso>/         una carpeta por recurso raíz de la URL (/v1/products → http/products/):
+                          <recurso>.controller.ts y <recurso>.dto.ts; los subrecursos van con el padre
+  http/openapi/           documento generado y su controller
   adapters/               los puertos que un módulo declara y otro satisface — ver [07 §7]
 libs/
   common/                 config, errores base, tipos primitivos, unidad de trabajo  (ya existe)
@@ -69,6 +75,12 @@ directorio:
 ```jsonc
 "@app/inventory": ["./libs/inventory/src/index.ts"]
 ```
+
+La capa HTTP se organiza por **recurso de la URL**, no por módulo de dominio ni
+por tipo de archivo: el árbol de `http/` se lee igual que el contrato. Qué módulo
+sirve cada recurso es un detalle del controller, no de la carpeta. Las piezas
+transversales —las que aplican a toda petición— viven juntas en `http/pipeline/`,
+en el orden de [07 §3](07-composicion-y-contexto-de-ejecucion.md).
 
 Esto no es un detalle estético. Bajo `moduleResolution: "nodenext"` un objetivo de
 directorio no resuelve por índice, así que el alias debe nombrar `index.ts`
@@ -228,6 +240,9 @@ responsabilidad es exclusivamente de borde:
 - **Adaptadores cruzados** — implementan los puertos que un módulo declara y otro
   satisface.
 - **Módulo raíz** — enlaza cada puerto con su adaptador, de `persistence` o propio.
+
+Guards, interceptores, filtros y pipes viven en `http/pipeline/`; controllers y
+DTOs en `http/<recurso>/` (§3).
 
 El orden exacto, los tres contextos de ejecución y la configuración están en
 [07 — Composición y contexto de ejecución](07-composicion-y-contexto-de-ejecucion.md).

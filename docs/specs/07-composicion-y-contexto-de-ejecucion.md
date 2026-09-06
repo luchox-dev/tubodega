@@ -79,6 +79,9 @@ respeta ese orden en lugar de pelear con él:
  9. Filtro de excepciones  DomainError → problem+json; resto → 500 sin detalles
 ```
 
+Cada paso es un archivo de `apps/tubodega/src/http/pipeline/`; el orden de
+registro en `app.module.ts` es el de esta lista y está probado en integración.
+
 Tres consecuencias que conviene dejar dichas:
 
 - **El guard no toca la base.** Lo que exigía base —comprobar que el usuario

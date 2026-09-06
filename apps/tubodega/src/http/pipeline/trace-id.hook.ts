@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { isUuid, type IdGenerator, type TraceId } from '@app/common';
-import { initRequestState } from './request-store.js';
+import { initRequestState } from './request-state.js';
 
 /**
  * Step 1 of the request (spec 07 §3, §8): X-Request-Id is honoured only if it

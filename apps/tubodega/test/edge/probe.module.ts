@@ -3,7 +3,7 @@
 import { Controller, Get, Module, Post } from '@nestjs/common';
 import { sql } from 'kysely';
 import { TransactionContext } from '@app/persistence';
-import { Public } from '../../src/http/auth/public.decorator.js';
+import { Public } from '../../src/http/pipeline/public.decorator.js';
 
 @Controller('_probe')
 export class ProbeController {

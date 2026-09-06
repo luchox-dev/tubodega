@@ -7,9 +7,10 @@ import {
   type RequestContext,
   type UserRepository,
 } from '@app/tenancy';
-import { Ctx } from '../context/ctx.decorator.js';
-import { MeView, ProblemDetailsView } from './dto.js';
-import { organizationView, userView } from './views.js';
+import { Ctx } from '../pipeline/params.decorators.js';
+import { MeView } from './me.dto.js';
+import { ProblemDetailsView } from '../shared/shared.dto.js';
+import { organizationView, userView } from '../shared/views.js';
 
 @ApiTags('tenancy')
 @ApiBearerAuth()
