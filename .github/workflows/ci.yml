@@ -1,0 +1,58 @@
+# The five gates of docs/specs/06 §8. Every one of them also runs locally with
+# the same command, so a green CI is never a surprise.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+      NODE_ENV: test
+      DATABASE_URL: postgresql://tubodega_app:app@localhost:5432/tubodega_test
+      DATABASE_URL_SYSTEM: postgresql://tubodega_system:system@localhost:5432/tubodega_test
+      DATABASE_URL_MIGRATOR: postgresql://tubodega_migrator:migrator@localhost:5432/tubodega_test
+      SHADOW_DATABASE_URL: postgresql://tubodega_migrator:migrator@localhost:5432/tubodega_shadow
+      JWT_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A service container cannot mount docker-entrypoint-initdb.d, so the
+      # roles and databases of db/init/01-roles.sql are created by hand.
+      - name: Roles and databases
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f db/init/01-roles.sql
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:check
+      - run: pnpm test
+      - run: pnpm test:e2e

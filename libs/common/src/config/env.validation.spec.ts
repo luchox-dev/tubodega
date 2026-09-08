@@ -16,12 +16,14 @@ describe('validate(env)', () => {
     expect(env.JWT_ACCESS_TTL).toBe('15m');
     expect(env.JWT_REFRESH_TTL).toBe('30d');
     expect(env.SHADOW_DATABASE_URL).toBeUndefined();
+    expect(env.OUTBOX_INTERVAL_MS).toBe(1000);
   });
 
   it('coerces numbers from strings', () => {
-    const env = validate({ ...base, PORT: '8080', DATABASE_POOL_SIZE: '4' });
+    const env = validate({ ...base, PORT: '8080', DATABASE_POOL_SIZE: '4', OUTBOX_INTERVAL_MS: '250' });
     expect(env.PORT).toBe(8080);
     expect(env.DATABASE_POOL_SIZE).toBe(4);
+    expect(env.OUTBOX_INTERVAL_MS).toBe(250);
   });
 
   it.each([
@@ -30,6 +32,7 @@ describe('validate(env)', () => {
     ['DATABASE_URL', 'mysql://x'],
     ['JWT_SECRET', 'short'],
     ['JWT_ACCESS_TTL', '15 minutes'],
+    ['OUTBOX_INTERVAL_MS', '50'],
   ])('rejects invalid %s', (key, value) => {
     expect(() => validate({ ...base, [key]: value })).toThrow(/Invalid environment variables/);
   });

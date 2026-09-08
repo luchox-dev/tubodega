@@ -66,6 +66,12 @@ export class EnvironmentVariables {
 
   @Matches(DURATION, { message: 'JWT_REFRESH_TTL must be a duration like 30d' })
   JWT_REFRESH_TTL: string = '30d';
+
+  /** How often the outbox dispatcher runs (spec 05 §3). Not started under NODE_ENV=test. */
+  @Transform(({ value }) => (value === undefined ? 1000 : Number(value)))
+  @IsInt()
+  @Min(100)
+  OUTBOX_INTERVAL_MS: number = 1000;
 }
 
 /**
