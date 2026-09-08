@@ -11,6 +11,8 @@ import { OrganizationsController } from './http/organizations/organizations.cont
 import { AuthGuard } from './http/pipeline/auth.guard.js';
 import { DomainErrorFilter } from './http/pipeline/domain-error.filter.js';
 import { IdentityInterceptor } from './http/pipeline/identity.interceptor.js';
+import { IdempotencyInterceptor } from './http/pipeline/idempotency.interceptor.js';
+import { IdempotencyStore } from './http/pipeline/idempotency.store.js';
 import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.js';
 
 /**
@@ -27,9 +29,11 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
   controllers: [OrganizationsController, AuthController, MeController, OpenApiController],
   providers: [
     OpenApiDocument,
+    IdempotencyStore,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: TransactionInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdentityInterceptor },
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
     { provide: APP_FILTER, useClass: DomainErrorFilter },
   ],
 })
