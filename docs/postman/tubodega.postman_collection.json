@@ -1,18 +1,58 @@
 {
   "info": {
     "name": "tubodega — API v1",
-    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 1 — registro de organización, login, /me y OpenAPI.\n\nFlujo sugerido: 1) Registrar organización → guarda orgId; 2) Login → guarda accessToken y refreshToken; 3) /me.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.",
+    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 2 — la WAVE 1 completa: registro, sesiones (login, refresh, logout), equipo (`/v1/users`), cambio de contraseña e idempotencia.\n\nFlujo sugerido: 1) Registrar organización → guarda orgId; 2) Login → guarda accessToken y refreshToken; 3) /me; 4) Equipo → crea a Juan y guarda juanId y juanVersion; 5) los casos de error.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. El pre-request también genera una `Idempotency-Key` nueva en cada POST, salvo donde la petición fija una a mano para demostrar el replay.\n\nTodo POST exige `Idempotency-Key` salvo /v1/organizations, /v1/auth/login, /v1/auth/refresh y /v1/auth/logout. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "slug", "value": "" },
-    { "key": "email", "value": "" },
-    { "key": "password", "value": "correcthorse1" },
-    { "key": "orgId", "value": "" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "userId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "slug",
+      "value": ""
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": "correcthorse1"
+    },
+    {
+      "key": "orgId",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    },
+    {
+      "key": "juanId",
+      "value": ""
+    },
+    {
+      "key": "juanVersion",
+      "value": ""
+    },
+    {
+      "key": "replayKey",
+      "value": ""
+    },
+    {
+      "key": "idemKey",
+      "value": ""
+    }
   ],
   "event": [
     {
@@ -28,7 +68,11 @@
           "}",
           "if (!pm.collectionVariables.get('email')) {",
           "  pm.collectionVariables.set('email', `marta-${pm.collectionVariables.get('slug')}@esquina.co`);",
-          "}"
+          "}",
+          "",
+          "// Idempotency-Key nueva por POST: la petición que quiera demostrar el replay",
+          "// fija {{replayKey}} a mano y esta línea no la pisa.",
+          "pm.collectionVariables.set('idemKey', pm.variables.replaceIn('{{$guid}}'));"
         ]
       }
     },
@@ -78,13 +122,31 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/organizations", "host": ["{{baseUrl}}"], "path": ["v1", "organizations"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "organizations"
+              ]
+            },
             "description": "Registro público. Crea la organización y su primer OWNER en una sola transacción. Exento de Idempotency-Key (spec 07 §5). Errores: 400 validation-failed, 409 slug-taken, 422 invalid-slug / invalid-email.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Distribuidora La Esquina\",\n  \"slug\": \"{{slug}}\",\n  \"owner\": {\n    \"email\": \"{{email}}\",\n    \"name\": \"Marta\",\n    \"password\": \"{{password}}\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         }
@@ -118,13 +180,32 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["v1", "auth", "login"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
             "description": "Devuelve accessToken (JWT HS256, 15 min) y refreshToken (opaco, 30 días; se rota en cada uso). `slug` es opcional: obligatorio solo si el correo existe en varias organizaciones (409 ambiguous-login). Correo inexistente, contraseña errónea y usuario inactivo responden lo mismo: 401 invalid-credentials.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
@@ -132,15 +213,129 @@
           "name": "Login con slug (correo en varias organizaciones)",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["v1", "auth", "login"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
             "description": "La misma persona puede pertenecer a dos negocios (T-1 es por organización). Sin `slug` el login es 409 ambiguous-login; con `slug` resuelve.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"slug\": \"{{slug}}\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
+        },
+        {
+          "name": "Refresh — rota el par",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Exento de Idempotency-Key. El token de refresco es de un solo uso: al usarlo queda revocado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', b.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', b.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout — revoca el token de refresco",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Exento de Idempotency-Key. Responde 204 aunque el token no exista: no revela cuáles existen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -167,10 +362,408 @@
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/v1/me", "host": ["{{baseUrl}}"], "path": ["v1", "me"] },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            },
             "description": "Requiere Bearer. Los roles vienen de la base de datos, no del token: desactivar un usuario o retirarle un rol surte efecto en la siguiente petición (T-6). Errores: 401 invalid-credentials (sin token, token inválido o usuario inactivo), 401 token-expired."
           }
+        },
+        {
+          "name": "Cambiar mi contraseña",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me",
+                "password"
+              ]
+            },
+            "description": "Exige la contraseña actual. Las sesiones abiertas siguen valiendo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current\": \"{{password}}\",\n  \"next\": \"unmejorsecreto9\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Equipo",
+      "item": [
+        {
+          "name": "Crear a Juan (OPERATOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Exige Idempotency-Key. Devuelve 201 con Location.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juan-{{slug}}@esquina.co\",\n  \"name\": \"Juan\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"OPERATOR\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con Location', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.headers.get('location')).to.be.a('string');",
+                  "});",
+                  "const b = pm.response.json();",
+                  "pm.collectionVariables.set('juanId', b.id);",
+                  "pm.collectionVariables.set('juanVersion', 1);",
+                  "pm.collectionVariables.set('replayKey', pm.request.headers.get('idempotency-key'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reintento con la misma clave → replay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{replayKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Mismo cuerpo y misma clave: devuelve la respuesta guardada, sin crear un segundo usuario.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"juan-{{slug}}@esquina.co\",\n  \"name\": \"Juan\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"OPERATOR\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('replay con la misma respuesta', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.headers.get('idempotency-replayed')).to.eql('true');",
+                  "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('juanId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar el equipo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users?sort=name&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "name"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Filtros admitidos: active, role. Orden: name, email (prefijo - para descendente)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con envoltorio de página', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.have.property('data');",
+                  "  pm.expect(b.page).to.have.property('hasMore');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtrar por rol",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users?role=OPERATOR",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "OPERATOR"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('solo operarios', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.response.json().data.forEach((u) => pm.expect(u.roles).to.include('OPERATOR'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un usuario por id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('juanVersion', 1);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar roles (If-Match)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{juanVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            },
+            "description": "If-Match es obligatorio: sin él, 400 missing-if-match; con una versión vieja, 409 stale-version.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"ADMIN\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('juanVersion', 2);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Desactivar a Juan",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            },
+            "description": "Desactiva, no borra: los movimientos referencian a su actor."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -196,7 +789,16 @@
           ],
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/v1/openapi.json", "host": ["{{baseUrl}}"], "path": ["v1", "openapi.json"] },
+            "url": {
+              "raw": "{{baseUrl}}/v1/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "openapi.json"
+              ]
+            },
             "description": "El contrato generado desde el código (spec 03 §10). Público."
           }
         }
@@ -209,113 +811,628 @@
         {
           "name": "409 slug-taken — registrar el mismo slug otra vez",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('409 slug-taken', () => {",
-              "  pm.response.to.have.status(409);",
-              "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/slug-taken');",
-              "});"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 slug-taken', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/slug-taken');",
+                  "});"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/organizations", "host": ["{{baseUrl}}"], "path": ["v1", "organizations"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "organizations"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Otra\",\n  \"slug\": \"{{slug}}\",\n  \"owner\": { \"email\": \"otra@esquina.co\", \"name\": \"Otra\", \"password\": \"{{password}}\" }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
           "name": "400 validation-failed — cuerpo inválido con pointers",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('400 con errors[].pointer', () => {",
-              "  pm.response.to.have.status(400);",
-              "  const p = pm.response.json();",
-              "  pm.expect(p.type).to.eql('https://tubodega.app/errors/validation-failed');",
-              "  pm.expect(p.errors.map(e => e.pointer)).to.include('/owner/password');",
-              "});"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 con errors[].pointer', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p.type).to.eql('https://tubodega.app/errors/validation-failed');",
+                  "  pm.expect(p.errors.map(e => e.pointer)).to.include('/owner/password');",
+                  "});"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/organizations", "host": ["{{baseUrl}}"], "path": ["v1", "organizations"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/organizations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "organizations"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"X\",\n  \"slug\": \"La Esquina\",\n  \"owner\": { \"email\": \"a@b.co\", \"name\": \"A\" }\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
           "name": "401 invalid-credentials — contraseña errónea",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('401 invalid-credentials', () => {",
-              "  pm.response.to.have.status(401);",
-              "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/invalid-credentials');",
-              "});"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 invalid-credentials', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/invalid-credentials');",
+                  "});"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": { "raw": "{{baseUrl}}/v1/auth/login", "host": ["{{baseUrl}}"], "path": ["v1", "auth", "login"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"nope-nope-nope\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
           "name": "401 invalid-credentials — /me sin token",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('401 sin token', () => pm.response.to.have.status(401));"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin token', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/v1/me", "host": ["{{baseUrl}}"], "path": ["v1", "me"] }
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            }
           }
         },
         {
           "name": "404 not-found — ruta inexistente",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('404 not-found en problem+json', () => {",
-              "  pm.response.to.have.status(404);",
-              "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/not-found');",
-              "});"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 not-found en problem+json', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/not-found');",
+                  "});"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/v1/nope", "host": ["{{baseUrl}}"], "path": ["v1", "nope"] }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nope"
+              ]
+            }
           }
         },
         {
           "name": "X-Request-Id — se respeta si es UUID, se sustituye si no",
           "event": [
-            { "listen": "test", "script": { "type": "text/javascript", "exec": [
-              "pm.test('req-123 no es UUID: la respuesta trae uno nuevo', () => {",
-              "  pm.expect(pm.response.headers.get('X-Request-Id')).to.not.eql('req-123');",
-              "});"
-            ] } }
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('req-123 no es UUID: la respuesta trae uno nuevo', () => {",
+                  "  pm.expect(pm.response.headers.get('X-Request-Id')).to.not.eql('req-123');",
+                  "});"
+                ]
+              }
+            }
           ],
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "X-Request-Id", "value": "req-123" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Request-Id",
+                "value": "req-123"
+              }
             ],
-            "url": { "raw": "{{baseUrl}}/v1/me", "host": ["{{baseUrl}}"], "path": ["v1", "me"] }
+            "url": {
+              "raw": "{{baseUrl}}/v1/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "me"
+              ]
+            }
           }
+        },
+        {
+          "name": "400 invalid-filter — un filtro no declarado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users?orgId=otra",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "orgId",
+                  "value": "otra"
+                }
+              ]
+            },
+            "description": "T-4: la organización viene solo del token. Un orgId en la query es un filtro no declarado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 invalid-filter', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().type).to.include('invalid-filter');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 missing-if-match — PATCH sin la cabecera",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"VIEWER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 missing-if-match', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().type).to.include('missing-if-match');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "409 stale-version — PATCH con una versión vieja",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"1\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"VIEWER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 stale-version', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.include('stale-version');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "400 missing-idempotency-key — POST sin la cabecera",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sin-clave-{{slug}}@esquina.co\",\n  \"name\": \"Sin Clave\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"VIEWER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 missing-idempotency-key', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().type).to.include('missing-idempotency-key');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "409 idempotency-key-reuse — misma clave, otro cuerpo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{replayKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"otro-{{slug}}@esquina.co\",\n  \"name\": \"Otro\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"VIEWER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 idempotency-key-reuse', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.include('idempotency-key-reuse');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "403 insufficient-role — un VIEWER administrando",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Ejecutar con un accessToken de VIEWER para verlo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"colado-{{slug}}@esquina.co\",\n  \"name\": \"Colado\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"OWNER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 insufficient-role si el token es de VIEWER', () => {",
+                  "  if (pm.response.code === 403) pm.expect(pm.response.json().type).to.include('insufficient-role');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 not-found — un usuario de otra organización",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+              ]
+            },
+            "description": "I-6: un recurso de otra organización responde 404, nunca 403. Un id que ni siquiera es UUID también."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 y nunca 403', () => {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(pm.response.json().type).to.include('not-found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "401 refresh-token-invalid — reutilizar un refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"ya-lo-use-o-no-existe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 refresh-token-invalid', () => {",
+                  "  pm.response.to.have.status(401);",
+                  "  pm.expect(pm.response.json().type).to.include('refresh-token-invalid');",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     }
