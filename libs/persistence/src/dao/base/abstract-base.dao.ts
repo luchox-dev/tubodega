@@ -13,6 +13,15 @@ export abstract class AbstractBaseDao<TB extends keyof DB & string, E>
   implements IBaseDao<E, Model<TB>, New<TB>, Patch<TB>>
 {
   /**
+   * Columns of the ON CONFLICT of `upsert`. Defaults to the key columns, and
+   * differs only in the Org family, where the lookup key carries `org_id` but
+   * the unique index behind the conflict is the real primary key.
+   */
+  protected get conflictColumns(): readonly string[] {
+    return this.idColumns;
+  }
+
+  /**
    * Optimistic locking (spec 08 §4): zero rows affected has two causes, and a
    * second read by key tells them apart. Without `expectedVersion` the version
    * still moves — a write with no condition is still a new version.
@@ -64,7 +73,7 @@ export abstract class AbstractBaseDao<TB extends keyof DB & string, E>
       return (await this.anyDb
         .insertInto(this.table)
         .values(create)
-        .onConflict((oc: any) => oc.columns(this.idColumns).doUpdateSet(update))
+        .onConflict((oc: any) => oc.columns(this.conflictColumns).doUpdateSet(update))
         .returningAll()
         .executeTakeFirstOrThrow()) as Model<TB>;
     } catch (e) {

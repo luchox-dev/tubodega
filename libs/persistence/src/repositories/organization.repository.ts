@@ -24,7 +24,7 @@ export class KyselyOrganizationRepository implements OrganizationRepository {
   constructor(private readonly dao: OrganizationDao) {}
 
   async findById(id: OrgId): Promise<Organization | null> {
-    const row = await this.dao.findById(id);
+    const row = await this.dao.findUnique(id);
     return row ? toOrganization(row) : null;
   }
 
@@ -36,10 +36,10 @@ export class KyselyOrganizationRepository implements OrganizationRepository {
   async save(org: Organization): Promise<void> {
     const data = { name: org.name, slug: org.slug, active: org.active };
     try {
-      await this.dao.update(org.id, data, org.version);
+      await this.dao.update(org.id, data, { expectedVersion: org.version });
     } catch (e) {
       if (e instanceof RecordNotFoundError) {
-        await this.dao.insert({ id: org.id, ...data }).catch(translate(org));
+        await this.dao.create({ id: org.id, ...data }).catch(translate(org));
         return;
       }
       translate(org)(e);

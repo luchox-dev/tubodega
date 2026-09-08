@@ -32,7 +32,7 @@ export class KyselyUserRepository implements UserRepository {
   }
 
   async findByEmail(orgId: OrgId, email: Email): Promise<User | null> {
-    const row = await this.users.findFirst(orgId, { email });
+    const row = await this.users.findFirst(orgId, { where: { email } });
     return row ? this.hydrate(row) : null;
   }
 
