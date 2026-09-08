@@ -18,6 +18,7 @@ export * from './dao/user.dao.js';
 export * from './dao/user-role.dao.js';
 export * from './dao/refresh-token.dao.js';
 export * from './dao/outbox-event.dao.js';
+export * from './dao/idempotency-key.dao.js';
 export * from './repositories/organization.repository.js';
 export * from './repositories/user.repository.js';
 export * from './repositories/session.repository.js';
