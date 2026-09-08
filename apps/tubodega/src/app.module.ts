@@ -8,6 +8,7 @@ import { AuthController } from './http/auth/auth.controller.js';
 import { MeController } from './http/me/me.controller.js';
 import { OpenApiController, OpenApiDocument } from './http/openapi/openapi.controller.js';
 import { OrganizationsController } from './http/organizations/organizations.controller.js';
+import { UsersController } from './http/users/users.controller.js';
 import { AuthGuard } from './http/pipeline/auth.guard.js';
 import { DomainErrorFilter } from './http/pipeline/domain-error.filter.js';
 import { IdentityInterceptor } from './http/pipeline/identity.interceptor.js';
@@ -26,7 +27,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     AdaptersModule,
     TenancyModule,
   ],
-  controllers: [OrganizationsController, AuthController, MeController, OpenApiController],
+  controllers: [OrganizationsController, AuthController, UsersController, MeController, OpenApiController],
   providers: [
     OpenApiDocument,
     IdempotencyStore,

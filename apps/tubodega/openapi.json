@@ -1,0 +1,1123 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/v1/organizations": {
+      "post": {
+        "description": "Exento de Idempotency-Key (spec 07 §5).",
+        "operationId": "OrganizationsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrganizationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationCreatedView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "slug-taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid-slug · invalid-email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Registro de una organización con su primer OWNER",
+        "tags": [
+          "tenancy"
+        ]
+      }
+    },
+    "/v1/auth/login": {
+      "post": {
+        "description": "Devuelve el par de tokens. Exento de Idempotency-Key.",
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPairView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "ambiguous-login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inicio de sesión",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/refresh": {
+      "post": {
+        "description": "El token de refresco es de un solo uso: al usarlo queda revocado. Exento de Idempotency-Key.",
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRotationView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "refresh-token-invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Rota el par de tokens",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/auth/logout": {
+      "post": {
+        "description": "Revoca el token de refresco propio. Responde igual si no existe. Exento de Idempotency-Key.",
+        "operationId": "AuthController_signOut",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cierra la sesión",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/v1/users": {
+      "get": {
+        "description": "Filtros: active, role. Orden: name, email.",
+        "operationId": "UsersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials · token-expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista los usuarios de la organización",
+        "tags": [
+          "tenancy"
+        ]
+      },
+      "post": {
+        "operationId": "UsersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "email-taken · idempotency-key-reuse · idempotency-key-in-flight",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid-email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Da de alta a una persona del equipo",
+        "tags": [
+          "tenancy"
+        ]
+      }
+    },
+    "/v1/users/{id}": {
+      "get": {
+        "operationId": "UsersController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found · también para otra organización (I-6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un usuario por id",
+        "tags": [
+          "tenancy"
+        ]
+      },
+      "patch": {
+        "description": "Exige If-Match con la versión del usuario.",
+        "operationId": "UsersController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRolesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "missing-if-match · validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "stale-version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "last-owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambia los roles",
+        "tags": [
+          "tenancy"
+        ]
+      },
+      "delete": {
+        "description": "No borra: los movimientos referencian a su actor.",
+        "operationId": "UsersController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "last-owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Desactiva a una persona",
+        "tags": [
+          "tenancy"
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "operationId": "MeController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials · token-expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Usuario y organización del token",
+        "tags": [
+          "tenancy"
+        ]
+      }
+    },
+    "/v1/me/password": {
+      "post": {
+        "description": "Exige la contraseña actual. Las sesiones abiertas siguen siendo válidas.",
+        "operationId": "MeController_password",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambia la propia contraseña",
+        "tags": [
+          "tenancy"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "tubodega",
+    "description": "WMS de movimientos: contrato público v1",
+    "version": "1",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "OwnerDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "marta@esquina.co"
+          },
+          "name": {
+            "type": "string",
+            "example": "Marta"
+          },
+          "password": {
+            "type": "string",
+            "example": "correcthorse1",
+            "minLength": 10
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "password"
+        ]
+      },
+      "CreateOrganizationDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Distribuidora La Esquina"
+          },
+          "slug": {
+            "type": "string",
+            "example": "la-esquina",
+            "description": "minúsculas, dígitos y guiones, 3-64"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/OwnerDto"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "owner"
+        ]
+      },
+      "OrganizationView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "name": {
+            "type": "string",
+            "example": "Distribuidora La Esquina"
+          },
+          "slug": {
+            "type": "string",
+            "example": "la-esquina"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ]
+      },
+      "UserView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f7"
+          },
+          "email": {
+            "type": "string",
+            "example": "marta@esquina.co"
+          },
+          "name": {
+            "type": "string",
+            "example": "Marta"
+          },
+          "roles": {
+            "type": "array",
+            "example": [
+              "OWNER"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "OWNER",
+                "ADMIN",
+                "OPERATOR",
+                "VIEWER"
+              ]
+            }
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "roles",
+          "active"
+        ]
+      },
+      "OrganizationCreatedView": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/OrganizationView"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/UserView"
+          }
+        },
+        "required": [
+          "organization",
+          "owner"
+        ]
+      },
+      "ProblemDetailsView": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "https://tubodega.app/errors/slug-taken"
+          },
+          "title": {
+            "type": "string",
+            "example": "Conflicto"
+          },
+          "status": {
+            "type": "number",
+            "example": 409
+          },
+          "detail": {
+            "type": "string",
+            "example": "El slug \"la-esquina\" ya está en uso"
+          },
+          "instance": {
+            "type": "string",
+            "example": "/v1/organizations"
+          },
+          "traceId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "errors": {
+            "example": [
+              {
+                "pointer": "/slug",
+                "code": "isLength"
+              }
+            ],
+            "type": "array",
+            "items": {
+              "type": "array"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "traceId"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "marta@esquina.co"
+          },
+          "password": {
+            "type": "string",
+            "example": "correcthorse1"
+          },
+          "slug": {
+            "type": "string",
+            "example": "la-esquina",
+            "description": "Obligatorio si el correo existe en varias organizaciones"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "TokenPairView": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiJ9…"
+          },
+          "refreshToken": {
+            "type": "string",
+            "example": "k3JgQ…",
+            "description": "Opaco; se rota en cada uso"
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 900,
+            "description": "Segundos de validez del accessToken"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserView"
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expiresIn",
+          "user"
+        ]
+      },
+      "RefreshDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "example": "k3JgQ…"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "TokenRotationView": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiJ9…"
+          },
+          "refreshToken": {
+            "type": "string",
+            "example": "k3JgQ…",
+            "description": "Nuevo; el anterior queda revocado"
+          },
+          "expiresIn": {
+            "type": "number",
+            "example": 900
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expiresIn"
+        ]
+      },
+      "PageView": {
+        "type": "object",
+        "properties": {
+          "nextCursor": {
+            "type": "string",
+            "example": "W3siYSI6MX1d",
+            "description": "Opaco: se devuelve tal cual en `cursor`"
+          },
+          "hasMore": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "hasMore"
+        ]
+      },
+      "UserPageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "juan@esquina.co"
+          },
+          "name": {
+            "type": "string",
+            "example": "Juan"
+          },
+          "password": {
+            "type": "string",
+            "example": "correcthorse1",
+            "minLength": 10
+          },
+          "roles": {
+            "type": "array",
+            "example": [
+              "OPERATOR"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "OWNER",
+                "ADMIN",
+                "OPERATOR",
+                "VIEWER"
+              ]
+            }
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "password",
+          "roles"
+        ]
+      },
+      "UpdateUserRolesDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "example": [
+              "ADMIN"
+            ],
+            "items": {
+              "type": "string",
+              "enum": [
+                "OWNER",
+                "ADMIN",
+                "OPERATOR",
+                "VIEWER"
+              ]
+            }
+          }
+        },
+        "required": [
+          "roles"
+        ]
+      },
+      "MeView": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserView"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/OrganizationView"
+          }
+        },
+        "required": [
+          "user",
+          "organization"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "current": {
+            "type": "string",
+            "example": "correcthorse1"
+          },
+          "next": {
+            "type": "string",
+            "example": "unmejorsecreto9",
+            "minLength": 10
+          }
+        },
+        "required": [
+          "current",
+          "next"
+        ]
+      }
+    }
+  }
+}
