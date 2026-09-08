@@ -1,4 +1,4 @@
-import { unwrap } from '@app/common';
+import { unwrap, type OrgId, type UserId } from '@app/common';
 import { aUser } from '../../test/builders/a-user.js';
 import { Action, Role } from './role.js';
 import { User } from './user.js';
@@ -43,5 +43,15 @@ describe('User', () => {
     it('does not apply to non-owners', () => {
       expect(unwrap(aUser({ roles: [Role.ADMIN] }).deactivate(1)).active).toBe(false);
     });
+  });
+
+  it('withVersion carries what the caller believes, for If-Match', () => {
+    const u = unwrap(
+      User.create({ id: 'u' as UserId, orgId: 'o' as OrgId, email: 'a@b.co', name: 'A', passwordHash: 'h', roles: [Role.ADMIN] }),
+    );
+    const stale = u.withVersion(7);
+    expect(stale.version).toBe(7);
+    expect(stale.roles).toEqual(u.roles);
+    expect(stale.email).toBe(u.email);
   });
 });

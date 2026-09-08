@@ -74,3 +74,29 @@ export class LastOwnerError extends DomainError {
     super('La operación dejaría la organización sin ningún OWNER activo');
   }
 }
+
+/**
+ * Unknown, revoked, expired — and also a token whose user was deactivated
+ * (T-6 applies to rotation, not only to access). One type for all of them, for
+ * the same reason `invalid-credentials` covers three cases (spec 10 §9).
+ */
+export class RefreshTokenInvalidError extends DomainError {
+  readonly type = 'refresh-token-invalid';
+  readonly status = 401;
+  constructor() {
+    super('El token de refresco no es válido');
+  }
+}
+
+/**
+ * A resource of another organization does not exist as far as this one is
+ * concerned: 404 and never 403 (I-6). Telling them apart would leak which ids
+ * are real elsewhere.
+ */
+export class UserNotFoundError extends DomainError {
+  readonly type = 'not-found';
+  readonly status = 404;
+  constructor() {
+    super('No existe ese usuario');
+  }
+}

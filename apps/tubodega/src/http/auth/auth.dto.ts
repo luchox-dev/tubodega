@@ -26,3 +26,17 @@ export class TokenPairView {
   @ApiProperty({ example: 900, description: 'Segundos de validez del accessToken' }) expiresIn!: number;
   @ApiProperty({ type: UserView }) user!: UserView;
 }
+
+export class RefreshDto {
+  @ApiProperty({ example: 'k3JgQ…' })
+  @IsString()
+  @MaxLength(512)
+  refreshToken!: string;
+}
+
+/** Rotation returns a fresh pair; the user is already known to the caller. */
+export class TokenRotationView {
+  @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiJ9…' }) accessToken!: string;
+  @ApiProperty({ example: 'k3JgQ…', description: 'Nuevo; el anterior queda revocado' }) refreshToken!: string;
+  @ApiProperty({ example: 900 }) expiresIn!: number;
+}

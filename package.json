@@ -24,13 +24,15 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:check": "prisma migrate diff --from-migrations libs/persistence/prisma/migrations --to-schema libs/persistence/prisma/schema.prisma --exit-code"
+    "db:check": "prisma migrate diff --from-migrations libs/persistence/prisma/migrations --to-schema libs/persistence/prisma/schema.prisma --exit-code",
+    "openapi:write": "UPDATE_OPENAPI=1 vitest run --config ./vitest.config.e2e.ts apps/tubodega/test/edge/openapi.int-spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
     "@nestjs/config": "^12.0.0",
     "@nestjs/core": "^12.0.1",
     "@nestjs/platform-fastify": "^12.0.1",
+    "@nestjs/schedule": "^12.0.1",
     "@nestjs/swagger": "^12.0.1",
     "@node-rs/argon2": "^2.2.0",
     "class-transformer": "^0.5.1",

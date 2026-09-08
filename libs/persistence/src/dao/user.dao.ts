@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { TransactionContext } from '../kysely/transaction.context.js';
 import type { UserModel } from '../models/index.js';
-import { AbstractOrgDao } from './base/abstract-org.dao.js';
+import { AbstractOrgDao } from './base/org/abstract-org.dao.js';
 
 @Injectable()
-export class UserDao extends AbstractOrgDao<'appUser'> {
+export class UserDao extends AbstractOrgDao<'appUser', string> {
   protected readonly table = 'appUser' as const;
   protected override readonly versioned = true;
 
@@ -15,7 +15,8 @@ export class UserDao extends AbstractOrgDao<'appUser'> {
   /**
    * System context only: the single read of tenant data without an
    * organization in the whole system (spec 07 §2). Login does not know the
-   * organization until the password disambiguates the candidates.
+   * organization until the password disambiguates the candidates — which is
+   * why it cannot be expressed with the Org generic.
    */
   findByEmailGlobal(email: string): Promise<UserModel[]> {
     return this.db

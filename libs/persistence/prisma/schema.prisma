@@ -100,3 +100,28 @@ model OutboxEvent {
   @@index([publishedAt, occurredAt])
   @@map("outbox_event")
 }
+
+enum IdemStatus {
+  IN_FLIGHT
+  COMPLETED
+
+  @@map("idem_status_enum")
+}
+
+/// The single idempotency mechanism of the system (spec 07 §5). No FK to
+/// organization: the reservation lives in its own transaction (decision D-9)
+/// and must not depend on when the request's transaction commits.
+model IdempotencyKey {
+  orgId        String     @map("org_id") @db.Uuid
+  key          String     @db.VarChar(128)
+  requestHash  String     @map("request_hash") @db.VarChar(64)
+  status       IdemStatus
+  responseCode Int?       @map("response_code")
+  responseBody Json?      @map("response_body")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz
+
+  @@id([orgId, key])
+  @@index([expiresAt])
+  @@map("idempotency_key")
+}

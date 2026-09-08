@@ -1,5 +1,5 @@
 import { v7 } from 'uuid';
-import { unwrap, type OrgId, type UserId } from '@app/common';
+import { unwrap, type Cursor, type OrgId, type UserId } from '@app/common';
 import { Organization, Role, User, type Email } from '@app/tenancy';
 import {
   KyselyOrganizationRepository,
@@ -77,5 +77,55 @@ describe('KyselyUserRepository', () => {
     } finally {
       await tx.rollback().execute();
     }
+  });
+
+  it('listPage paginates stably by name and hydrates every role', async () => {
+    await withRollback(uow, { pool: 'system' }, async () => {
+      const org = await newOrg();
+      const names = ['Ana', 'Beto', 'Carla', 'Diego', 'Elena', 'Fabio', 'Gina'];
+      for (const [i, name] of names.entries()) {
+        const u = unwrap(
+          User.create({
+            id: v7() as UserId,
+            orgId: org.id,
+            email: `${name.toLowerCase()}@x.co`,
+            name,
+            passwordHash: 'h',
+            roles: i === 0 ? [Role.OWNER, Role.ADMIN] : [Role.OPERATOR],
+          }),
+        );
+        await users.save(u);
+      }
+
+      const seen: string[] = [];
+      let cursor: Cursor | undefined;
+      for (let page = 0; page < 3; page++) {
+        const got = await users.listPage(org.id, {}, { limit: 3, cursor, sort: { field: 'name', dir: 'asc' } });
+        seen.push(...got.data.map((u) => u.name));
+        cursor = got.nextCursor;
+        expect(got.hasMore).toBe(page < 2);
+      }
+      expect(seen).toEqual(names);
+      expect(cursor).toBeUndefined();
+    });
+  });
+
+  it('listPage filters by role and by active', async () => {
+    await withRollback(uow, { pool: 'system' }, async () => {
+      const org = await newOrg();
+      await users.save(newUser(org.id, 'marta@x.co', [Role.OWNER]));
+      const juan = newUser(org.id, 'juan@x.co', [Role.OPERATOR]);
+      await users.save(juan);
+      await users.save(newUser(org.id, 'sofia@x.co', [Role.VIEWER]));
+
+      const page = { limit: 50, sort: { field: 'email', dir: 'asc' } } as const;
+      const operators = await users.listPage(org.id, { role: Role.OPERATOR }, page);
+      expect(operators.data.map((u) => u.email)).toEqual(['juan@x.co']);
+      expect(operators.data[0]!.roles).toEqual(new Set([Role.OPERATOR]));
+
+      await users.save(unwrap(juan.deactivate(1)));
+      expect((await users.listPage(org.id, { active: false }, page)).data.map((u) => u.email)).toEqual(['juan@x.co']);
+      expect((await users.listPage(org.id, { active: true }, page)).data).toHaveLength(2);
+    });
   });
 });

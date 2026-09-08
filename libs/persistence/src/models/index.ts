@@ -21,3 +21,7 @@ export type RefreshTokenPatch = Updateable<DB['refreshToken']>;
 
 export type OutboxEventModel = Selectable<DB['outboxEvent']>;
 export type NewOutboxEvent = Insertable<DB['outboxEvent']>;
+
+export type IdempotencyKeyModel = Selectable<DB['idempotencyKey']>;
+export type NewIdempotencyKey = Insertable<DB['idempotencyKey']>;
+export type IdempotencyKeyPatch = Updateable<DB['idempotencyKey']>;

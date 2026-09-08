@@ -8,18 +8,35 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 1
+## Estado: Plan 2 — la WAVE 1 completa
 
-| Endpoint | Qué hace |
-|---|---|
-| `POST /v1/organizations` | Registra una organización con su primer `OWNER` |
-| `POST /v1/auth/login` | Devuelve `accessToken` (JWT, 15 min) y `refreshToken` |
-| `GET /v1/me` | Usuario y organización del token |
-| `GET /v1/openapi.json` | El contrato generado desde el código |
+| Endpoint | Acción | Qué hace |
+|---|---|---|
+| `POST /v1/organizations` | — | Registra una organización con su primer `OWNER` |
+| `POST /v1/auth/login` | — | Devuelve `accessToken` (JWT, 15 min) y `refreshToken` |
+| `POST /v1/auth/refresh` | — | Rota el par; el token usado queda revocado |
+| `POST /v1/auth/logout` | `READ` | Revoca el token de refresco propio |
+| `GET /v1/me` | `READ` | Usuario y organización del token |
+| `POST /v1/me/password` | `READ` | Cambia la propia contraseña, con la actual |
+| `GET /v1/users` | `MANAGE_USERS` | Filtros `active` y `role`; orden `name`/`email`; cursor |
+| `POST /v1/users` | `MANAGE_USERS` | Da de alta a alguien del equipo |
+| `GET /v1/users/{id}` | `MANAGE_USERS` | Uno por id |
+| `PATCH /v1/users/{id}` | `MANAGE_USERS` | Cambia roles; exige `If-Match` |
+| `DELETE /v1/users/{id}` | `MANAGE_USERS` | Desactiva; no borra |
+| `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
-`X-Request-Id` en toda respuesta y token vencido distinguido de credenciales
-inválidas. Usuarios, refresh/logout e `Idempotency-Key` llegan en el plan 2.
+`X-Request-Id` en toda respuesta, `404` y nunca `403` para recursos de otra
+organización, y el despachador de outbox publicando los eventos del ledger.
+
+**`Idempotency-Key` es obligatoria en todo `POST`** salvo los cuatro exentos
+—`/v1/organizations`, `/v1/auth/login`, `/v1/auth/refresh`, `/v1/auth/logout`—,
+que corren antes de que exista una organización con la que indexar la tabla
+([07 §5](docs/specs/07-composicion-y-contexto-de-ejecucion.md)). Repetir una
+clave con el mismo cuerpo devuelve la respuesta guardada con
+`Idempotency-Replayed: true`; con otro cuerpo, `409 idempotency-key-reuse`.
+
+El catálogo, las ubicaciones y el ledger llegan a partir del plan 3.
 
 ## Arranque local
 
@@ -31,18 +48,46 @@ pnpm db:migrate                  # aplica migraciones y regenera los tipos de Ky
 pnpm start:dev
 ```
 
-Probar con `curl`:
+Probar con `curl` (el recorrido completo de la WAVE 1):
 
 ```bash
-curl -s -i -X POST localhost:3000/v1/organizations -H 'content-type: application/json' \
-  -d '{"name":"Distribuidora La Esquina","slug":"la-esquina","owner":{"email":"marta@esquina.co","name":"Marta","password":"correcthorse1"}}'
+B=localhost:3000/v1
 
-TOKEN=$(curl -s -X POST localhost:3000/v1/auth/login -H 'content-type: application/json' \
-  -d '{"email":"marta@esquina.co","password":"correcthorse1"}' | jq -r .accessToken)
+curl -s -X POST $B/organizations -H 'content-type: application/json' \
+  -d '{"name":"Distribuidora La Esquina","slug":"la-esquina","owner":{"email":"marta@esquina.co","name":"Marta","password":"correcthorse1!"}}' | jq
 
-curl -s localhost:3000/v1/me -H "authorization: Bearer $TOKEN" | jq
-curl -s -i localhost:3000/v1/me                        # 401 problem+json
-curl -s localhost:3000/v1/openapi.json | jq '.paths | keys'
+R=$(curl -s -X POST $B/auth/login -H 'content-type: application/json' \
+  -d '{"email":"marta@esquina.co","password":"correcthorse1!"}')
+T=$(echo $R | jq -r .accessToken); RT=$(echo $R | jq -r .refreshToken)
+
+curl -s $B/me -H "authorization: Bearer $T" | jq
+
+# Todo POST autenticado exige Idempotency-Key; repetirla devuelve el replay.
+K=$(uuidgen)
+curl -s -X POST $B/users -H "authorization: Bearer $T" -H 'content-type: application/json' \
+  -H "idempotency-key: $K" \
+  -d '{"email":"juan@esquina.co","name":"Juan","password":"correcthorse1!","roles":["OPERATOR"]}' | jq
+curl -s -D- -o /dev/null -X POST $B/users -H "authorization: Bearer $T" -H 'content-type: application/json' \
+  -H "idempotency-key: $K" \
+  -d '{"email":"juan@esquina.co","name":"Juan","password":"correcthorse1!","roles":["OPERATOR"]}' \
+  | grep -i idempotency-replayed          # → true
+
+curl -s "$B/users?role=OPERATOR&sort=-name&limit=10" -H "authorization: Bearer $T" | jq
+curl -s -i "$B/users?orgId=otra" -H "authorization: Bearer $T"   # 400 invalid-filter (T-4)
+
+U=$(curl -s "$B/users?role=OPERATOR" -H "authorization: Bearer $T" | jq -r '.data[0].id')
+curl -s -o /dev/null -w '%{http_code}\n' -X PATCH $B/users/$U -H "authorization: Bearer $T" \
+  -H 'content-type: application/json' -H 'if-match: "1"' -d '{"roles":["ADMIN"]}'   # 200
+curl -s -o /dev/null -w '%{http_code}\n' -X PATCH $B/users/$U -H "authorization: Bearer $T" \
+  -H 'content-type: application/json' -H 'if-match: "1"' -d '{"roles":["VIEWER"]}'  # 409 stale-version
+curl -s -o /dev/null -w '%{http_code}\n' -X PATCH $B/users/$U -H "authorization: Bearer $T" \
+  -H 'content-type: application/json' -d '{"roles":["VIEWER"]}'                     # 400 missing-if-match
+
+curl -s -X POST $B/auth/refresh -H 'content-type: application/json' -d "{\"refreshToken\":\"$RT\"}" | jq
+curl -s -i -X POST $B/auth/refresh -H 'content-type: application/json' -d "{\"refreshToken\":\"$RT\"}"  # 401: es de un solo uso
+
+curl -s -i $B/me                                       # 401 problem+json
+curl -s $B/openapi.json | jq '.paths | keys'
 ```
 
 Si el correo existe en más de una organización, `login` responde

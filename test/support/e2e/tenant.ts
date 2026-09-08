@@ -16,6 +16,8 @@ export interface Tenant {
   readonly slug: string;
   readonly orgId: string;
   readonly owner: Session;
+  /** Creates a teammate through `POST /v1/users` and logs them in. */
+  user(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', name?: string): Promise<Session>;
 }
 
 export const PASSWORD = 'correcthorse1!';
@@ -39,8 +41,32 @@ export async function registerOrg(
     { idem: false },
   );
   if (res.status !== 201) throw new Error(`registerOrg failed: ${res.status} ${JSON.stringify(res.body)}`);
-  const owner = await login(http, email, PASSWORD, slug);
-  return { slug, orgId: res.body.organization.id, owner };
+  return makeTenant(http, slug, res.body.organization.id, await login(http, email, PASSWORD, slug));
+}
+
+/**
+ * Wraps an organization that already exists. Suites that register it with a
+ * raw POST — because they assert the response — build their Tenant with this
+ * instead of a second registration.
+ */
+export function makeTenant(http: TestHttp, slug: string, orgId: string, owner: Session): Tenant {
+  return {
+    slug,
+    orgId,
+    owner,
+    async user(role, name = role.toLowerCase()) {
+      const mail = `${name}-${slug}@esquina.co`;
+      const created = await http.post(
+        '/v1/users',
+        { email: mail, name, password: PASSWORD, roles: [role] },
+        { token: owner.token },
+      );
+      if (created.status !== 201) {
+        throw new Error(`create ${role} failed: ${created.status} ${JSON.stringify(created.body)}`);
+      }
+      return login(http, mail, PASSWORD, slug);
+    },
+  };
 }
 
 /** An access token whose exp is in the past, signed with the test secret. Never touches the database. */

@@ -8,13 +8,14 @@ import { OutboxEventDao } from './dao/outbox-event.dao.js';
 import { RefreshTokenDao } from './dao/refresh-token.dao.js';
 import { UserDao } from './dao/user.dao.js';
 import { UserRoleDao } from './dao/user-role.dao.js';
+import { IdempotencyKeyDao } from './dao/idempotency-key.dao.js';
 
 import { KyselyOutboxEventPublisher } from './outbox/outbox-event-publisher.js';
 import { KyselyOrganizationRepository } from './repositories/organization.repository.js';
 import { KyselySessionRepository } from './repositories/session.repository.js';
 import { KyselyUserRepository } from './repositories/user.repository.js';
 
-const DAOS = [OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao];
+const DAOS = [OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao, IdempotencyKeyDao];
 const ADAPTERS = [
   KyselyOrganizationRepository,
   KyselyUserRepository,

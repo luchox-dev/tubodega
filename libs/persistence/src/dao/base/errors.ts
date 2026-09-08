@@ -31,6 +31,34 @@ export class UniqueViolationError extends Error {
   }
 }
 
+/** Postgres 23514: a CHECK the schema declares and the domain also states. */
+export class CheckViolationError extends Error {
+  constructor(readonly constraint: string) {
+    super(`check violation: ${constraint}`);
+    this.name = 'CheckViolationError';
+  }
+}
+
+/** Postgres 23503: a composite FK (org_id, x_id) that does not resolve. */
+export class ForeignKeyViolationError extends Error {
+  constructor(readonly constraint: string) {
+    super(`foreign key violation: ${constraint}`);
+    this.name = 'ForeignKeyViolationError';
+  }
+}
+
+/**
+ * An opaque cursor the client sent back mangled, or one built for a different
+ * ordering. The edge turns it into 400 invalid-filter; continuing with it
+ * would silently skip or repeat rows.
+ */
+export class InvalidCursorError extends Error {
+  constructor() {
+    super('unreadable cursor');
+    this.name = 'InvalidCursorError';
+  }
+}
+
 interface PgError {
   code?: string;
   constraint?: string;
@@ -40,5 +68,7 @@ interface PgError {
 export function translatePgError(e: unknown): never {
   const pg = e as PgError;
   if (pg?.code === '23505') throw new UniqueViolationError(pg.constraint ?? 'unknown');
+  if (pg?.code === '23514') throw new CheckViolationError(pg.constraint ?? 'unknown');
+  if (pg?.code === '23503') throw new ForeignKeyViolationError(pg.constraint ?? 'unknown');
   throw e;
 }

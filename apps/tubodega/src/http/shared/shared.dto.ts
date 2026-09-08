@@ -16,6 +16,13 @@ export class UserView {
   @ApiProperty({ example: true }) active!: boolean;
 }
 
+/** The cursor envelope of spec 03 §6, the same for every collection. */
+export class PageView {
+  @ApiPropertyOptional({ example: 'W3siYSI6MX1d', description: 'Opaco: se devuelve tal cual en `cursor`' })
+  nextCursor?: string;
+  @ApiProperty({ example: true }) hasMore!: boolean;
+}
+
 /** RFC 9457 body (spec 03 §5), declared as the error response of every endpoint. */
 export class ProblemDetailsView {
   @ApiProperty({ example: 'https://tubodega.app/errors/slug-taken' }) type!: string;
