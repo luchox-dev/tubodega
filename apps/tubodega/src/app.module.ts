@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from '@app/common';
 import { TenancyModule } from '@app/tenancy';
@@ -9,6 +10,7 @@ import { MeController } from './http/me/me.controller.js';
 import { OpenApiController, OpenApiDocument } from './http/openapi/openapi.controller.js';
 import { OrganizationsController } from './http/organizations/organizations.controller.js';
 import { UsersController } from './http/users/users.controller.js';
+import { OutboxDispatcherJob } from './jobs/outbox-dispatcher.job.js';
 import { AuthGuard } from './http/pipeline/auth.guard.js';
 import { DomainErrorFilter } from './http/pipeline/domain-error.filter.js';
 import { IdentityInterceptor } from './http/pipeline/identity.interceptor.js';
@@ -24,6 +26,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, cache: true, validate }),
+    ScheduleModule.forRoot(),
     AdaptersModule,
     TenancyModule,
   ],
@@ -31,6 +34,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
   providers: [
     OpenApiDocument,
     IdempotencyStore,
+    OutboxDispatcherJob,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_INTERCEPTOR, useClass: TransactionInterceptor },
     { provide: APP_INTERCEPTOR, useClass: IdentityInterceptor },
