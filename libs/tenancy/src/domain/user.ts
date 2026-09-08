@@ -66,6 +66,16 @@ export class User {
     return ok(new User(this.id, this.orgId, this.email, this.name, this.passwordHash, this.roles, false, this.version));
   }
 
+  /**
+   * The version the caller believes this user is at, taken from `If-Match`.
+   * Optimistic locking travels in the entity all the way to the DAO (spec
+   * 08 §7), so a stale header surfaces as 409 stale-version instead of
+   * silently overwriting someone else's change.
+   */
+  withVersion(version: number): User {
+    return new User(this.id, this.orgId, this.email, this.name, this.passwordHash, this.roles, this.active, version);
+  }
+
   withPasswordHash(passwordHash: string): User {
     return new User(this.id, this.orgId, this.email, this.name, passwordHash, this.roles, this.active, this.version);
   }

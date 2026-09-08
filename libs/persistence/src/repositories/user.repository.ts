@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import type { OrgId, UserId } from '@app/common';
-import { EmailTakenError, User, type Email, type Role, type UserRepository } from '@app/tenancy';
+import type { OrgId, Page, UserId } from '@app/common';
+import {
+  EmailTakenError,
+  User,
+  type Email,
+  type Role,
+  type UserFilter,
+  type UserPage,
+  type UserRepository,
+} from '@app/tenancy';
 import { UserDao } from '../dao/user.dao.js';
 import { UserRoleDao } from '../dao/user-role.dao.js';
 import { RecordNotFoundError, UniqueViolationError } from '../dao/base/errors.js';
@@ -43,6 +51,42 @@ export class KyselyUserRepository implements UserRepository {
 
   countActiveOwners(orgId: OrgId): Promise<number> {
     return this.roles.countActiveOwners(orgId);
+  }
+
+  /**
+   * The role filter is the documented escape hatch of spec 08 §5: an EXISTS
+   * over `user_role`, which the DSL mixes into its own AND. And the roles of a
+   * whole page are fetched with one query, not one per user.
+   */
+  async listPage(orgId: OrgId, filter: UserFilter, page: UserPage): Promise<Page<User>> {
+    const found = await this.users.findPage(orgId, {
+      take: page.limit,
+      cursor: page.cursor,
+      orderBy: { [page.sort.field]: page.sort.dir },
+      where: {
+        ...(filter.active !== undefined ? { active: filter.active } : {}),
+        ...(filter.role
+          ? {
+              AND: [
+                (eb) =>
+                  eb.exists(
+                    eb
+                      .selectFrom('userRole')
+                      .select('userId')
+                      .whereRef('userRole.userId', '=', 'appUser.id')
+                      .where('userRole.orgId', '=', orgId)
+                      .where('userRole.role', '=', filter.role!),
+                  ),
+              ],
+            }
+          : {}),
+      },
+    });
+
+    const roles = await this.roles.listByUsers(orgId, found.data.map((r) => r.id));
+    const byUser = new Map<string, UserRoleModel[]>();
+    for (const r of roles) byUser.set(r.userId, [...(byUser.get(r.userId) ?? []), r]);
+    return { ...found, data: found.data.map((row) => toUser(row, byUser.get(row.id) ?? [])) };
   }
 
   async save(user: User): Promise<void> {

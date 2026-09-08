@@ -4,6 +4,11 @@ import { RANDOM_TOKEN, TOKEN_ISSUER } from './application/ports/token-issuer.js'
 import { Authenticate } from './application/use-cases/authenticate.js';
 import { ChangePassword } from './application/use-cases/change-password.js';
 import { CreateOrganization } from './application/use-cases/create-organization.js';
+import { CreateUser } from './application/use-cases/create-user.js';
+import { DeactivateUser } from './application/use-cases/deactivate-user.js';
+import { GetUser } from './application/use-cases/get-user.js';
+import { ListUsers } from './application/use-cases/list-users.js';
+import { UpdateUserRoles } from './application/use-cases/update-user-roles.js';
 import { Logout } from './application/use-cases/logout.js';
 import { RefreshSession } from './application/use-cases/refresh-session.js';
 import { Argon2PasswordHasher } from './infrastructure/argon2-password-hasher.js';
@@ -22,6 +27,11 @@ import { JoseTokenIssuer } from './infrastructure/jose-token-issuer.js';
     RefreshSession,
     Logout,
     ChangePassword,
+    CreateUser,
+    ListUsers,
+    GetUser,
+    UpdateUserRoles,
+    DeactivateUser,
     { provide: PASSWORD_HASHER, useClass: Argon2PasswordHasher },
     { provide: TOKEN_ISSUER, useClass: JoseTokenIssuer },
     { provide: RANDOM_TOKEN, useClass: CryptoRandomToken },
@@ -32,6 +42,11 @@ import { JoseTokenIssuer } from './infrastructure/jose-token-issuer.js';
     RefreshSession,
     Logout,
     ChangePassword,
+    CreateUser,
+    ListUsers,
+    GetUser,
+    UpdateUserRoles,
+    DeactivateUser,
     TOKEN_ISSUER,
     PASSWORD_HASHER,
   ],
