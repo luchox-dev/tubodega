@@ -104,6 +104,10 @@
     {
       "key": "mediaId",
       "value": ""
+    },
+    {
+      "key": "viewerToken",
+      "value": ""
     }
   ],
   "event": [
@@ -705,6 +709,101 @@
                   "  pm.response.to.have.status(200);",
                   "  pm.response.json().data.forEach((u) => pm.expect(u.roles).to.include('OPERATOR'));",
                   "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear a Sofía (VIEWER)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Un VIEWER de verdad: hace falta para demostrar el 403 de la carpeta de errores.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sofia-{{slug}}@esquina.co\",\n  \"name\": \"Sofía\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"VIEWER\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión como Sofía",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sofia-{{slug}}@esquina.co\",\n  \"password\": \"{{password}}\",\n  \"slug\": \"{{slug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('viewerToken', pm.response.json().accessToken);"
                 ]
               }
             }
@@ -2444,8 +2543,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
                   "pm.test('req-123 no es UUID: la respuesta trae uno nuevo', () => {",
                   "  pm.expect(pm.response.headers.get('X-Request-Id')).to.not.eql('req-123');",
+                  "  pm.expect(pm.response.headers.get('X-Request-Id')).to.match(/^[0-9a-f-]{36}$/i);",
                   "});"
                 ]
               }
@@ -2735,7 +2836,7 @@
               },
               {
                 "key": "authorization",
-                "value": "Bearer {{accessToken}}"
+                "value": "Bearer {{viewerToken}}"
               },
               {
                 "key": "idempotency-key",
@@ -2752,7 +2853,7 @@
                 "users"
               ]
             },
-            "description": "Ejecutar con un accessToken de VIEWER para verlo.",
+            "description": "Con el token de Sofía, que es VIEWER: leer sí, administrar no.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"colado-{{slug}}@esquina.co\",\n  \"name\": \"Colado\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"OWNER\"\n  ]\n}",
@@ -2769,8 +2870,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('403 insufficient-role si el token es de VIEWER', () => {",
-                  "  if (pm.response.code === 403) pm.expect(pm.response.json().type).to.include('insufficient-role');",
+                  "pm.test('403 insufficient-role', () => {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/insufficient-role');",
                   "});"
                 ]
               }
