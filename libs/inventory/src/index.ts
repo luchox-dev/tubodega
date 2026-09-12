@@ -19,4 +19,8 @@ export * from './application/use-cases/seed-boundary-nodes.js';
 export * from './application/use-cases/movements/record-movement.js';
 export * from './application/use-cases/movements/record-movement-batch.js';
 export * from './application/use-cases/movements/reverse-movement.js';
+export * from './application/use-cases/stock/get-stock.js';
+export * from './application/use-cases/stock/get-movement-history.js';
+export * from './application/use-cases/stock/get-movement-by-id.js';
+export * from './application/use-cases/stock/get-open-custodies.js';
 export * from './inventory.module.js';
