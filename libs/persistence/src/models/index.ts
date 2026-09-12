@@ -56,3 +56,7 @@ export type NewMovement = Insertable<DB['movement']>;
 
 export type StockBalanceModel = Selectable<DB['stockBalance']>;
 export type NewStockBalance = Insertable<DB['stockBalance']>;
+
+export type ProcessTemplateModel = Selectable<DB['processTemplate']>;
+export type NewProcessTemplate = Insertable<DB['processTemplate']>;
+export type ProcessTemplatePatch = Updateable<DB['processTemplate']>;

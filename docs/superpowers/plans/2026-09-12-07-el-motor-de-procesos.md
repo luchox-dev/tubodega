@@ -339,7 +339,7 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
 `libs/persistence/test/repositories/process/template.repository.int-spec.ts`;
 `apps/tubodega/test/edge/org-seeding.int-spec.ts`
 
-- [ ] **Step 1:** los tres alias en `models/index.ts` —**un solo fichero**, no el
+- [x] **Step 1:** los tres alias en `models/index.ts` —**un solo fichero**, no el
       `src/models/*.ts` que dibuja el mapa del maestro— y `process-template.dao.ts` sobre
       `AbstractOrgDao`. `steps` es `jsonb`: el mapeo de ida y vuelta vive en `mapping.ts`,
       como en catalog e inventory.
@@ -348,29 +348,29 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
       `false` —como en `NodeDao` está en `true` porque allí sí lo es—, o el DAO tratará el
       número de versión de la plantilla como un contador de ediciones y `save` fallará con
       `VersionConflictError` la primera vez que alguien cree una `v2`.
-- [ ] **Step 2:** el puerto `ProcessTemplateRepository` con los cinco métodos de
+- [x] **Step 2:** el puerto `ProcessTemplateRepository` con los cinco métodos de
       [13 §8](docs/specs/13-process.md). `hasInstances` se declara aunque **no tenga ruta
       que lo produzca en el MVP**: es P-9, y el plan 8 lo usa.
-- [ ] **Step 3: spec primero** de `SeedFactoryTemplates`: siembra las seis en versión 1, y
+- [x] **Step 3: spec primero** de `SeedFactoryTemplates`: siembra las seis en versión 1, y
       **llamarlo dos veces no duplica**. Idempotente por `findVersion(code, 1)` antes de
       `save`, como `SeedBoundaryNodes` — y no con `ON CONFLICT`, porque un `23505` abortaría
       la transacción que crea la organización.
-- [ ] **Step 4: implementar** (D-26): `execute(orgId)`, **sin `RequestContext`, sin
+- [x] **Step 4: implementar** (D-26): `execute(orgId)`, **sin `RequestContext`, sin
       `requireAction`, sin eventos**. Cuando corre no hay organización ni token, y un ctx con
       roles inventados sería una autorización que no puede fallar. `organization.created` ya
       cuenta el hecho.
-- [ ] **Step 5:** el adaptador y el cableado. `factory-templates.seeder.ts` es el molde
+- [x] **Step 5:** el adaptador y el cableado. `factory-templates.seeder.ts` es el molde
       exacto de `boundary-nodes.seeder.ts`. En `adapters.module.ts`, `ORG_SEEDERS` gana una
       línea en `inject` y un parámetro en el `useFactory` —**`useFactory` y no `useValue`**,
       que es lo que ya dice su comentario—, y `AdaptersModule` importa `ProcessModule` como
       ya importa `InventoryModule`.
-- [ ] **Step 6: integración.** El repositorio contra Postgres con `withRollback`, y
+- [x] **Step 6: integración.** El repositorio contra Postgres con `withRollback`, y
       `org-seeding.int-spec.ts` —que ya existe para los ocho nodos— comprobando que tras
       `CreateOrganization` hay **seis plantillas activas en versión 1**, y que las seis pasan
       el validador al releerlas de la base. El `jsonb` de ida y vuelta es donde se rompen
       estas cosas.
-- [ ] **Step 7: Run** `pnpm test:e2e libs/persistence apps/tubodega/test/edge` → PASS.
-- [ ] **Step 8: Commit** `feat(process): las seis plantillas sembradas con la organización`
+- [x] **Step 7: Run** `pnpm test:e2e libs/persistence apps/tubodega/test/edge` → PASS.
+- [x] **Step 8: Commit** `feat(process): las seis plantillas sembradas con la organización`
 
 ---
 

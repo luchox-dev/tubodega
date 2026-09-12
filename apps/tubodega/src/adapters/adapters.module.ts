@@ -23,11 +23,14 @@ import {
   KyselySessionRepository,
   KyselyStockBalanceRepository,
   KyselyUserRepository,
+  KyselyProcessTemplateRepository,
   PersistenceModule,
 } from '@app/persistence';
 import { ORGANIZATION_REPOSITORY, ORG_PROVISIONER, SESSION_REPOSITORY, USER_REPOSITORY } from '@app/tenancy';
 import { InventoryModule, MOVEMENT_REPOSITORY, NODE_REPOSITORY, STOCK_BALANCE_REPOSITORY } from '@app/inventory';
+import { PROCESS_TEMPLATE_REPOSITORY, ProcessModule } from '@app/process';
 import { BoundaryNodesSeeder } from './inventory/boundary-nodes.seeder.js';
+import { FactoryTemplatesSeeder } from './process/factory-templates.seeder.js';
 import { CompositeOrgProvisioner, ORG_SEEDERS, type OrgSeeder } from './tenancy/org-provisioner.adapter.js';
 import { MovementCounterAdapter } from './catalog/movement-counter.adapter.js';
 import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
@@ -38,7 +41,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
  */
 @Global()
 @Module({
-  imports: [PersistenceModule, InventoryModule],
+  imports: [PersistenceModule, InventoryModule, ProcessModule],
   providers: [
     { provide: CLOCK, useClass: SystemClock },
     { provide: ID_GENERATOR, useClass: Uuidv7Generator },
@@ -47,14 +50,21 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     { provide: USER_REPOSITORY, useExisting: KyselyUserRepository },
     { provide: SESSION_REPOSITORY, useExisting: KyselySessionRepository },
     BoundaryNodesSeeder,
+    FactoryTemplatesSeeder,
     {
       provide: ORG_SEEDERS,
       // useFactory and not useValue: useValue would hand the composite the
       // classes instead of the instances, and seeder.seed() would blow up at
-      // runtime. Plans 8 and 9 extend this with one entry in `inject` and one
+      // runtime. Plan 9 extends this with one entry in `inject` and one
       // parameter here (decision D-2).
-      inject: [BoundaryNodesSeeder],
-      useFactory: (nodes: BoundaryNodesSeeder): readonly OrgSeeder[] => [nodes],
+      //
+      // The order is the order they run in: the templates do not depend on the
+      // boundary nodes today — a `default` resolves its node when a process
+      // confirms, not when it is seeded — but the eight nodes being there first
+      // is what the narrative of an organization says.
+      inject: [BoundaryNodesSeeder, FactoryTemplatesSeeder],
+      useFactory: (nodes: BoundaryNodesSeeder, templates: FactoryTemplatesSeeder): readonly OrgSeeder[] =>
+        [nodes, templates],
     },
     { provide: ORG_PROVISIONER, useClass: CompositeOrgProvisioner },
     { provide: PRODUCT_REPOSITORY, useExisting: KyselyProductRepository },
@@ -64,6 +74,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     { provide: MOVEMENT_REPOSITORY, useExisting: KyselyMovementRepository },
     { provide: NODE_REPOSITORY, useExisting: KyselyNodeRepository },
     { provide: STOCK_BALANCE_REPOSITORY, useExisting: KyselyStockBalanceRepository },
+    { provide: PROCESS_TEMPLATE_REPOSITORY, useExisting: KyselyProcessTemplateRepository },
     MovementCounterAdapter,
     StockCheckerAdapter,
     { provide: MOVEMENT_COUNTER, useExisting: MovementCounterAdapter },
@@ -94,6 +105,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     MOVEMENT_REPOSITORY,
     NODE_REPOSITORY,
     STOCK_BALANCE_REPOSITORY,
+    PROCESS_TEMPLATE_REPOSITORY,
     MOVEMENT_COUNTER,
     STOCK_CHECKER,
     MEDIA_UPLOAD_REPOSITORY,

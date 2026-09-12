@@ -5,6 +5,7 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from '@app/common';
 import { CatalogModule } from '@app/catalog';
 import { InventoryModule } from '@app/inventory';
+import { ProcessModule } from '@app/process';
 import { TenancyModule } from '@app/tenancy';
 import { AdaptersModule } from './adapters/adapters.module.js';
 import { AuthController } from './http/auth/auth.controller.js';
@@ -43,6 +44,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     TenancyModule,
     CatalogModule,
     InventoryModule,
+    ProcessModule,
   ],
   controllers: [
     OrganizationsController,
