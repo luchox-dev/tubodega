@@ -2,6 +2,8 @@ export * from './domain/ids.js';
 export * from './domain/errors.js';
 export * from './domain/node.js';
 export * from './domain/quantity.js';
+export * from './domain/stock-position.js';
+export * from './domain/movement.js';
 export * from './application/events.js';
 export * from './application/ports/node.repository.js';
 export * from './application/ports/stock-balance.repository.js';

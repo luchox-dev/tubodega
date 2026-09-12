@@ -159,3 +159,118 @@ export class InvalidQuantityError extends DomainError {
     });
   }
 }
+
+/** I-1. A movement is a double entry, and both ends being the same place is not one. */
+export class SameNodeError extends DomainError {
+  readonly type = 'same-node';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Un movimiento va de un sitio a otro, y "${path}" es los dos`, {
+      errors: [{ pointer: '/toNodeId', code: 'same-node' }],
+    });
+  }
+}
+
+/** I-8, the half where the product tracks batches and none came. */
+export class BatchRequiredError extends DomainError {
+  readonly type = 'batch-required';
+  readonly status = 422;
+  constructor(sku: string, mode: string) {
+    super(`"${sku}" se rastrea por ${mode === 'SERIAL' ? 'número de serie' : 'lote'}: hay que decir cuál se mueve`, {
+      errors: [{ pointer: '/batchId', code: 'batch-required' }],
+    });
+  }
+}
+
+/** I-8, the other half: a QUANTITY product has no batches to speak of. */
+export class BatchNotAllowedError extends DomainError {
+  readonly type = 'batch-not-allowed';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`"${sku}" se lleva por cantidad, así que no tiene lotes ni series`, {
+      errors: [{ pointer: '/batchId', code: 'batch-not-allowed' }],
+    });
+  }
+}
+
+export class BatchProductMismatchError extends DomainError {
+  readonly type = 'batch-product-mismatch';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`Ese lote no es de "${sku}"`, {
+      errors: [{ pointer: '/batchId', code: 'batch-product-mismatch' }],
+    });
+  }
+}
+
+/** I-11. A due date on stock that is not on loan has nobody to come back from. */
+export class DueDateNotAllowedError extends DomainError {
+  readonly type = 'due-date-not-allowed';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Solo un préstamo tiene fecha de devolución, y "${path}" no es una custodia`, {
+      errors: [{ pointer: '/dueAt', code: 'due-date-not-allowed' }],
+    });
+  }
+}
+
+/**
+ * I-14. The five minutes of tolerance are for the device with a drifting clock,
+ * which is the whole reason occurredAt and recordedAt are two columns.
+ */
+export class FutureOccurrenceError extends DomainError {
+  readonly type = 'future-occurrence';
+  readonly status = 422;
+  constructor(toleranceMinutes: number) {
+    super(`El movimiento dice haber ocurrido en el futuro: se admiten hasta ${toleranceMinutes} minutos de desfase`, {
+      errors: [{ pointer: '/occurredAt', code: 'future-occurrence' }],
+    });
+  }
+}
+
+/** I-17. Stock leaving a custody is either a return or the undoing of a loan. */
+export class SettlesRequiredError extends DomainError {
+  readonly type = 'settles-required';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Lo que sale de la custodia "${path}" salda un préstamo: falta decir cuál`, {
+      errors: [{ pointer: '/settlesId', code: 'settles-required' }],
+    });
+  }
+}
+
+export class SettlesMismatchError extends DomainError {
+  readonly type = 'settles-mismatch';
+  readonly status = 422;
+  constructor(detail: string) {
+    super(`El préstamo que se dice saldar no cuadra: ${detail}`, {
+      errors: [{ pointer: '/settlesId', code: 'settles-mismatch' }],
+    });
+  }
+}
+
+/** I-18. The pending amount is an aggregate, so no CHECK can hold it. */
+export class SettlesExceededError extends DomainError {
+  readonly type = 'settles-exceeded';
+  readonly status = 422;
+  constructor(pending: string, requested: string) {
+    super(`De ese préstamo quedan ${pending} por devolver, y se intentan devolver ${requested}`, {
+      errors: [{ pointer: '/quantity', code: 'settles-exceeded', pending, requested }],
+    });
+  }
+}
+
+/**
+ * Decision D-10 and D-36. Spec 02 §10 demands an explanation for adjustments
+ * and shrinkage; spec 12 §9 gives it no `type`, so it is fixed here. Consumption
+ * is deliberately not on the list: it is a physical fact, not a correction.
+ */
+export class ReasonRequiredError extends DomainError {
+  readonly type = 'reason-required';
+  readonly status = 422;
+  constructor(code: string) {
+    super(`Un movimiento contra "${code}" tiene que explicar por qué`, {
+      errors: [{ pointer: '/reason', code: 'reason-required' }],
+    });
+  }
+}
