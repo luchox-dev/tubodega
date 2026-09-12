@@ -3,7 +3,7 @@
 > Rama `plan/07-el-motor-de-procesos` · documento en `docs/superpowers/plans/2026-09-12-07-el-motor-de-procesos.md`
 > Fases del maestro: **F4.1**, **F4.2** y la mitad de lectura de **F4.4** *(re-cortado, D-51)*
 
-## Estado: **pendiente**
+## Estado: **en curso**
 
 ---
 
@@ -161,9 +161,9 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 ### Task 0: Rama y documento del plan
 
-- [ ] **Step 1:** `git checkout -b plan/07-el-motor-de-procesos`
-- [ ] **Step 2:** Este documento.
-- [ ] **Step 3: Commit** `docs(plan): plan 7 — el motor de procesos`
+- [x] **Step 1:** `git checkout -b plan/07-el-motor-de-procesos`
+- [x] **Step 2:** Este documento.
+- [x] **Step 3: Commit** `docs(plan): plan 7 — el motor de procesos`
 
 ---
 
@@ -173,26 +173,26 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 `.dependency-cruiser.cjs`, `libs/process/tsconfig.lib.json`,
 `libs/process/src/{index.ts, domain/ids.ts, domain/step-types.ts, domain/errors.ts}`
 
-- [ ] **Step 1: los seis ficheros del andamiaje** (D-48). Copiar de `inventory` en cada uno.
+- [x] **Step 1: los seis ficheros del andamiaje** (D-48). Copiar de `inventory` en cada uno.
       `tsconfig.json` lleva **las dos cosas**: `paths['@app/process']` apuntando al
       `index.ts` —bajo `moduleResolution: nodenext` un directorio no resuelve por índice— y
       una entrada en `references`. Los alias de vitest están **duplicados a mano en dos
       ficheros**: el que se olvide falla solo en `pnpm test:e2e`, media hora después.
-- [ ] **Step 2: la regla R-2 que falta.** `.dependency-cruiser.cjs` nombra `process` y
+- [x] **Step 2: la regla R-2 que falta.** `.dependency-cruiser.cjs` nombra `process` y
       `alerts` en las reglas de tenancy, catalog e inventory, lo que hace *parecer* que
       están cubiertos. No hay ninguna que impida `process → alerts`. Probarla con un import
       prohibido temporal, ver `pnpm lint` en rojo, y retirarlo.
-- [ ] **Step 3:** `domain/ids.ts` con `StepId` y `TemplateCode`. **Aquí y no en
+- [x] **Step 3:** `domain/ids.ts` con `StepId` y `TemplateCode`. **Aquí y no en
       `@app/common`**: solo `ProcessInstanceId` vive allí, y su comentario explica por qué
       (lo referencia `inventory`). `TemplateCode.of` valida contra `varchar(64)`.
-- [ ] **Step 4:** `step-types.ts` y `errors.ts` — los dieciséis de
+- [x] **Step 4:** `step-types.ts` y `errors.ts` — los dieciséis de
       [13 §12](docs/specs/13-process.md), incluidos los tres que el refinamiento añadió:
       `process-instance-not-found` (404), `process-instance-id-taken` (409) e
       `invalid-template` (422). Los de instancia se declaran aunque el plan 8 sea quien los
       lance: el fichero de errores del módulo se escribe una vez.
-- [ ] **Step 5: Run** `pnpm lint && pnpm typecheck && pnpm test` → PASS con la librería
+- [x] **Step 5: Run** `pnpm lint && pnpm typecheck && pnpm test` → PASS con la librería
       vacía. Si `depcruise` no ve `libs/process`, es que falta el `paths`.
-- [ ] **Step 6: Commit** `feat(process): la librería de alta, y el vocabulario del motor`
+- [x] **Step 6: Commit** `feat(process): la librería de alta, y el vocabulario del motor`
 
 ---
 

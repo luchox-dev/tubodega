@@ -17,6 +17,7 @@ export default defineConfig({
       '@app/common': lib('common'),
       '@app/catalog': lib('catalog'),
       '@app/inventory': lib('inventory'),
+      '@app/process': lib('process'),
       '@app/persistence': lib('persistence'),
       '@app/tenancy': lib('tenancy'),
     },
@@ -38,6 +39,11 @@ export default defineConfig({
         'libs/inventory/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
         'libs/inventory/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'libs/tenancy/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
+        // The engine is provable without Postgres, without HTTP and without a
+        // container (spec 13 §4.3), so there is no excuse for less than all of
+        // it. It starts with the directory, not at the end (decision D-15).
+        'libs/process/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
+        'libs/process/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
       },
     },
   },

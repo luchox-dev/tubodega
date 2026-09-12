@@ -17,6 +17,7 @@ export default defineConfig({
       '@app/common': lib('common'),
       '@app/catalog': lib('catalog'),
       '@app/inventory': lib('inventory'),
+      '@app/process': lib('process'),
       '@app/persistence': lib('persistence'),
       '@app/tenancy': lib('tenancy'),
     },

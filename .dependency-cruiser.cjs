@@ -40,6 +40,17 @@ module.exports = {
       to: { path: '^libs/(process|alerts)/' },
     },
     {
+      // The row that was missing: `process` is named as a *destination* in the
+      // three rules above, which makes the pair look covered. Nothing stopped
+      // `process` from importing `alerts` (decision D-48). It must not: the
+      // alerts of spec 14 are raised by reconciliation, and an effect carrying
+      // a type of `alerts` would be a cycle (spec 13 §4.3).
+      name: 'R-2 dependency-order-process',
+      severity: 'error',
+      from: { path: '^libs/process/' },
+      to: { path: '^libs/alerts/' },
+    },
+    {
       name: 'R-3 only-barrels',
       comment: 'A context imports @app/<lib> (its index.ts), never an internal path of another library.',
       severity: 'error',
