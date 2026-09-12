@@ -226,21 +226,21 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 **Files:** `libs/process/src/domain/{instance.ts, context.ts, drafts.ts, step-completion.ts, effects.ts}` + specs
 
-- [ ] **Step 1: spec primero.** `ProcessInstance.isOpen()`, `canComplete(stepId)`;
+- [x] **Step 1: spec primero.** `ProcessInstance.isOpen()`, `canComplete(stepId)`;
       `ProcessContext.with` acumula por paso; `withDraft` **funde** —no añade— y
       `withStorageKeys` acumula aparte.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** El borrador es **uno** (la corrección de
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** El borrador es **uno** (la corrección de
       [13 §2](docs/specs/13-process.md)), y **no lleva `occurredAt`**: la hora del asiento
       la pone el aplicador de efectos con el `Clock` en el plan 8, porque una instancia puede
       llevar abierta desde ayer.
       Las claves de foto van en su propio campo y no en el borrador: alimentan otro efecto,
       y sobre un producto, no sobre una posición.
-- [ ] **Step 4:** `effects.ts` con el `feeds` de la corrección: el índice del borrador al que
+- [x] **Step 4:** `effects.ts` con el `feeds` de la corrección: el índice del borrador al que
       alimenta el `CREATE_BATCH`. Hoy siempre `0`; sin él, el orden de los efectos no sirve
       de nada porque el `batchId` no tiene dónde aterrizar.
-- [ ] **Step 5: Run** → PASS.
-- [ ] **Step 6: Commit** `feat(process): la instancia, el contexto que acumula, y los efectos`
+- [x] **Step 5: Run** → PASS.
+- [x] **Step 6: Commit** `feat(process): la instancia, el contexto que acumula, y los efectos`
 
 ---
 

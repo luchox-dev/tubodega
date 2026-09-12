@@ -13,6 +13,9 @@ export type StepId = Branded<string, 'StepId'>;
 /** A row of `process_template`. The natural key is (org, code, version). */
 export type ProcessTemplateId = Branded<string, 'ProcessTemplateId'>;
 
+/** A row of `step_completion`. Append-only, like a movement. */
+export type StepCompletionId = Branded<string, 'StepCompletionId'>;
+
 /** The business name of a process: RECEPCION, TRASLADO, AJUSTE_ENTRADA, ... */
 export type TemplateCode = Branded<string, 'TemplateCode'>;
 
