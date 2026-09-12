@@ -3,7 +3,72 @@
 > Rama `plan/06-el-cierre-de-la-wave-3` · documento en `docs/superpowers/plans/2026-09-12-06-el-cierre-de-la-wave-3.md`
 > Fases del maestro: **F3.6** y la **e2e WAVE 3**
 
-## Estado: **en ejecución** (2026-09-12)
+## Estado: **ejecutado** (2026-09-12)
+
+Siete tareas, ocho commits. Al cerrar: **568 unitarias**, **241 de integración,
+e2e y propiedades**, **421 comprobaciones de caja negra** en cinco suites. El
+contrato se queda en **44 operaciones** —el plan 6 no añade endpoints— y el cruce
+de cobertura sigue completo: 44 ejercitadas, 44 con camino feliz, 44 con camino
+de error. La pirámide de [06 §2](docs/specs/06-pruebas-y-calidad.md) queda con
+sus **seis niveles poblados** por primera vez.
+
+### Lo que se encontró al ejecutar, y no estaba previsto
+
+**I-9 no valía al compensar un despacho.** Es el hallazgo del plan, y lo encontró
+la generación, no una persona. La secuencia: una serie entra, se traslada, se
+vende, el proveedor manda otra unidad con la misma serie a otra estantería —cosa
+legítima, el sistema no puede saber que es la misma pieza hasta que la ve— y
+entonces alguien deshace la venta. La compensación devuelve la serie al sitio del
+que salió y la misma pieza queda en dos estanterías. Ninguna operación por
+separado hace nada raro.
+
+`guardSerial` tenía la condición correcta —entrar a un nodo custodiable desde uno
+que no lo es— y deshacer un despacho la cumple exactamente, porque es una entrada
+`TERMINAL → INTERNAL`. Lo que fallaba no era la regla: era que `ReverseMovement`
+no se la preguntaba a nadie. Y `custodialTotal` devuelve cero justo hasta el
+instante en que deja de hacerlo.
+
+Con la guarda quitada, la propiedad de I-9 cae a los **902 casos** y encoge a seis
+pasos, que es exactamente la secuencia de arriba. Ningún ejemplo escrito a mano la
+cubría, y ninguna de las 558 pruebas que había la habría encontrado nunca.
+
+**Y el patrón es raro: dos de cada mil.** Medido sobre 20.000 secuencias, el
+interleaving que rompe I-9 aparece el 0,2 % de las veces con el mundo completo.
+Por eso la suite de I-9 corre sobre un mundo estrecho —un producto por serie, dos
+series, un par de estantes y una frontera de cada clase— y con 1500 corridas en
+vez de 50. Cincuenta no lo verían nunca. Y por eso el testigo escrito a mano
+sigue ahí: la propiedad busca lo que no sabemos, el ejemplo clava lo que ya sabemos.
+
+### Dos tests ajenos que esto puso en rojo, y por qué no era culpa suya
+
+Ninguno de los dos falló por una línea de código nueva. Los dos daban por hecho
+algo sobre la base de test que dejó de ser cierto cuando el ledger empezó a
+escribir de verdad.
+
+| Qué | Por qué se cayó |
+|---|---|
+| `outbox-dispatcher.int-spec.ts` · «publishes what is pending» y «two concurrent passes» | El despachador publica de **100 en 100** y la base de test no se limpia nunca. Las suites del ledger dejan varios cientos de eventos por publicar, así que el `tick()` del test se gastaba el lote entero en historia de otros y sus tres eventos no llegaban a reclamarse. Ahora vacía primero |
+| `ledger.int-spec.ts` · «los últimos por producto van por el índice» | Fijaba el **nombre** de un índice. Con cientos de organizaciones, el planificador no tiene estadísticas para un par `(org, producto)` nuevo, estima **una fila**, y `movement_org_id_occurred_at_idx` y `movement_org_id_product_id_occurred_at_idx` empatan en coste: se lleva el que ese día sea una página más bajo. El test se puso rojo sin que cambiara nada, solo porque la base había crecido — y no puede arreglarse sus propias estadísticas, porque **`ANALYZE` se salta en silencio** para un rol que no es dueño de la tabla, y ninguno de los dos de aplicación lo es. Pasa a afirmar lo que D-37 promete: que esa consulta **nunca escanea la tabla** |
+
+### Desviaciones al ejecutar
+
+| Qué | Por qué |
+|---|---|
+| El testigo a mano de I-9 vive en `test/invariants/serial-reversal.int-spec.ts`, no en `libs/persistence/test/repositories/inventory/` | Necesita los casos de uso reales cableados contra Postgres, que es justo lo que monta el harness de las propiedades. En `libs/persistence` habría que rehacerlo entero |
+| `fcParams()` acepta un `numRuns` en la llamada, y la suite de I-9 pide 1500 | D-44 dice que local y CI corren igual, no que las cuatro propiedades tengan que correr lo mismo. Una cuyo estado interesante aparece dos de cada mil necesita más casos, y decirlo en el sitio de la llamada es más honesto que subir el número para todas |
+| `arbitraries.ts` añade `checks.ts` y `harness.ts`, que F3.6 no nombra | F3.6 lista los ficheros mínimos. `checks.ts` separa las cuatro consultas porque I-5 y la conservación comparten el CTE del ledger, y deja cada `prop-spec` en cuarenta líneas legibles |
+| El generador **produce** la secuencia que rompe I-9 en vez de esquivarla | Primero la esquivaba, y con eso la propiedad salía verde incluso con la guarda quitada: el modelo se había vuelto más listo que el sistema. Una operación válida a priori se genera; quien tiene que negarse es el producto |
+| Un caso 16 en la e2e que el maestro no pide: el aislamiento del ledger entre empresas | Ni la caja negra ni w1/w2 lo tocan, porque ninguna crea una segunda organización con el ledger en pie |
+| El e2e no importa `Quantity` (D-45) | El criterio 8 pide un oráculo. Con la aritmética del dominio, un fallo en `Quantity` saldría verde justo en la prueba que existe para cazarlo |
+
+### Lo que encontró cada capa de prueba
+
+| Capa | Qué encontró que la anterior no podía |
+|---|---|
+| La spec del propio generador | Que el sobregiro de una serie salía en `1.250` unidades. Una serie se mueve entera, y eso no lo dice ningún `CHECK` |
+| Propiedades sobre Postgres | **El agujero de I-9.** Y, de paso, que el modelo del generador y el dominio coinciden exactamente: 1729 operaciones, 120 rechazos, y los 120 son los sobregiros deliberados |
+| e2e por HTTP | Que el despachador de outbox y el plan del índice daban por hecho que estaban solos en la base |
+| Caja negra sobre el socket | Que había un `nest --watch` colgado en el `:3000` sirviendo un build viejo. El arreglo de I-9, comprobado a mano con `curl`: `422 serial-already-placed` donde antes había un `201` |
 
 ---
 
@@ -128,28 +193,28 @@ docs/specs/12-inventory.md                      I-9 también en la compensación
 
 **Files:** `package.json`; `test/invariants/harness.ts`
 
-- [ ] **Step 1:** `pnpm add -D fast-check`.
-- [ ] **Step 2: el spike, antes de escribir nada más.** Un fichero desechable que, dentro de
+- [x] **Step 1:** `pnpm add -D fast-check`.
+- [x] **Step 2: el spike, antes de escribir nada más.** Un fichero desechable que, dentro de
       `withRollback`, haga `append()` de un movimiento y luego `uow.run(() => applyDelta(delta negativo))`,
       y compruebe que (a) la transacción sigue usable y (b) el asiento desapareció. Anida savepoints
       a **tres** niveles (`runAs` → `run` → el `run` interno de `applyDelta`), y ese anidamiento
       **nunca se ha ejercitado en este repo**. Si falla, cambia el diseño entero (D-42).
-- [ ] **Step 3:** `createInvariantHarness()` sobre `ConfigModule + AdaptersModule + InventoryModule`.
+- [x] **Step 3:** `createInvariantHarness()` sobre `ConfigModule + AdaptersModule + InventoryModule`.
       `AdaptersModule` es la raíz de composición real: replicar su tabla puerto↔adaptador aquí haría
       que la propiedad probase un cableado inventado. Importarla desde `test/` tiene precedente
       (`test/support/e2e/app.ts` hace lo mismo con `AppModule`). **No** se arranca la app entera:
       por HTTP cada petición commitea y no habría forma de deshacer una corrida.
-- [ ] **Step 4:** `seedInvariantWorld(h, label)` — commitea por el pool `system` una organización
+- [x] **Step 4:** `seedInvariantWorld(h, label)` — commitea por el pool `system` una organización
       con 2 productos QUANTITY, 1 LOT con 2 lotes, 1 SERIAL con 3 series, 3 INTERNAL, 2 CUSTODY,
       2 TERMINAL, 2 SOURCE. `seedWorld` de `libs/persistence/test/support/raw-rows.ts` no sirve
       (un nodo de cada clase, ningún SERIAL) y ensancharlo obligaría a un deep-import.
       **Trampa:** ningún `code` puede ser `shrinkage`, `adjustment-in` ni `adjustment-out`
       (`REASON_REQUIRED_CODES`), o todo movimiento generado exigiría `reason`.
-- [ ] **Step 5:** `attempt()`, `applySequence()` y `fcParams()` (D-42, D-44). Los rechazos que la
+- [x] **Step 5:** `attempt()`, `applySequence()` y `fcParams()` (D-42, D-44). Los rechazos que la
       spec acepta son `insufficient-stock`, `settles-exceeded`, `serial-already-placed` y
       `already-reversed`; **todo lo demás se repropaga**, porque un 23514 o un 25P02 es un fallo de
       la propiedad, no un resultado.
-- [ ] **Step 6: Commit** `test(invariants): el contexto de las propiedades, y el savepoint por operación`
+- [x] **Step 6: Commit** `test(invariants): el contexto de las propiedades, y el savepoint por operación`
 
 ---
 
@@ -157,20 +222,20 @@ docs/specs/12-inventory.md                      I-9 también en la compensación
 
 **Files:** `test/invariants/{arbitraries.ts,arbitraries.spec.ts}`
 
-- [ ] **Step 1: spec primero.** Toda secuencia empieza por `receive`; ningún `checkIn` referencia
+- [x] **Step 1: spec primero.** Toda secuencia empieza por `receive`; ningún `checkIn` referencia
       un `ref` inexistente; ningún `reverse` apunta a uno ya compensado; ninguna cantidad supera lo
       que el modelo dice que hay, salvo en `overdraw`. **Un generador con un bug produce propiedades
       verdes que no prueban nada**, y esto es lo único que lo cierra.
-- [ ] **Step 2: Run** `pnpm test test/invariants` → **FAIL**, anotar.
-- [ ] **Step 3: implementar** `plan()` con el modelo en milésimas enteras (D-43). Escalera de
+- [x] **Step 2: Run** `pnpm test test/invariants` → **FAIL**, anotar.
+- [x] **Step 3: implementar** `plan()` con el modelo en milésimas enteras (D-43). Escalera de
       degradación, no descarte: si el `pick` es imposible en el estado actual cae al siguiente y en
       último término a `receive`, para que la longitud sea estable bajo encogimiento.
       `occurredAt` **no se genera** —se calcula al aplicar—, porque un instante reutilizado a lo
       largo de un encogimiento cruzaría la tolerancia de `i14_not_from_future`.
       De momento cada serial se recibe como mucho una vez por secuencia; **la Task 4 levanta esa
       restricción**.
-- [ ] **Step 4: Run** `pnpm test test/invariants` → PASS.
-- [ ] **Step 5: Commit** `test(invariants): el generador de secuencias, y lo que se le exige a él`
+- [x] **Step 4: Run** `pnpm test test/invariants` → PASS.
+- [x] **Step 5: Commit** `test(invariants): el generador de secuencias, y lo que se le exige a él`
 
 ---
 
@@ -182,14 +247,14 @@ Cada comprobación **devuelve las filas que la violan** (vacío = invariante en 
 comparación de decimales vive en SQL** sobre `numeric`: `'0'` y `'0.000'` son el mismo número y
 distinta cadena.
 
-- [ ] **Step 1:** `checks.ts`. `ledgerMismatches` despliega cada asiento en sus dos lados con signo
+- [x] **Step 1:** `checks.ts`. `ledgerMismatches` despliega cada asiento en sus dos lados con signo
       y hace **`FULL OUTER JOIN`** contra `stock_balance` —un saldo sin historia que lo respalde es
       tan grave como una historia que no llegó al saldo— con `batch_id IS NOT DISTINCT FROM`, porque
       el lote nulo de los productos por cantidad es el caso más común del catálogo y `=` lo perdería.
       `serialsInTwoPlaces` y `custodyPendingBreaches` **cruzan además contra el puerto**
       (`custodialTotal`, `settledQuantity`): si la consulta y el método que implementa el invariante
       en producción divergen, se ve aquí.
-- [ ] **Step 2:** los cuatro `prop-spec`. `seedInvariantWorld` en `beforeAll` (commiteado: si viviera
+- [x] **Step 2:** los cuatro `prop-spec`. `seedInvariantWorld` en `beforeAll` (commiteado: si viviera
       dentro del rollback, la primera secuencia no tendría ni productos que mover) y
       `withRollback` **por corrida**, para que cada secuencia arranque con ledger vacío y saldo cero
       — sin eso la propiedad sería «tras la concatenación de cincuenta secuencias», que no es la que
@@ -197,8 +262,8 @@ distinta cadena.
       los pondría a pelear por `movement_org_id_reverses_id_key` y por los mismos `batch.serial`.
       Cada uno afirma también que algo se escribió: una secuencia entera rechazada probaría la
       propiedad sobre la nada.
-- [ ] **Step 3: Run** `time pnpm test:e2e test/invariants` → PASS en **< 180 s**.
-- [ ] **Step 4: Commit** `test(invariants): I-5, la conservación, I-9 y el pendiente de las custodias`
+- [x] **Step 3: Run** `time pnpm test:e2e test/invariants` → PASS en **< 180 s**.
+- [x] **Step 4: Commit** `test(invariants): I-5, la conservación, I-9 y el pendiente de las custodias`
 
 ---
 
@@ -209,19 +274,19 @@ distinta cadena.
 `libs/inventory/test/doubles/in-memory.ts`; `test/invariants/arbitraries.ts`;
 `docs/specs/12-inventory.md`
 
-- [ ] **Step 1: el testigo.** Un `int-spec` que escriba la secuencia a mano —recibir `BSH-001` en
+- [x] **Step 1: el testigo.** Un `int-spec` que escriba la secuencia a mano —recibir `BSH-001` en
       `BIN-1`, despacharlo a `TRM-1`, recibirlo otra vez en `BIN-2`, compensar el despacho— y afirme
       que I-9 se sostiene. **Run → FAIL**, anotar el saldo que queda. Sin esta prueba el arreglo no
       tiene testigo.
-- [ ] **Step 2: arreglar** (D-41). `guardSerial` pasa a función libre exportada en
+- [x] **Step 2: arreglar** (D-41). `guardSerial` pasa a función libre exportada en
       `record-movement.ts`, junto a `applyOrExplain`, `deltasOf` y `movementEvents`, que
       `ReverseMovement` ya importa. `ReverseMovement` gana `PRODUCT_REPOSITORY` y `BATCH_REPOSITORY`.
-- [ ] **Step 3:** unitarios de aplicación en `movements.spec.ts` con los dobles en memoria, y los de
+- [x] **Step 3:** unitarios de aplicación en `movements.spec.ts` con los dobles en memoria, y los de
       dominio que haga falta para sostener el 100 % de `libs/inventory/src/domain/**`.
-- [ ] **Step 4: soltar el generador**: quitar la restricción de seriales de la Task 2 y dejar que
+- [x] **Step 4: soltar el generador**: quitar la restricción de seriales de la Task 2 y dejar que
       `serial-uniqueness.prop-spec.ts` recorra el camino libremente.
-- [ ] **Step 5: Run** `pnpm test && pnpm test:e2e` → PASS. Corregir [12](docs/specs/12-inventory.md).
-- [ ] **Step 6: Commit** `fix(inventory): I-9 también vale cuando se compensa un despacho`
+- [x] **Step 5: Run** `pnpm test && pnpm test:e2e` → PASS. Corregir [12](docs/specs/12-inventory.md).
+- [x] **Step 6: Commit** `fix(inventory): I-9 también vale cuando se compensa un despacho`
 
 ---
 
@@ -234,28 +299,28 @@ Los saldos se **encadenan** entre `it` —vitest los corre en orden de declaraci
 de eso—; va dicho en un comentario de cabecera, porque el primer refactor que reordene los casos los
 rompe todos.
 
-- [ ] **Step 1:** el `beforeAll` monta el mundo. En la WAVE 3 el mundo ya existe cuando empieza el
+- [x] **Step 1:** el `beforeAll` monta el mundo. En la WAVE 3 el mundo ya existe cuando empieza el
       primer día de operación: crearlo no es la historia. Los 8 nodos de frontera se **descubren**
       con un `GET /v1/nodes?limit=200`; `MUELLE` cuelga de `BOD-A` y no de `Z1`, que es lo que hace
       honesta la agregación `under={z1}`; el `CUSTODY:juan` va sin padre (I-10). Dos guardias ahí
       dentro: los ocho códigos, y `B3.path === 'BOD-A/Z1/E3/B3'` — mejor que reviente el montaje que
       una aserción de `detail` tres casos después.
-- [ ] **Step 2:** los casos 1-10, encadenando el libro mayor. Reparto inicial 100/60/40.
-- [ ] **Step 3:** los casos 11-12, que son los que rompen el mundo. Los siete fallos sin efecto
+- [x] **Step 2:** los casos 1-10, encadenando el libro mayor. Reparto inicial 100/60/40.
+- [x] **Step 3:** los casos 11-12, que son los que rompen el mundo. Los siete fallos sin efecto
       lateral van **con `B3` vivo** (`due-date-not-allowed` y `future-occurrence` apuntan a `B3`, y
       un nodo inactivo cortocircuitaría con `node-inactive`); luego se vacía `B3` con un asiento
       real —`DeactivateNode` mira el saldo **antes** que los hijos—, luego el `DELETE`, luego
       `node-inactive`. `B3` queda inactivo para siempre.
-- [ ] **Step 4:** los casos 13-15 y el **16**, que cubre el aislamiento del ledger entre
+- [x] **Step 4:** los casos 13-15 y el **16**, que cubre el aislamiento del ledger entre
       organizaciones: ni la caja negra ni w1/w2 lo tocan.
-- [ ] **Step 5:** el caso 14, la reconciliación de Marta. `nonZeroOnly=false` y `custodialOnly=false`
+- [x] **Step 5:** el caso 14, la reconciliación de Marta. `nonZeroOnly=false` y `custodialOnly=false`
       en **los dos lados**: el libro reconstruido tiene claves en cero, y sin las fronteras la suma
       por producto no da cero — **la conservación *es* la frontera**. Y el conjunto de ids vistos se
       compara con el de asientos que la narrativa consiguió escribir, que detecta un movimiento
       fantasma que un 422 hubiera dejado escrito.
-- [ ] **Step 6: Run** `time pnpm test:e2e apps/tubodega/test/e2e/w3-mover-mercancia.e2e-spec.ts`
+- [x] **Step 6: Run** `time pnpm test:e2e apps/tubodega/test/e2e/w3-mover-mercancia.e2e-spec.ts`
       → PASS en **< 30 s**.
-- [ ] **Step 7: Commit** `test(e2e): el primer día de operación — cierre de la WAVE 3`
+- [x] **Step 7: Commit** `test(e2e): el primer día de operación — cierre de la WAVE 3`
 
 ---
 
@@ -263,14 +328,14 @@ rompe todos.
 
 **Files:** `scripts/blackbox/30-movimientos.sh`
 
-- [ ] **Step 1:** añadir los caminos que hoy solo vería `fastify.inject()`: el lote de 200 desde la
+- [x] **Step 1:** añadir los caminos que hoy solo vería `fastify.inject()`: el lote de 200 desde la
       hoja, `batch-too-large` con 501 exactos, el todo-o-nada con el saldo intacto, `node-inactive`
       tras un `DELETE` real, `product-has-stock`, `tracking-mode-locked`, la compensación sin stock,
       y **el replay que no duplica el saldo**.
-- [ ] **Step 2: Run** contra un proceso propio en un puerto libre. El plan 5 ya enseñó lo que cuesta
+- [x] **Step 2: Run** contra un proceso propio en un puerto libre. El plan 5 ya enseñó lo que cuesta
       no hacerlo: el `:3000` colgado servía un build viejo y la primera corrida dio 64 fallos contra
       un servidor sin `/v1/movements`.
-- [ ] **Step 3: Commit** `test(blackbox): los caminos del cierre de la WAVE 3 contra el socket real`
+- [x] **Step 3: Commit** `test(blackbox): los caminos del cierre de la WAVE 3 contra el socket real`
 
 ---
 
@@ -278,13 +343,13 @@ rompe todos.
 
 **Files:** este documento; `README.md`; `docs/specs/06-pruebas-y-calidad.md`
 
-- [ ] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba previsto,
+- [x] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba previsto,
       las desviaciones y «lo que encontró cada capa de prueba».
-- [ ] **Step 2:** `README.md` — «El ledger llega en la WAVE 3» (ya llegó) y la fila «Movimientos y
+- [x] **Step 2:** `README.md` — «El ledger llega en la WAVE 3» (ya llegó) y la fila «Movimientos y
       existencias | plan 6» de la tabla del seed, que `scripts/seed.sh` ya siembra desde el plan 5.
-- [ ] **Step 3:** [06 §7](docs/specs/06-pruebas-y-calidad.md): «las tres propiedades» son cuatro.
-- [ ] **Step 4:** las seis puertas.
-- [ ] **Step 5: Commit** `docs(plan): la bitácora del plan 6, y el I-9 que la generación encontró`
+- [x] **Step 3:** [06 §7](docs/specs/06-pruebas-y-calidad.md): «las tres propiedades» son cuatro.
+- [x] **Step 4:** las seis puertas.
+- [x] **Step 5: Commit** `docs(plan): la bitácora del plan 6, y el I-9 que la generación encontró`
 
 ---
 
