@@ -50,14 +50,17 @@ export class MoveNode {
     const oldPath = node.path;
     const moved = node.moveTo(parent);
     // Same parent: nothing moved, so no empty UPDATE and no event about a
-    // non-event.
-    if (moved.path === oldPath) return node;
+    // non-event. The version is still checked first — If-Match is a
+    // precondition, and one that is only evaluated when the work turns out to
+    // be worth doing is not a precondition. A stale version falls through to
+    // `save`, which is what turns it into 409 stale-version.
+    if (moved.path === oldPath && node.version === input.expectedVersion) return node;
 
     // N-1 and N-2, in this order and in the transaction the edge already opened
     // (spec 07 §3). The moved node first: `save` is the cheap check that can
     // fail — stale-version, the composite FK on the new parent — and there is
     // no point rewriting N descendant rows before knowing it passes.
-    await this.nodes.save(moved, input.expectedVersion);
+    const version = await this.nodes.save(moved, input.expectedVersion);
     await this.nodes.updateSubtreePaths(ctx.orgId, oldPath, moved.path);
 
     await this.events.publish([
@@ -66,6 +69,6 @@ export class MoveNode {
         ...(moved.parentId !== undefined ? { parentId: moved.parentId } : {}),
       }),
     ]);
-    return moved;
+    return moved.withVersion(version);
   }
 }

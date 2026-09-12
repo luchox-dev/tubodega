@@ -31,8 +31,12 @@ export interface NodeRepository {
   /** How many active nodes hang from here — N-3's sibling check (decision D-30). */
   listActiveChildren(orgId: OrgId, path: NodePath, limit: number): Promise<Node[]>;
   list(orgId: OrgId, filter: NodeFilter, page: NodePage): Promise<Page<Node>>;
-  /** Insert or update by id with optimistic locking. Raises NodeCodeTakenError. */
-  save(node: Node, expectedVersion?: number): Promise<void>;
+  /**
+   * Insert or update by id with optimistic locking. Raises NodeCodeTakenError.
+   * Returns the version the row ended up with: the caller has to be able to
+   * hand it back to the client, and only the repository knows it.
+   */
+  save(node: Node, expectedVersion?: number): Promise<number>;
   /** N-2: rewrites the path of every strict descendant, by prefix. */
   updateSubtreePaths(orgId: OrgId, oldPrefix: NodePath, newPrefix: NodePath): Promise<void>;
 }

@@ -25,7 +25,9 @@ export interface UploadFile {
 
 export interface TestHttp {
   get(url: string, o?: Req): Promise<Res>;
-  post(url: string, body: unknown, o?: Req): Promise<Res>;
+  /** `ifMatch` because POST /v1/nodes/{id}/move takes one: it changes a
+   *  versioned resource without creating anything. */
+  post(url: string, body: unknown, o?: Req & { ifMatch?: number }): Promise<Res>;
   patch(url: string, body: unknown, o: Req & { ifMatch: number }): Promise<Res>;
   put(url: string, body: unknown, o?: Req & { ifMatch?: number }): Promise<Res>;
   del(url: string, o?: Req): Promise<Res>;

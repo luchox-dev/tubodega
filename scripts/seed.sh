@@ -14,10 +14,9 @@
 # ESTE GUION SE ACTUALIZA EN CADA PLAN QUE AÑADA ENDPOINTS, igual que la
 # colección de Postman. Un seed que se queda atrás es peor que no tenerlo: da la
 # impresión de un mundo completo mientras le falta justo lo que acabas de
-# construir. Hoy siembra todo lo que el contrato sabe crear —tenencia y
-# catálogo—; lo que todavía no existe, con el plan que lo traerá:
+# construir. Hoy siembra todo lo que el contrato sabe crear —tenencia, catálogo
+# y ubicaciones—; lo que todavía no existe, con el plan que lo traerá:
 #
-#   ubicaciones y nodos de frontera .......... plan 4
 #   movimientos y existencias ................ plan 6
 #   plantillas e instancias de proceso ....... plan 8
 #   reglas de alerta ......................... plan 9
@@ -123,7 +122,52 @@ req POST /products --token "$T_DIEGO" --body '{
 ok "el taladro, por serie" 201
 P_TAL="$(jqv '.id')"
 
-step "5 · una remesa y una unidad concreta"
+step "5 · la bodega"
+# Los ocho nodos de frontera no se siembran aquí: los pone el provisioner dentro
+# de la transacción que dio de alta la organización (spec 04 §6). Lo que se
+# comprueba es que estaban.
+req GET "/nodes?kind=SOURCE" --token "$T_DIEGO"
+ok "las tres fuentes ya estaban" 200
+body "sin que nadie las creara" '.data | length' 3
+req GET "/nodes?kind=TERMINAL" --token "$T_DIEGO"
+body "y los cinco sumideros" '.data | length' 5
+
+# El id sale por referencia y no por stdout: por stdout va el informe, y una
+# sustitución de comando se lo tragaría entero junto con el id.
+nodo() { # nodo <variable destino> <código> <nombre> [idPadre]
+  local -n out="$1"
+  local code="$2" name="$3" parent="${4:-}"
+  if [[ -n "$parent" ]]; then
+    req POST /nodes --token "$T_DIEGO" --body "$(jq -nc --arg c "$code" --arg n "$name" --arg p "$parent" \
+      '{kind:"INTERNAL", code:$c, name:$n, parentId:$p}')"
+  else
+    req POST /nodes --token "$T_DIEGO" --body "$(jq -nc --arg c "$code" --arg n "$name" \
+      '{kind:"INTERNAL", code:$c, name:$n}')"
+  fi
+  ok "$name" 201
+  out="$(jqv '.id')"
+}
+
+# BOD-B lleva Z2 y no otro Z1: el código es único por organización, no por
+# padre — el escáner no sabe bajo qué bodega está.
+nodo N_BODA BOD-A "la bodega principal"
+nodo N_MUELLE MUELLE "el muelle de recepción" "$N_BODA"
+nodo N_Z1 Z1 "la zona 1" "$N_BODA"
+nodo N_E3 E3 "el estante 3" "$N_Z1"
+nodo N_B2 B2 "el bin 2" "$N_E3"
+nodo N_B3 B3 "el bin 3" "$N_E3"
+nodo N_BODB BOD-B "la segunda bodega"
+nodo N_Z2 Z2 "su zona" "$N_BODB"
+
+# Juan también es un sitio donde puede haber mercancía: los préstamos de la
+# WAVE 3 van a un nodo CUSTODY, no a una tabla de personas.
+req POST /nodes --token "$T_DIEGO" --body "$(jq -nc '{kind:"CUSTODY", code:"juan", name:"Juan (herramienta en préstamo)"}')"
+ok "y Juan, que también es un nodo" 201
+
+req GET "/nodes/$N_B2" --token "$T_DIEGO"
+body "el path del bin es la cadena entera" '.path' 'BOD-A/Z1/E3/B2'
+
+step "6 · una remesa y una unidad concreta"
 # Lo que hace interesante a GET /v1/codes/{value}/resolve: con esto, escanear
 # BSH-001 devuelve el taladro y la unidad, no solo el producto.
 req POST "/products/$P_TAL/batches" --token "$T_JUAN" --body '{"serial":"BSH-001"}'
@@ -154,5 +198,7 @@ cat <<FIN
 
   catálogo       TOR-M8 · ARROZ-25 · LECHE-1L · TAL-BOSCH
   escanea        7501000000017 (el tornillo) · BSH-001 (el taladro)
+  bodega         BOD-A › MUELLE · BOD-A › Z1 › E3 › B2, B3 · BOD-B › Z2
+  y además       juan (CUSTODY) y los ocho nodos de frontera
 
 FIN

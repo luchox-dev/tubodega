@@ -77,10 +77,10 @@ export class KyselyNodeRepository implements NodeRepository {
    * to carry on with the next code, which is impossible inside an aborted
    * transaction (deviation 5 of plan 3).
    */
-  async save(node: Node, expectedVersion?: number): Promise<void> {
+  async save(node: Node, expectedVersion?: number): Promise<number> {
     const data = nodeValues(node);
     try {
-      await this.uow.run(() =>
+      const row = await this.uow.run(() =>
         this.dao.update(
           node.orgId,
           node.id,
@@ -88,14 +88,15 @@ export class KyselyNodeRepository implements NodeRepository {
           expectedVersion !== undefined ? { expectedVersion } : {},
         ),
       );
+      return row.version;
     } catch (e) {
       if (e instanceof RecordNotFoundError) {
-        await this.uow
+        const row = await this.uow
           .run(() => this.dao.create({ id: node.id, orgId: node.orgId, ...data }))
           .catch(translate(node.code));
-        return;
+        return row.version;
       }
-      translate(node.code)(e);
+      return translate(node.code)(e);
     }
   }
 

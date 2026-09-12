@@ -59,6 +59,8 @@ plantilla() {
     s#^/custom-fields/$u\$#/custom-fields/{id}#;
     s#^/organizations/$u\$#/organizations/{id}#;
     s#^/codes/.+/resolve\$#/codes/{value}/resolve#;
+    s#^/nodes/$u/(move|tree)\$#/nodes/{id}/\1#;
+    s#^/nodes/$u\$#/nodes/{id}#;
   " <<<"$p")"
   printf '/v1%s' "$p"
 }

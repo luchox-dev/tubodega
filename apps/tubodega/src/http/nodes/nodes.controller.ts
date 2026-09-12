@@ -135,6 +135,9 @@ export class NodesController {
   }
 
   @Post(':id/move')
+  // A POST that creates nothing: the node was already there and only changed
+  // place, so 201 would promise a Location that does not exist.
+  @HttpCode(200)
   @ApiOperation({
     summary: 'Reasigna el padre de un nodo',
     description:

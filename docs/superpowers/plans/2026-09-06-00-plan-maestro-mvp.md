@@ -85,6 +85,17 @@ Decisiones que los specs dejan abiertas o que afectan al orden. Cada una es revi
 | D-18 | **`MovementCounter` y `StockChecker` se implementan en el plan 3**, sin esperar a `libs/inventory`. | Leen `movement` y `stock_balance`, y el `path` que `product-has-stock` necesita sale de un `innerJoin` contra `node`, que existe desde `full_schema`. Los adaptadores viven en `apps/tubodega/src/adapters/catalog/`, así que R-4 sigue intacta y `app.module.ts` nunca registra un stub. |
 | D-19 | **La WAVE 2 se cierra en dos suites:** `w2a-cargar-el-catalogo` (plan 3, casos 1-11 y 16) y `w2-cargar-catalogo-y-ubicaciones` (plan 4, que absorbe la narrativa y añade 12-15). | La división en planes exige que cada uno cierre con algo probable por HTTP; un plan 3 sin HTTP de catálogo no lo cumplía. |
 | D-20 | **Toda clave foránea se escribe compuesta `(org_id, x_id) REFERENCES x (org_id, id)`**, aunque [04 §3](docs/specs/04-persistencia.md) las dibuje simples: manda §2. | Postgres **no aplica RLS al comprobar una FK**. Con una clave simple, una organización podría apuntar un movimiento al `product_id` de otra y la política no lo vería nunca. Obliga a `@@unique([orgId, id])` en toda tabla de negocio, la auto-referencia `node.parent_id` y las dos de `movement` incluidas. |
+| D-21 | **La suite de la WAVE 2 se reunifica en `w2-cargar-catalogo-y-ubicaciones.e2e-spec.ts` y renumera**: los cuatro de nodos entran como 12-15 y los que ocupaban esos números corren a 16-21. | D-19 decía «absorbe la narrativa entera», y la numeración del fichero se había desalineado de la tabla «E2E WAVE 2». Renumerar la realinea de una vez; el diff es grande pero mecánico. |
+| D-22 | **`BOD-B` lleva `Z2`, no otro `Z1`**, en el reparto narrativo. | El `code` es único **por organización**, no por padre: el escáner no sabe bajo qué bodega está. `Z2` es además el destino al que el caso 13 mueve `E3`, así que la narrativa cuadra sola. |
+| D-23 | **La caja negra de nodos va en `scripts/blackbox/25-ubicaciones.sh`**, suite propia. | El runner descubre por el glob `[0-9]*.sh`; una suite propia permite `--only ubicaciones` y no infla `20-catalogo.sh`, que ya tiene 428 líneas. |
+| D-24 | **`UpdateNodeDto` declara `kind`, `code` y `parentId` como `?: never` con `@IsEmpty()`** y sin `@ApiProperty`. | `whitelist: true` solo elimina las propiedades **sin metadatos de validación**: una con decorador sobrevive al filtrado y se valida. Sin esto, mandar `kind` daría un `200` que no cambió nada. Sin `@ApiProperty` porque no son entrada aceptada y no deben salir en el contrato — y no hay plugin de Swagger que las cuele. |
+| D-25 | **El `code` de un nodo es inmutable**, como el `kind`. | Es el segmento del `path`: cambiarlo convertiría cada `PATCH` en una reescritura de subárbol de coste no acotado que además puede dar `409 node-code-taken` sin anunciarlo. Es también la clave por la que el sembrador es idempotente. Misma forma que `UpdateProductDto`, que no lleva `sku`. |
+| D-26 | **`SeedBoundaryNodes.execute(orgId)` no recibe `RequestContext`, no llama a `requireAction` y no publica eventos.** | Cuando corre no hay organización ni token ([07 §2](docs/specs/07-composicion-y-contexto-de-ejecucion.md)); un ctx con roles falsos sería una autorización que no puede fallar, o sea ninguna. La firma es la salvaguarda: un caso de uso que empieza por `OrgId` no se ata a un controlador por descuido. Y `organization.created` ya cuenta el hecho: nadie «creó» esos ocho. |
+| D-27 | **`MoveNode` guarda primero el nodo movido y después reescribe el subárbol, y no abre `uow.run()`.** | `save` es la comprobación barata que puede fallar (`stale-version`, la FK del padre nuevo): no tiene sentido reescribir N filas antes de saber que pasa. Un savepoint solo sirve para sobrevivir a un error y seguir leyendo, y aquí un fallo debe deshacer el movimiento entero — la atomicidad de N-1+N-2 es la de la transacción del borde. |
+| D-28 | **El `under` de `GET /v1/nodes` apuntando a un nodo inexistente es `400 invalid-filter`.** | El 404 de esta casa es para el recurso nombrado en la **ruta**; darlo por un parámetro de query diría que la colección se esfumó. Y una página vacía es indistinguible de «ese subárbol está vacío», así que un uuid mal tecleado pintaría «no hay nodos» para siempre. |
+| D-29 | **`GET /v1/nodes/{id}/tree` incluye los inactivos, no limita la profundidad y limita el tamaño a 1000** (`422 tree-too-large`). | Omitir un estante retirado entre una zona activa y un bin activo dejaría huérfanos a sus hijos. Y es el único endpoint del módulo sin cursor: el árbol raíz de una organización de 500 nodos se serializaría entero en cada carga de panel. |
+| D-30 | **`DELETE /v1/nodes/{id}` sobre un nodo con hijos activos es `422 node-has-children`.** | Ni cascada —un `DELETE` de un recurso no debe escribir N filas que el cliente no nombró— ni silencio, que dejaría un subárbol operable colgando de una zona que dice no operar, justo la incoherencia que N-3 previene. |
+| D-31 | **`NodeRepository.save` devuelve la versión guardada**, y los casos de uso la propagan a la vista. | Lo encontró la colección de Postman: el `PATCH` devolvía la versión que traía la entidad en memoria, no la que quedó en la fila, así que un cliente que editaba dos veces con la versión recién recibida se llevaba un `409` fantasma. **Los `PATCH` de producto, campo propio y usuario siguen con el mismo defecto**: se arregla donde toca, no de paso. |
 | D-11 | **`GET /v1/nodes/{id}/tree`** devuelve `{ node, children: [...] }` anidado. **`POST /v1/products/import`** recibe `{ rows: ProductRow[] }` con máximo 1000 filas por petición (`422 import-too-large`). El tope lo comprueba el caso de uso y **no** un `@ArrayMaxSize` en el DTO: con el validador en el borde la respuesta era `400 validation-failed`, y mil una filas se entienden perfectamente — lo que las rechaza es una regla de negocio ([03 §5](docs/specs/03-contrato-api.md)). | Forma no fijada por [12 §7](docs/specs/12-inventory.md) ni [11 §4](docs/specs/11-catalog.md). |
 | D-12 | **Rate limit en memoria** (ventana deslizante por organización, una instancia). | [03 §11](docs/specs/03-contrato-api.md) solo exige la infraestructura con un límite generoso; un almacén compartido es una extensión. |
 
@@ -199,7 +210,7 @@ Reparto narrativo usado por todas las suites e2e (para que se lean como un caso 
 | Organización | `distribuidora-la-esquina` — vende consumibles y presta herramienta |
 | Personas | Marta (OWNER), Diego (ADMIN), Juan (OPERATOR, también tenedor `CUSTODY:juan`), Sofía (VIEWER) |
 | Productos | `TOR-M8` tornillo M8 (`QUANTITY`, `UNIT`) · `ARROZ-25` saco de arroz (`QUANTITY`, `KG`) · `LECHE-1L` (`LOT`, vence) · `TAL-BOSCH` taladro (`SERIAL`) |
-| Ubicaciones | `BOD-A` › `MUELLE`; `BOD-A` › `Z1` › `E3` › `B2`, `B3`; `BOD-B` › `Z1` › `E1` › `B1` |
+| Ubicaciones | `BOD-A` › `MUELLE`; `BOD-A` › `Z1` › `E3` › `B2`, `B3`; `BOD-B` › `Z2` (D-22: el `code` es único por organización, no por padre, así que `BOD-B` no puede llevar otro `Z1`) |
 | Nodos de frontera | sembrados: `supplier-default`, `adjustment-in`, `opening-balance`, `sale`, `consumption`, `shrinkage`, `adjustment-out`, `supplier-return` |
 
 ---
@@ -549,10 +560,12 @@ Narrativa: Marta registra «Distribuidora La Esquina», invita a Diego, Juan y S
 
 Narrativa: Diego (ADMIN) migra la hoja de cálculo y organiza la bodega; Juan (OPERATOR) escanea y registra una remesa con lote.
 
-> **Desviación (D-19).** Esta tabla se reparte en dos suites. Los casos **1-11 y 16** ya se
-> entregaron con el plan 3 en `w2a-cargar-el-catalogo.e2e-spec.ts`; los **12-15** son de nodos y
-> llegan con el plan 4, que absorbe la narrativa entera. Los mismos casos se recorren además por
-> HTTP contra un servidor real en `scripts/blackbox/20-catalogo.sh`.
+> **Desviación (D-19), saldada.** La tabla se repartió en dos suites: los casos **1-11 y 16** con
+> el plan 3 en `w2a-cargar-el-catalogo.e2e-spec.ts`, y los **12-15** —los de nodos— con el plan 4.
+> El plan 4 las reunificó en `w2-cargar-catalogo-y-ubicaciones.e2e-spec.ts` y **renumeró** (D-21):
+> los cuatro de nodos entraron como 12-15 y los que ocupaban esos números corrieron a 16-21, con
+> lo que el fichero vuelve a estar alineado con esta tabla. Los mismos casos se recorren además
+> por HTTP contra un servidor real en `scripts/blackbox/20-catalogo.sh` y `25-ubicaciones.sh`.
 
 | # | Caso de uso real | Llamadas | Afirmaciones |
 |---|---|---|---|
@@ -881,7 +894,7 @@ Cada plan es un documento propio (`docs/superpowers/plans/2026-MM-DD-NN-<nombre>
 | **3d** | **hecho** *(derivado)* | La colección de Postman al día | — | Las 30 operaciones en Postman, 70 peticiones afirmando su código. Merge `e1c0651`. |
 | **3e** | **hecho** *(derivado)* | `docker compose up --build`, a la primera | F6.6 | La pila entera en contenedores sobre volumen limpio: `db` + `migrate` (init container con `prisma migrate deploy`) + `tubodega`, entorno en `.env.docker` versionado y base propia `tubodega_docker`. `POST /v1/organizations` contra el contenedor, y las tres suites de la caja negra en verde con `BASE=http://localhost:3001 DB=tubodega_docker`. |
 | **3f** | **hecho** *(derivado)* | Un mundo sembrado, cuando haga falta | — | `pnpm seed` y `docker compose --profile seed up`: el reparto narrativo completo por HTTP —La Esquina, las cuatro personas, los campos propios, los cuatro SKU canónicos, un lote y una serie—, idempotente y con `SEED_SLUG` para sembrar mundos paralelos. |
-| 4 | pendiente | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Árbol de bodega (`/v1/nodes`, `tree`, `move`), sembrador de nodos de frontera, suite e2e «Cargar el catálogo y las ubicaciones» completa. |
+| 4 | **hecho** | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Los 7 endpoints de `/v1/nodes` con `tree` y `move`, `libs/inventory` (nodos), el sembrador de los ocho de frontera en `ORG_SEEDERS`, y la suite `w2-cargar-catalogo-y-ubicaciones` con los 21 casos. |
 | 5 | pendiente | El ledger: dominio, casos de uso y persistencia | F3.1-F3.4 | Sin endpoints nuevos; `pnpm test` y las pruebas de integración del ledger (savepoint, interbloqueo, `REVOKE`). |
 | 6 | pendiente | Mover mercancía por HTTP y cierre de la WAVE 3 | F3.5-F3.6 + e2e W3 | `/v1/movements`, `/batch`, `/reverse`, `/v1/stock`, `/v1/stock/custodies`; criterios 3-4-6-7-8-9; pruebas de propiedades. |
 | 7 | pendiente | Motor de procesos: dominio y manejadores | F4.1-F4.2 | Sin endpoints nuevos; `LinearRunner` recorriendo las seis plantillas de fábrica en pruebas. |

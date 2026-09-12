@@ -142,6 +142,18 @@ describe('UpdateNode', () => {
     ).rejects.toMatchObject({ type: 'not-found' });
   });
 
+  // Found by the Postman collection: what comes back from a write has to carry
+  // the version the row ended up with, or a client that edits twice using the
+  // version it was just handed gets a spurious 409.
+  it('devuelve la versión que quedó guardada, no la que traía', async () => {
+    const t = build();
+    const w = await aWarehouse(t);
+    const once = await t.update.execute(w.ctx, { id: w.z1.id, name: 'uno', expectedVersion: 1 });
+    expect(once.version).toBe(2);
+    const twice = await t.update.execute(w.ctx, { id: w.z1.id, name: 'dos', expectedVersion: once.version });
+    expect(twice.version).toBe(3);
+  });
+
   it('cambia los campos propios validándolos (C-7)', async () => {
     const t = build();
     t.fields.add(
@@ -180,6 +192,13 @@ describe('MoveNode', () => {
     expect((await t.nodes.findById(ORG, w.b2.id))!.path).toBe('BOD-B/Z2/E3/B2');
     expect((await t.nodes.findById(ORG, w.b3.id))!.path).toBe('BOD-B/Z2/E3/B3');
     expect(t.events.types().at(-1)).toBe('node.moved');
+  });
+
+  it('el movimiento también devuelve la versión nueva', async () => {
+    const t = build();
+    const w = await aWarehouse(t);
+    const moved = await t.move.execute(w.ctx, { id: w.e3.id, parentId: w.z2.id, expectedVersion: 1 });
+    expect(moved.version).toBe(2);
   });
 
   it('no arrastra a los que solo comparten prefijo', async () => {
@@ -223,6 +242,16 @@ describe('MoveNode', () => {
     const same = await t.move.execute(w.ctx, { id: w.e3.id, parentId: w.z1.id, expectedVersion: 1 });
     expect(same.path).toBe('BOD-A/Z1/E3');
     expect(t.events.published.length).toBe(before);
+  });
+
+  // Found by the black-box run: the no-op used to return before the version was
+  // looked at, so a stale If-Match slipped through with a 200.
+  it('…pero una versión vieja se rechaza igual, aunque no hubiera nada que mover', async () => {
+    const t = build();
+    const w = await aWarehouse(t);
+    await expect(
+      t.move.execute(w.ctx, { id: w.e3.id, parentId: w.z1.id, expectedVersion: 99 }),
+    ).rejects.toThrow();
   });
 
   it('el destino tiene que ser INTERNAL (I-10)', async () => {

@@ -1,7 +1,8 @@
-// WAVE 2 · «Cargar el catálogo». Diego (ADMIN) migra la hoja de cálculo de
-// «Distribuidora La Esquina», define sus campos propios y le pone fotos; Juan
-// (OPERATOR) escanea en el pasillo y registra una remesa con lote. Solo el
-// contrato público: ni una consulta a la base (spec 06 §6).
+// WAVE 2 · «Cargar el catálogo y las ubicaciones». Diego (ADMIN) migra la hoja
+// de cálculo de «Distribuidora La Esquina», define sus campos propios, le pone
+// fotos y dibuja el árbol de la bodega; Juan (OPERATOR) escanea en el pasillo y
+// registra una remesa con lote. Solo el contrato público: ni una consulta a la
+// base (spec 06 §6).
 import { randomBytes } from 'node:crypto';
 import { startTestApp, type TestApp } from '../../../../test/support/e2e/app.js';
 import { expectProblem } from '../../../../test/support/e2e/problem.js';
@@ -16,7 +17,7 @@ const PNG = {
   contentType: 'image/png',
 };
 
-describe('WAVE 2 · cargar el catálogo', () => {
+describe('WAVE 2 · cargar el catálogo y las ubicaciones', () => {
   let t: TestApp;
   let esquina: Tenant;
   let diego: Session;
@@ -447,7 +448,188 @@ describe('WAVE 2 · cargar el catálogo', () => {
     ).toBe(200);
   });
 
-  it('12 · C-9 · sin existencias, el producto se retira del catálogo', async () => {
+  it('12 · Criterio 2 · Diego dibuja el árbol de la bodega', async () => {
+    // Los ocho de frontera ya estaban antes de que nadie creara nada: los
+    // sembró el provisioner dentro de la transacción que dio de alta la
+    // organización (D-2, spec 04 §6).
+    const sources = await t.http.get('/v1/nodes?kind=SOURCE', asDiego());
+    expect(sources.status).toBe(200);
+    expect(sources.body.data).toHaveLength(3);
+    const terminals = await t.http.get('/v1/nodes?kind=TERMINAL', asDiego());
+    expect(terminals.body.data).toHaveLength(5);
+
+    const nodo = async (code: string, parentId?: string) => {
+      const res = await t.http.post(
+        '/v1/nodes',
+        { kind: 'INTERNAL', code, name: code, ...(parentId ? { parentId } : {}) },
+        asDiego(),
+      );
+      expect(res.status).toBe(201);
+      expect(res.headers.location).toBe(`/v1/nodes/${res.body.id}`);
+      id[code] = res.body.id;
+      return res.body;
+    };
+
+    const bodA = await nodo('BOD-A');
+    expect(bodA.path).toBe('BOD-A');
+    await nodo('MUELLE', id['BOD-A']);
+    await nodo('Z1', id['BOD-A']);
+    await nodo('E3', id.Z1);
+    const b2 = await nodo('B2', id.E3);
+    await nodo('B3', id.E3);
+    // BOD-B lleva Z2 y no otro Z1: el código es único por organización, no por
+    // padre — el escáner no sabe bajo qué bodega está (D-22).
+    await nodo('BOD-B');
+    await nodo('Z2', id['BOD-B']);
+
+    expect(b2.path).toBe('BOD-A/Z1/E3/B2');
+
+    // Y por eso mismo, repetir un código choca.
+    expectProblem(
+      await t.http.post('/v1/nodes', { kind: 'INTERNAL', code: 'B2', name: 'Otro' }, asDiego()),
+      { status: 409, type: 'node-code-taken' },
+    );
+
+    // El árbol llega anidado, no plano (D-11).
+    const tree = await t.http.get(`/v1/nodes/${id['BOD-A']}/tree`, asDiego());
+    expect(tree.status).toBe(200);
+    expect(tree.body.node.code).toBe('BOD-A');
+    expect(tree.body.children.map((c: { node: { code: string } }) => c.node.code).sort()).toEqual(['MUELLE', 'Z1']);
+    const z1 = tree.body.children.find((c: { node: { code: string } }) => c.node.code === 'Z1');
+    expect(z1.children[0].node.code).toBe('E3');
+    expect(z1.children[0].children.map((c: { node: { code: string } }) => c.node.code).sort()).toEqual(['B2', 'B3']);
+
+    // El listado por subárbol da lo mismo en plano, y es estricto.
+    const under = await t.http.get(`/v1/nodes?under=${id.Z1}`, asDiego());
+    expect(under.body.data.map((n: { code: string }) => n.code).sort()).toEqual(['B2', 'B3', 'E3']);
+
+    // Un under que no nombra a nadie es un filtro malo, no un 404 ni una página
+    // vacía que escondería el error de tecleo (D-28).
+    expectProblem(
+      await t.http.get('/v1/nodes?under=018f0000-0000-7000-8000-00000000dead', asDiego()),
+      { status: 400, type: 'invalid-filter', pointer: '/under' },
+    );
+  });
+
+  it('13 · Diego reorganiza los estantes', async () => {
+    // Primero el ciclo, mientras B2 todavía cuelga de Z1 a tres niveles de
+    // distancia: colgar Z1 de su propio bisnieto cerraría el árbol sobre sí.
+    expectProblem(
+      await t.http.post(`/v1/nodes/${id.Z1}/move`, { parentId: id.B2 }, { ...asDiego(), ifMatch: 1 }),
+      { status: 422, type: 'node-cycle' },
+    );
+
+    // Mover E3 arrastra a B2 y B3 sin que nadie los toque (N-1, N-2).
+    const moved = await t.http.post(
+      `/v1/nodes/${id.E3}/move`,
+      { parentId: id.Z2 },
+      { ...asDiego(), ifMatch: 1 },
+    );
+    expect(moved.status).toBe(200);
+    expect(moved.body.path).toBe('BOD-B/Z2/E3');
+
+    const b2 = await t.http.get(`/v1/nodes/${id.B2}`, asDiego());
+    expect(b2.body.path).toBe('BOD-B/Z2/E3/B2');
+    const b3 = await t.http.get(`/v1/nodes/${id.B3}`, asDiego());
+    expect(b3.body.path).toBe('BOD-B/Z2/E3/B3');
+
+    // Z1 ya puede colgar de B2: el movimiento anterior sacó a B2 de su subárbol,
+    // y quien decide es el path de ahora, no el de antes.
+    const z1 = await t.http.get(`/v1/nodes/${id.Z1}`, asDiego());
+    const bajoB2 = await t.http.post(
+      `/v1/nodes/${id.Z1}/move`,
+      { parentId: id.B2 },
+      { ...asDiego(), ifMatch: z1.body.version },
+    );
+    expect(bajoB2.status).toBe(200);
+    expect(bajoB2.body.path).toBe('BOD-B/Z2/E3/B2/Z1');
+
+    // Y ahora el ciclo es el de arriba: BOD-B está por encima de B2.
+    expectProblem(
+      await t.http.post(`/v1/nodes/${id['BOD-B']}/move`, { parentId: id.B2 }, { ...asDiego(), ifMatch: 1 }),
+      { status: 422, type: 'node-cycle' },
+    );
+
+    // Devolvemos Z1 a su bodega, que es donde la narrativa la deja.
+    const vuelta = await t.http.get(`/v1/nodes/${id.Z1}`, asDiego());
+    const devuelta = await t.http.post(
+      `/v1/nodes/${id.Z1}/move`,
+      { parentId: id['BOD-A'] },
+      { ...asDiego(), ifMatch: vuelta.body.version },
+    );
+    expect(devuelta.body.path).toBe('BOD-A/Z1');
+
+    const renamed = await t.http.patch(
+      `/v1/nodes/${id.B2}`,
+      { name: 'Bin 2 · refrigerado' },
+      { ...asDiego(), ifMatch: b2.body.version },
+    );
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe('Bin 2 · refrigerado');
+    // La versión que vuelve es la que quedó guardada, así que sirve para el
+    // siguiente If-Match sin tener que releer el nodo.
+    expect(renamed.body.version).toBe(b2.body.version + 1);
+    const again = await t.http.patch(
+      `/v1/nodes/${id.B2}`,
+      { name: 'Bin 2' },
+      { ...asDiego(), ifMatch: renamed.body.version },
+    );
+    expect(again.status).toBe(200);
+
+    expectProblem(
+      await t.http.patch(`/v1/nodes/${id.B2}`, { name: 'Otro' }, { ...asDiego(), ifMatch: b2.body.version }),
+      { status: 409, type: 'stale-version' },
+    );
+
+    // El tipo no se cambia, y decirlo en voz alta es un 400: si el borde lo
+    // borrara en silencio, el cliente recibiría un 200 que no cambió nada.
+    expectProblem(
+      await t.http.patch(`/v1/nodes/${id.B2}`, { kind: 'CUSTODY' }, { ...asDiego(), ifMatch: renamed.body.version }),
+      { status: 400, type: 'validation-failed', pointer: '/kind' },
+    );
+  });
+
+  it('14 · las reglas del árbol: solo lo interno anida (I-10)', async () => {
+    expectProblem(
+      await t.http.post('/v1/nodes', { kind: 'CUSTODY', code: 'juan', name: 'Juan', parentId: id.Z1 }, asDiego()),
+      { status: 422, type: 'parent-not-internal' },
+    );
+
+    const juan = await t.http.post('/v1/nodes', { kind: 'CUSTODY', code: 'juan', name: 'Juan' }, asDiego());
+    expect(juan.status).toBe(201);
+    expect(juan.body.path).toBe('juan');
+    expect(juan.body.parentId).toBeUndefined();
+    id.juan = juan.body.id;
+
+    // Y tampoco se cuelga después, moviéndolo.
+    expectProblem(
+      await t.http.post(`/v1/nodes/${id.juan}/move`, { parentId: id.Z1 }, { ...asDiego(), ifMatch: 1 }),
+      { status: 422, type: 'parent-not-internal' },
+    );
+  });
+
+  it('15 · Diego retira un bin vacío, pero no una zona con estantes', async () => {
+    const gone = await t.http.del(`/v1/nodes/${id.B3}`, asDiego());
+    expect(gone.status).toBe(204);
+    const b3 = await t.http.get(`/v1/nodes/${id.B3}`, asDiego());
+    expect(b3.body.active).toBe(false);
+
+    // E3 todavía cuelga B2. Ni cascada ni silencio: un estante activo bajo una
+    // zona retirada seguiría admitiendo mercancía (D-30). N-3 con saldo llega
+    // en la WAVE 3, cuando haya forma de crear un saldo por el contrato.
+    expectProblem(await t.http.del(`/v1/nodes/${id.E3}`, asDiego()), {
+      status: 422,
+      type: 'node-has-children',
+    });
+
+    // Un OPERATOR no dibuja ni retira la bodega.
+    expectProblem(
+      await t.http.post('/v1/nodes', { kind: 'INTERNAL', code: 'PIRATA', name: 'Pirata' }, asJuan()),
+      { status: 403, type: 'insufficient-role' },
+    );
+  });
+
+  it('16 · C-9 · sin existencias, el producto se retira del catálogo', async () => {
     const sobra = await t.http.post(
       '/v1/products',
       { sku: 'RETIRO-1', name: 'Para retirar', trackingMode: 'QUANTITY', uom: 'UNIT' },
@@ -463,7 +645,7 @@ describe('WAVE 2 · cargar el catálogo', () => {
     expect(activos.body.data.map((p: { sku: string }) => p.sku)).toContain('RETIRO-1');
   });
 
-  it('13 · campo obligatorio retroactivo (C-10)', async () => {
+  it('17 · campo obligatorio retroactivo (C-10)', async () => {
     const failure = await t.http.post(
       '/v1/custom-fields',
       { entity: 'PRODUCT', key: 'ubicacion_fiscal', label: 'Ubicación fiscal', type: 'TEXT', required: true },
@@ -483,7 +665,7 @@ describe('WAVE 2 · cargar el catálogo', () => {
     );
   });
 
-  it('14 · reintentos seguros sobre el catálogo (I-7)', async () => {
+  it('18 · reintentos seguros sobre el catálogo (I-7)', async () => {
     const key = `idem-${randomBytes(8).toString('hex')}`;
     const body = { sku: 'IDEM-1', name: 'Idempotente', trackingMode: 'QUANTITY', uom: 'UNIT' };
 
@@ -504,7 +686,7 @@ describe('WAVE 2 · cargar el catálogo', () => {
     });
   });
 
-  it('15 · filtros y orden: lo no declarado se rechaza', async () => {
+  it('19 · filtros y orden: lo no declarado se rechaza', async () => {
     expectProblem(await t.http.get('/v1/products?foo=1', asDiego()), {
       status: 400,
       type: 'invalid-filter',
@@ -528,7 +710,7 @@ describe('WAVE 2 · cargar el catálogo', () => {
     expect([...skus].sort().reverse()).toEqual(skus);
   });
 
-  it('16 · otra empresa no ve nada: 404 y nunca 403 (I-6)', async () => {
+  it('20 · otra empresa no ve nada: 404 y nunca 403 (I-6)', async () => {
     const otra = await registerOrg(t.http, { slug: `otra-${randomBytes(4).toString('hex')}` });
     const ajeno = { token: otra.owner.token };
 
@@ -563,9 +745,27 @@ describe('WAVE 2 · cargar el catálogo', () => {
       status: 404,
       type: 'code-not-found',
     });
+
+    // La bodega tampoco se ve desde fuera, y por el mismo camino: 404, nunca 403.
+    expectProblem(await t.http.get(`/v1/nodes/${id.Z1}`, ajeno), notFound);
+    expectProblem(await t.http.get(`/v1/nodes/${id.Z1}/tree`, ajeno), notFound);
+    expectProblem(
+      await t.http.post(`/v1/nodes/${id.Z1}/move`, { parentId: id['BOD-B'] }, { ...ajeno, ifMatch: 1 }),
+      notFound,
+    );
+    expectProblem(await t.http.del(`/v1/nodes/${id.Z1}`, ajeno), notFound);
+
+    // Ella tiene sus ocho de frontera y ninguno de los de La Esquina; y «Z1»
+    // está libre para ella, porque el código es único por organización.
+    const suyos = await t.http.get('/v1/nodes?limit=200', ajeno);
+    expect(suyos.body.data).toHaveLength(8);
+    expect(suyos.body.data.map((n: { id: string }) => n.id)).not.toContain(id.Z1);
+    expect(
+      (await t.http.post('/v1/nodes', { kind: 'INTERNAL', code: 'Z1', name: 'Su zona' }, ajeno)).status,
+    ).toBe(201);
   });
 
-  it('17 · el contrato del catálogo está publicado', async () => {
+  it('21 · el contrato del catálogo y de las ubicaciones está publicado', async () => {
     const doc = await t.http.get('/v1/openapi.json');
     expect(doc.status).toBe(200);
     for (const path of [
@@ -575,6 +775,10 @@ describe('WAVE 2 · cargar el catálogo', () => {
       '/v1/codes/{value}/resolve',
       '/v1/custom-fields',
       '/v1/uploads',
+      '/v1/nodes',
+      '/v1/nodes/{id}',
+      '/v1/nodes/{id}/move',
+      '/v1/nodes/{id}/tree',
     ]) {
       expect(Object.keys(doc.body.paths)).toContain(path);
     }

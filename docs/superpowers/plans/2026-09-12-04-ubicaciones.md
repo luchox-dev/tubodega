@@ -8,6 +8,45 @@
 
 ---
 
+## Estado: **ejecutado** (2026-09-12)
+
+Las siete tareas están hechas. Puertas: `pnpm lint`, `pnpm typecheck`, `pnpm db:check`
+(**sale 0 y sin migración nueva**, que era el criterio de que este plan no tocó el
+esquema), `pnpm test`, `pnpm test:cov`, `pnpm test:e2e` y `pnpm blackbox` — 317
+comprobaciones en cuatro suites, con las 37 operaciones del contrato cubiertas por
+camino feliz y camino de error.
+
+### Desviaciones al ejecutar
+
+| # | Qué dijo el plan | Qué pasó |
+|---|---|---|
+| 1 | El `UPDATE` por prefijo de N-2 sería `${newPrefix} \|\| substring("path" from N)` | **Dejaba el path en NULL.** Sin `::int`, el driver manda el desplazamiento como parámetro sin tipo y Postgres resuelve `substring(text from text)` —la forma **regex**—, que devuelve NULL cuando el prefijo no casa como expresión regular. Los dos casts son parte de la consulta, no adorno. |
+| 2 | La prueba del índice afirmaría que `listUnder` **usa** `node_org_id_path_idx` | Con doce filas el planificador elige el índice más barato haya lo que haya, incluso con `enable_seqscan = off`: afirmar el plan era afirmar el tamaño de la base de pruebas. Se afirma la **opclase** en `pg_indexes`, que es lo único que Prisma emite y no introspecciona, y por tanto lo único que una migración futura podría tirar sin que `db:check` se entere. |
+| 3 | El caso e2e 13 movería `E3` y luego probaría el ciclo moviendo `Z1` bajo `B2` | En ese orden **no hay ciclo**: mover `E3` a `Z2` ya había sacado a `B2` del subárbol de `Z1`. Se prueba el ciclo a los dos lados del movimiento — antes con `Z1` bajo su bisnieto, después con `BOD-B` bajo `B2`—, que además cubre que quien decide es el `path` de ahora y no el de antes. |
+| 4 | `POST /v1/nodes/{id}/move` respondería `200` | Respondía `201`, el de `@Post` por defecto, contradiciendo su propio `@ApiOkResponse`. No crea nada: un `201` prometería un `Location` que no existe. **Lo encontró la e2e.** |
+| 5 | — | **La caja negra encontró que un `If-Match` viejo pasaba desapercibido** cuando el movimiento era un no-op: el atajo que evita el `UPDATE` vacío salía antes de mirar la versión. Una precondición que solo se comprueba cuando el trabajo vale la pena no es una precondición. |
+| 6 | — | **La colección de Postman encontró que el `PATCH` devolvía una versión obsoleta**: la de la entidad en memoria, no la que quedó en la fila. Un cliente que edita dos veces con la versión recién recibida se lleva un `409` fantasma. Se arregló para nodos (D-31); **producto, campo propio y usuario siguen igual**, y queda anotado en el maestro en vez de arreglado de paso. |
+| 7 | La suite de caja negra escribiría los ids con `$(nodo …)` | Se tragó el informe junto con el id — exactamente la trampa que `lib.sh` documenta para `alta`. Los ids salen por *nameref*, como allí. |
+| 8 | — | Los 7 fallos de la carpeta «Fotos» de Postman bajo Newman son **anteriores a este plan** (se reprodujeron sobre `master`): es multipart de Newman, no del contrato. Sin tocar. |
+
+### Una observación sin cerrar
+
+En una corrida de `pnpm test:e2e` —la primera tras un `pnpm test:cov` encadenado— falló
+**un** caso y la salida no llegó a nombrarlo. No se ha vuelto a reproducir en **siete**
+corridas posteriores, tres de ellas repitiendo esa misma secuencia. Queda anotado sin
+causa: no se ha identificado, y decir que fue «cosa del entorno» sería inventarla.
+
+### Lo que las tres capas de prueba encontraron, cada una
+
+Vale la pena anotarlo porque es el argumento de que las tres hacen falta:
+la **e2e en proceso** encontró el `201` del `move`; la **caja negra por socket**, el
+`If-Match` que no se miraba; y la **colección de Postman**, la versión obsoleta del
+`PATCH` — un defecto que estaba en el repositorio desde el plan 3 y que ninguna de las
+otras dos veía, porque ninguna encadenaba dos ediciones usando lo que la respuesta
+anterior devolvía.
+
+---
+
 ## Context
 
 El plan 3 entregó el catálogo entero: 18 endpoints, `libs/catalog` completa y las 20 tablas del esquema. Pero entregó **productos sin lugares**. `POST /v1/movements` no existe todavía porque un movimiento es una partida doble entre dos nodos, y hoy no hay forma de crear un nodo por HTTP: la tabla existe y está vacía.

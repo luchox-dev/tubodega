@@ -143,6 +143,19 @@ export class Node {
     );
   }
 
+  /**
+   * The version the row ended up with. The entity deliberately does not bump it
+   * — the repository is the only writer that knows — but what comes back from a
+   * write has to carry the new one, or a client that PATCHes twice using the
+   * version it was just handed gets a spurious 409.
+   */
+  withVersion(version: number): Node {
+    return new Node(
+      this.id, this.orgId, this.kind, this.code, this.name,
+      this.parentId, this.path, this.active, this.customFields, version,
+    );
+  }
+
   deactivate(): Node {
     return new Node(
       this.id, this.orgId, this.kind, this.code, this.name,

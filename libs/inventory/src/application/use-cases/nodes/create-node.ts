@@ -50,12 +50,12 @@ export class CreateNode {
       Node.create({ id: this.ids.next() as NodeId, orgId: ctx.orgId, ...input }, parent, defs),
     );
 
-    await this.nodes.save(node);
+    const version = await this.nodes.save(node);
     await this.events.publish([
       inventoryEvent(this.ids, 'node.created', ctx.orgId, ctx.traceId, this.clock.now(), {
         nodeId: node.id, kind: node.kind, code: node.code, path: node.path,
       }),
     ]);
-    return node;
+    return node.withVersion(version);
   }
 }

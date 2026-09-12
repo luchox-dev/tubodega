@@ -12,6 +12,15 @@ import {
 
 const key = (orgId: string, id: string) => `${orgId}:${id}`;
 
+/** Stands in for the VersionConflictError the DAO raises; the edge turns that
+ *  one into 409 stale-version. */
+export class StaleVersionError extends Error {
+  constructor(id: string, expected: number, actual: number) {
+    super(`node#${id}: se esperaba la versión ${expected} y hay la ${actual}`);
+    this.name = 'StaleVersionError';
+  }
+}
+
 export class InMemoryNodeRepository implements NodeRepository {
   readonly rows = new Map<string, Node>();
 
@@ -63,14 +72,24 @@ export class InMemoryNodeRepository implements NodeRepository {
     return { data, hasMore, ...(hasMore ? { nextCursor: encodeCursor([data.at(-1)!.id]) } : {}) };
   }
 
-  async save(node: Node): Promise<void> {
+  async save(node: Node, expectedVersion?: number): Promise<number> {
     // The unique index the database holds, so the double raises where it raises.
     for (const n of this.rows.values()) {
       if (n.orgId === node.orgId && n.code === node.code && n.id !== node.id) {
         throw new NodeCodeTakenError(node.code);
       }
     }
-    this.rows.set(key(node.orgId, node.id), node);
+    // And the optimistic lock, for the same reason: a double that always wins
+    // the race cannot fail the test that a stale If-Match must fail.
+    const current = this.rows.get(key(node.orgId, node.id));
+    if (expectedVersion !== undefined && current !== undefined && current.version !== expectedVersion) {
+      throw new StaleVersionError(node.id, expectedVersion, current.version);
+    }
+    // The database bumps on update and starts at 1 on insert; the double does
+    // the same, or the caller could not tell the two apart.
+    const stored = current === undefined ? node : node.withVersion(current.version + 1);
+    this.rows.set(key(node.orgId, node.id), stored);
+    return stored.version;
   }
 
   /** N-2, by prefix and strict, exactly like the bulk UPDATE. */

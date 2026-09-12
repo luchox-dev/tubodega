@@ -43,12 +43,12 @@ export class UpdateNode {
       input.customFields === undefined ? [] : await this.fields.listByEntity(ctx.orgId, CustomEntity.NODE);
     const next = unwrap(node.update(input, defs));
 
-    await this.nodes.save(next, input.expectedVersion);
+    const version = await this.nodes.save(next, input.expectedVersion);
     await this.events.publish([
       inventoryEvent(this.ids, 'node.updated', ctx.orgId, ctx.traceId, this.clock.now(), {
         nodeId: next.id, code: next.code, path: next.path,
       }),
     ]);
-    return next;
+    return next.withVersion(version);
   }
 }
