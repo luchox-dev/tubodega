@@ -89,6 +89,18 @@ describe('ProcessTemplate.create · el validador', () => {
     );
   });
 
+  // El motor pide los efectos solo al completar (P-6), así que un CONFIRM que
+  // no cierre perdería los tres en silencio.
+  it('un CONFIRM que no cierra el proceso es invalid-template', () => {
+    falla(
+      [
+        { id: 'confirmar', type: 'CONFIRM', required: true, transitions: [{ to: 'item' }] },
+        { id: 'item', type: 'SCAN_ITEM', required: true, transitions: [{ to: null }] },
+      ],
+      'invalid-template',
+    );
+  });
+
   it('un paso sin transiciones es invalid-template: no dice a dónde va', () => {
     falla(conPaso('item', { transitions: [] }), 'invalid-template');
   });

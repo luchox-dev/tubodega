@@ -3,7 +3,7 @@ import {
   BranchingNotSupportedError, InvalidTemplateError, UnknownStepTypeError,
 } from './errors.js';
 import { TemplateCode, type ProcessTemplateId, type StepId } from './ids.js';
-import { isStepType, type StepConfig, type StepType } from './step-types.js';
+import { StepType, isStepType, type StepConfig } from './step-types.js';
 
 export interface Transition {
   /** `null` ends the process. */
@@ -108,6 +108,15 @@ export function parseSteps(raw: unknown): Result<readonly StepDefinition[]> {
 
   if (!steps.some((s) => s.transitions[0]?.to === null)) {
     return err(new InvalidTemplateError('ningún paso cierra con "to": null, así que no termina nunca'));
+  }
+
+  // P-6 is enforced by the runner asking for effects only at completion, so a
+  // CONFIRM in the middle of a template would drop its three effects without a
+  // word. Not in the list of spec 13 §12 and needed for the same reason the
+  // rest of `invalid-template` is: it would get seeded and fail much later.
+  const suelto = steps.find((s) => s.type === StepType.CONFIRM && s.transitions[0]?.to !== null);
+  if (suelto) {
+    return err(new InvalidTemplateError(`el paso "${suelto.id}" confirma pero no cierra el proceso`));
   }
 
   // Reachability from the first step. With P-8 this is a walk and not a search,

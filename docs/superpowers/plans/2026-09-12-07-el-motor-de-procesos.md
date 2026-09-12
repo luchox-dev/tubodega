@@ -248,18 +248,18 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 **Files:** `libs/process/src/domain/{runner.ts, linear-runner.ts}` + spec
 
-- [ ] **Step 1: spec primero**, una prueba por invariante y nombrada por su número:
+- [x] **Step 1: spec primero**, una prueba por invariante y nombrada por su número:
       **P-2** paso que no es el actual → `wrong-step` con el actual en el `detail`;
       **P-4** instancia `COMPLETED` o `CANCELLED` → `instance-closed`;
       **P-5** `required: true` con payload `null` → `required-step-skipped`;
       omitir un `required: false` avanza **sin invocar al manejador**;
       `to: null` deja la instancia `COMPLETED`;
       y **efectos vacíos en todo paso que no sea `CONFIRM`** (P-6).
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `advance` devuelve `Result<AdvanceOutcome>`, no lanza: es
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `advance` devuelve `Result<AdvanceOutcome>`, no lanza: es
       dominio.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(process): el motor lineal, y las cinco invariantes que sostiene`
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(process): el motor lineal, y las cinco invariantes que sostiene`
 
 ---
 
