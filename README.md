@@ -167,6 +167,7 @@ hacia abajo, solo se importan barriles, nadie importa `persistence`.
 | `pnpm test` | dominio + aplicación, sin infraestructura |
 | `pnpm test:e2e` | integración + e2e (+ invariantes) contra Postgres; migra `tubodega_test` sola |
 | `pnpm test:cov` | cobertura |
+| `pnpm blackbox` | caja negra con `curl` contra un servidor levantado |
 
 ## Base de datos
 
@@ -203,18 +204,33 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 
 ### Caja negra
 
-[`scripts/blackbox-catalogo.sh`](scripts/blackbox-catalogo.sh) recorre la
-narrativa del catálogo por HTTP contra un servidor de verdad: registra su propia
-organización, da de alta al equipo, importa una hoja con filas malas, pagina por
-cursor, sube fotos y reclama claves, escanea códigos, series y SKU, y comprueba
-cada error del contrato —`problem+json` incluido, con el `traceId` cuadrando con
-el `X-Request-Id`—. Cuenta aciertos y fallos, y sale distinto de cero si hubo
-alguno.
+[`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
+HTTP contra un servidor de verdad — 248 comprobaciones en tres suites:
+
+| Suite | Qué recorre |
+|---|---|
+| [`10-tenencia.sh`](scripts/blackbox/10-tenencia.sh) | Marta abre el negocio: registro, sesiones, refresco y cierre, el equipo y sus roles, revocar un acceso, y que una empresa no vea a la de al lado |
+| [`20-catalogo.sh`](scripts/blackbox/20-catalogo.sh) | Diego migra la hoja de cálculo y Juan escanea en el pasillo: campos propios, importación, fotos, códigos, series y lotes |
+| [`30-transversal.sh`](scripts/blackbox/30-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger |
 
 ```bash
-pnpm start:dev                                   # en otra terminal
-./scripts/blackbox-catalogo.sh                   # 94 comprobaciones
-BASE=http://otra-maquina:3000 ./scripts/blackbox-catalogo.sh
+pnpm start:dev                       # en otra terminal
+pnpm blackbox                        # las tres suites y el informe de cobertura
+BASE=http://otra-maquina:3000 pnpm blackbox
+./scripts/blackbox.sh --only tenencia
+```
+
+Al terminar cruza lo que pidió de verdad contra los paths de
+`GET /v1/openapi.json` y exige de cada operación **un camino feliz y uno de
+error**, que es la regla de [06 §6](docs/specs/06-pruebas-y-calidad.md). Si
+alguna queda sin cubrir, la nombra y sale distinto de cero: «completo» deja de
+ser una palabra y pasa a ser algo que se comprueba solo.
+
+```
+  operaciones del contrato: 30
+  ejercitadas:              30
+  con camino feliz:         30
+  con camino de error:      30  (1 sin error posible)
 ```
 
 **No sustituye a `pnpm test:e2e`, lo complementa.** La suite corre en proceso con
@@ -225,7 +241,9 @@ transmite y avisa lanzando un `FastifyError`, y durante el plan 3 el filtro lo
 convertía en un `500`.
 
 Escribe en la base de desarrollo y no limpia lo que crea, como las e2e: cada
-corrida usa un slug nuevo.
+corrida usa un slug nuevo. Con `JWT_SECRET` exportado corre además la
+comprobación del `401 token-expired`, la única que necesita saber algo del
+interior del servidor.
 
 ## Cómo está cableado SWC
 
