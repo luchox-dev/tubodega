@@ -201,6 +201,32 @@ necesitan Postgres. Las de integración corren dentro de una transacción que se
 revierte; las e2e registran su propia organización y hablan solo el contrato.
 Todo se ejecuta con `.env.test` contra `tubodega_test`.
 
+### Caja negra
+
+[`scripts/blackbox-catalogo.sh`](scripts/blackbox-catalogo.sh) recorre la
+narrativa del catálogo por HTTP contra un servidor de verdad: registra su propia
+organización, da de alta al equipo, importa una hoja con filas malas, pagina por
+cursor, sube fotos y reclama claves, escanea códigos, series y SKU, y comprueba
+cada error del contrato —`problem+json` incluido, con el `traceId` cuadrando con
+el `X-Request-Id`—. Cuenta aciertos y fallos, y sale distinto de cero si hubo
+alguno.
+
+```bash
+pnpm start:dev                                   # en otra terminal
+./scripts/blackbox-catalogo.sh                   # 94 comprobaciones
+BASE=http://otra-maquina:3000 ./scripts/blackbox-catalogo.sh
+```
+
+**No sustituye a `pnpm test:e2e`, lo complementa.** La suite corre en proceso con
+`fastify.inject()`, que fabrica la petición en memoria; esto atraviesa un socket,
+y ahí aparecen fallos que la otra no puede ver. El `413` de una foto de 11 MB es
+el ejemplo que costó descubrir: `@fastify/multipart` corta el archivo mientras lo
+transmite y avisa lanzando un `FastifyError`, y durante el plan 3 el filtro lo
+convertía en un `500`.
+
+Escribe en la base de desarrollo y no limpia lo que crea, como las e2e: cada
+corrida usa un slug nuevo.
+
 ## Cómo está cableado SWC
 
 Rspack (`builder: "rspack"` en `nest-cli.json`) compila con `builtin:swc-loader`
