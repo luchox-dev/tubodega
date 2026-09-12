@@ -1,7 +1,7 @@
-import { unwrap, type ProcessInstanceId } from '@app/common';
-import { Product, TrackingMode, type BatchId, type ProductId } from '@app/catalog';
+import type { ProcessInstanceId } from '@app/common';
+import { Product, TrackingMode, type ProductId } from '@app/catalog';
 import { Role } from '@app/tenancy';
-import { NodeKind, Quantity, type MovementId, type Node, type NodeId } from '@app/inventory';
+import { NodeKind, type MovementId, type Node } from '@app/inventory';
 import { ORG, aNode } from '../../../../test/builders/a-node.js';
 import { aContext } from '../../../../test/builders/a-context.js';
 import { aBatch, aProduct } from '../../../../test/builders/a-movement.js';
@@ -405,7 +405,7 @@ describe('ReverseMovement', () => {
   });
 
   it('autorización: el OPERATOR no compensa', async () => {
-    const { t, w, movement } = await setup();
+    const { t, movement } = await setup();
     await expect(
       t.reverse.execute(aContext([Role.OPERATOR]), { movementId: movement.id, reason: 'x' }),
     ).rejects.toMatchObject({ type: 'insufficient-role' });

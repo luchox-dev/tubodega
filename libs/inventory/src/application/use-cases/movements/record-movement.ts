@@ -192,9 +192,10 @@ export class RecordMovement {
     );
 
     await this.events.publish(
-      movementEvents(this.ids, ctx, recordedAt, prepared, balances, {
-        ...(prepared.pending !== undefined ? { pending: prepared.pending } : {}),
-      }),
+      movementEvents(
+        this.ids, ctx, recordedAt, prepared, balances,
+        prepared.pending !== undefined ? { pending: prepared.pending } : {},
+      ),
     );
     return { movement: prepared.movement, balances };
   }
