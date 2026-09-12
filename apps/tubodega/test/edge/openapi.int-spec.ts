@@ -51,6 +51,12 @@ describe('OpenAPI document', () => {
         '/v1/nodes/{id}',
         '/v1/nodes/{id}/move',
         '/v1/nodes/{id}/tree',
+        '/v1/movements',
+        '/v1/movements/batch',
+        '/v1/movements/{id}',
+        '/v1/movements/{id}/reverse',
+        '/v1/stock',
+        '/v1/stock/custodies',
       ]),
     );
   });

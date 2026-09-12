@@ -2760,6 +2760,547 @@
           "inventory"
         ]
       }
+    },
+    "/v1/movements": {
+      "get": {
+        "description": "Filtros: productId, nodeId (casa origen o destino), batchId, actorId, from y to sobre occurredAt. Ordena solo por occurredAt, lo último primero.",
+        "operationId": "MovementsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovementPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "El histórico de movimientos",
+        "tags": [
+          "inventory"
+        ]
+      },
+      "post": {
+        "description": "La partida doble del ledger: la cantidad sale de un nodo y entra en otro, en la misma transacción que actualiza los dos saldos.",
+        "operationId": "MovementsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMovementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedMovementView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found — producto, lote, nodo o el préstamo que se salda",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "movement-id-taken · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "insufficient-stock · same-node · non-positive-quantity · batch-required · batch-not-allowed · batch-product-mismatch · due-date-not-allowed · future-occurrence · node-inactive · reason-required · settles-required · settles-mismatch · settles-exceeded · serial-already-placed · product-inactive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registra un movimiento",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/movements/batch": {
+      "post": {
+        "description": "Todo o nada, en una transacción. Es lo que usa la carga de saldo inicial desde una hoja de cálculo.",
+        "operationId": "MovementsController_batch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordMovementBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedBatchView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "movement-id-taken · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "batch-too-large · insufficient-stock · y las demás del asiento",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Registra un lote de movimientos",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/movements/{id}": {
+      "get": {
+        "operationId": "MovementsController_one",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovementView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un movimiento por id",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/movements/{id}/reverse": {
+      "post": {
+        "description": "La única forma de deshacer un asiento, porque los movimientos no se actualizan ni se borran (I-3). Puede fallar por saldo: el sistema no inventa existencias para cuadrar una corrección.",
+        "operationId": "MovementsController_compensate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReverseMovementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordedMovementView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "already-reversed · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "insufficient-stock",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Compensa un movimiento",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/stock": {
+      "get": {
+        "description": "custodialOnly deja fuera SOURCE y TERMINAL, cuyo saldo es un acumulado y no existencias; sin él se ve «cuánto he vendido», que también es una pregunta legítima. nonZeroOnly viene activado. under agrega el subárbol entero.",
+        "operationId": "StockController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Qué hay y dónde",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/v1/stock/custodies": {
+      "get": {
+        "description": "Por préstamo, no por saldo: cada check-out con pendiente mayor que cero es una fila, con su propio dueAt.",
+        "operationId": "StockController_open",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenCustodyPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Qué está prestado y no ha vuelto",
+        "tags": [
+          "inventory"
+        ]
+      }
     }
   },
   "info": {
@@ -4044,6 +4585,334 @@
         "required": [
           "node",
           "children"
+        ]
+      },
+      "MovementView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "productId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f0"
+          },
+          "batchId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f1"
+          },
+          "fromNodeId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f2"
+          },
+          "toNodeId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f3"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "12.500"
+          },
+          "occurredAt": {
+            "type": "string",
+            "example": "2026-09-12T14:32:00.000Z",
+            "description": "Cuándo pasó, según quien lo registró"
+          },
+          "recordedAt": {
+            "type": "string",
+            "example": "2026-09-12T14:33:10.000Z",
+            "description": "Cuándo lo recibió el servidor. Los dos relojes se ven, y eso es lo que hace auditable el histórico"
+          },
+          "actorId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f7"
+          },
+          "reason": {
+            "type": "string",
+            "example": "se mojó en el traslado"
+          },
+          "dueAt": {
+            "type": "string",
+            "example": "2026-09-19T12:00:00.000Z"
+          },
+          "reversesId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f8",
+            "description": "El movimiento que este compensa"
+          },
+          "settlesId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f4",
+            "description": "El préstamo que esta devolución salda"
+          },
+          "processInstanceId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f5"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "fromNodeId",
+          "toNodeId",
+          "quantity",
+          "occurredAt",
+          "recordedAt",
+          "actorId"
+        ]
+      },
+      "MovementPageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovementView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
+        ]
+      },
+      "CreateMovementDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6",
+            "description": "UUIDv7 del cliente. Si se repite con otra Idempotency-Key, 409 movement-id-taken"
+          },
+          "productId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f0"
+          },
+          "batchId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f1",
+            "description": "Obligatorio si el producto es LOT o SERIAL; prohibido si es QUANTITY (I-8)"
+          },
+          "fromNodeId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f2",
+            "description": "De dónde sale"
+          },
+          "toNodeId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f3",
+            "description": "A dónde entra"
+          },
+          "quantity": {
+            "type": "string",
+            "example": "12.500",
+            "description": "Decimal como cadena, hasta 3 decimales. Estrictamente positivo (I-2)"
+          },
+          "occurredAt": {
+            "type": "string",
+            "example": "2026-09-12T14:32:00.000Z",
+            "description": "Cuándo pasó. Hasta 5 minutos por delante del reloj (I-14)"
+          },
+          "reason": {
+            "type": "string",
+            "example": "se mojó en el traslado",
+            "description": "Obligatorio contra adjustment-in, adjustment-out y shrinkage"
+          },
+          "dueAt": {
+            "type": "string",
+            "example": "2026-09-19T12:00:00.000Z",
+            "description": "Solo hacia un nodo CUSTODY (I-11)"
+          },
+          "settlesId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f4",
+            "description": "El préstamo que esta devolución salda. Obligatorio si el origen es CUSTODY (I-17)"
+          },
+          "processInstanceId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f5"
+          }
+        },
+        "required": [
+          "productId",
+          "fromNodeId",
+          "toNodeId",
+          "quantity",
+          "occurredAt"
+        ]
+      },
+      "StockPositionView": {
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f2",
+            "description": "Vacío en una suma por subárbol"
+          },
+          "productId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f0"
+          },
+          "batchId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f1"
+          },
+          "nodeKind": {
+            "type": "string",
+            "example": "INTERNAL",
+            "enum": [
+              "INTERNAL",
+              "CUSTODY",
+              "TERMINAL",
+              "SOURCE"
+            ]
+          },
+          "quantity": {
+            "type": "string",
+            "example": "87.500"
+          }
+        },
+        "required": [
+          "nodeId",
+          "productId",
+          "nodeKind",
+          "quantity"
+        ]
+      },
+      "RecordedMovementView": {
+        "type": "object",
+        "properties": {
+          "movement": {
+            "$ref": "#/components/schemas/MovementView"
+          },
+          "balances": {
+            "description": "Los dos extremos, como quedaron",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockPositionView"
+            }
+          }
+        },
+        "required": [
+          "movement",
+          "balances"
+        ]
+      },
+      "RecordMovementBatchDto": {
+        "type": "object",
+        "properties": {
+          "movements": {
+            "description": "Todo o nada, en una transacción. Hasta 500",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateMovementDto"
+            }
+          }
+        },
+        "required": [
+          "movements"
+        ]
+      },
+      "RecordedBatchView": {
+        "type": "object",
+        "properties": {
+          "movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovementView"
+            }
+          },
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockPositionView"
+            }
+          }
+        },
+        "required": [
+          "movements",
+          "balances"
+        ]
+      },
+      "ReverseMovementDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "eran 10 unidades, no 100",
+            "description": "Obligatorio: una corrección sin explicación no sirve a quien audite después"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "StockPageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockPositionView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
+        ]
+      },
+      "OpenCustodyView": {
+        "type": "object",
+        "properties": {
+          "checkOut": {
+            "description": "El préstamo",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MovementView"
+              }
+            ]
+          },
+          "pending": {
+            "type": "string",
+            "example": "3.000",
+            "description": "La cantidad prestada menos lo ya devuelto"
+          },
+          "overdue": {
+            "type": "boolean",
+            "example": false,
+            "description": "dueAt quedó atrás"
+          }
+        },
+        "required": [
+          "checkOut",
+          "pending",
+          "overdue"
+        ]
+      },
+      "OpenCustodyPageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenCustodyView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
         ]
       }
     }
