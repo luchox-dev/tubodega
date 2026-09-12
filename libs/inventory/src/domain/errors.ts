@@ -128,3 +128,34 @@ export class UnknownFilterNodeError extends DomainError {
     });
   }
 }
+
+// ── The ledger (spec 12 §9). Wave 3.
+
+/**
+ * I-2. A negative is not a small amount, it is a direction — and the direction
+ * of a movement lives in its pair of nodes, never in its number (decision D-32).
+ */
+export class NonPositiveQuantityError extends DomainError {
+  readonly type = 'non-positive-quantity';
+  readonly status = 422;
+  constructor(raw: string) {
+    super(`La cantidad de un movimiento se escribe en positivo, y "${raw}" no lo es`, {
+      errors: [{ pointer: '/quantity', code: 'non-positive-quantity' }],
+    });
+  }
+}
+
+/**
+ * Not in the table of spec 12 §9: the edge already refuses a malformed decimal
+ * with 400 validation-failed, so this covers the amount that reaches the domain
+ * by another door. Declared as a deviation in the plan-5 document.
+ */
+export class InvalidQuantityError extends DomainError {
+  readonly type = 'invalid-quantity';
+  readonly status = 422;
+  constructor(raw: string) {
+    super(`"${raw}" no es una cantidad: hasta 15 enteros y 3 decimales, con punto`, {
+      errors: [{ pointer: '/quantity', code: 'invalid-quantity' }],
+    });
+  }
+}
