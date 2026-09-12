@@ -157,9 +157,15 @@ export class ProductRowDto {
 }
 
 export class ImportProductsDto {
+  /**
+   * El tope de D-11 lo impone `ImportProducts`, no un `@ArrayMaxSize` aquí. Con
+   * el validador en el borde la respuesta era `400 validation-failed`, y mil una
+   * filas no son una petición que no se entienda: se entiende perfectamente y la
+   * rechaza una regla de negocio. El contrato es firme en eso ([03 §5]), así que
+   * el límite se comprueba donde vive la regla y sale como `422 import-too-large`.
+   */
   @ApiProperty({ type: ProductRowDto, isArray: true, description: `Máximo ${MAX_IMPORT_ROWS} filas (D-11)` })
   @IsArray()
-  @ArrayMaxSize(MAX_IMPORT_ROWS)
   @ValidateNested({ each: true })
   @Type(() => ProductRowDto)
   rows!: ProductRowDto[];
