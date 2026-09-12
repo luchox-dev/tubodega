@@ -42,7 +42,22 @@ describe('OutboxDispatcherJob', () => {
 
   const readMine = (orgId: OrgId) => uow.runAs({ pool: 'system', orgId }, () => events.findMany(orgId));
 
+  /**
+   * Empties whatever the rest of the suite left behind. One tick claims at most
+   * BATCH events, and the test database is never cleaned (the house rule), so
+   * the ledger suites alone leave hundreds of published-pending rows: without
+   * draining first, a tick would spend its whole batch on somebody else's
+   * history and these assertions would be about events that never got claimed.
+   */
+  const drain = async (): Promise<void> => {
+    for (let pass = 0; pass < 100; pass++) {
+      if ((await job.tick()).length === 0) return;
+    }
+    throw new Error('el outbox no se vacía: algo lo está llenando más rápido de lo que se publica');
+  };
+
   it('publishes what is pending and marks it, once', async () => {
+    await drain();
     const { orgId, ids } = await seed(3);
 
     const published = await job.tick();
@@ -62,6 +77,7 @@ describe('OutboxDispatcherJob', () => {
   });
 
   it('two concurrent passes split the work and never overlap', async () => {
+    await drain();
     const { orgId, ids } = await seed(10);
 
     const [a, b] = await Promise.all([job.tick(), job.tick()]);
@@ -79,8 +95,7 @@ describe('OutboxDispatcherJob', () => {
   });
 
   it('a real event of a real registration goes through the same path', async () => {
-    const before = await job.tick();
-    expect(Array.isArray(before)).toBe(true);
+    await drain();
     const { http } = started;
     const slug = `la-esquina-${v7().slice(-8)}`;
     const res = await http.post(

@@ -309,9 +309,25 @@ describe('el ledger en Postgres', () => {
       expect(page.data.map((m) => m.id)).toEqual([nuevo.id, viejo.id]);
     });
 
-    // The table that grows fastest in the system: the last 50 of a product must
-    // not be a seq scan (decision D-37).
-    it('los últimos por producto van por el índice', async () => {
+    /**
+     * The table that grows fastest in the system: the last 50 of a product must
+     * never scan it (decision D-37).
+     *
+     * What is asserted is that promise, and not the name of one index. In a
+     * table with hundreds of tenants the planner has no statistics for a brand
+     * new (org, product) pair, estimates a single row, and then
+     * `movement_org_id_occurred_at_idx` and
+     * `movement_org_id_product_id_occurred_at_idx` tie on cost — it takes
+     * whichever is one page shallower that day. Pinning the name pins a coin
+     * flip: the suite went red here with no code change at all, only because the
+     * shared test database had grown. And the test cannot fix its own
+     * statistics: `ANALYZE` is silently skipped for a role that does not own the
+     * table, and neither application role does.
+     *
+     * Either plan honours D-37. A `Seq Scan` would not, and that is the failure
+     * this stands guard over.
+     */
+    it('los últimos por producto no escanean la tabla', async () => {
       const plan = await asTenant(async () => {
         const rows = await sql<{ 'QUERY PLAN': string }>`
           explain select * from movement
@@ -320,7 +336,10 @@ describe('el ledger en Postgres', () => {
         `.execute(h.ctx.current());
         return rows.rows.map((r) => r['QUERY PLAN']).join('\n');
       });
-      expect(plan).toContain('movement_org_id_product_id_occurred_at_idx');
+      expect(plan).not.toContain('Seq Scan on movement');
+      // Un índice que empieza por org_id y termina en occurred_at: cualquiera de
+      // los cuatro sirve al histórico, y ninguno lee la tabla entera.
+      expect(plan).toMatch(/Index Scan using movement_org_id_\w*_?occurred_at_idx/);
     });
 
     it('cuenta por producto, que es lo que C-8 necesita', async () => {
