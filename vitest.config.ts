@@ -36,6 +36,7 @@ export default defineConfig({
         'libs/catalog/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         // 100 %, and it starts here: F2.5 says so twice (decision D-15).
         'libs/inventory/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
+        'libs/inventory/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
         'libs/tenancy/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
       },
     },
