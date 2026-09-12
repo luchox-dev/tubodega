@@ -123,6 +123,27 @@ export class Product {
     );
   }
 
+  /**
+   * The version the row ended up with. The entity deliberately does not bump it
+   * — the repository is the only writer that knows — but what comes back from a
+   * write has to carry the new one, or a client that PATCHes twice using the
+   * version it was just handed gets a spurious 409 (decision D-31).
+   */
+  withVersion(version: number): Product {
+    return new Product(
+      this.id,
+      this.orgId,
+      this.sku,
+      this.name,
+      this.description,
+      this.trackingMode,
+      this.uom,
+      this.active,
+      this.customFields,
+      version,
+    );
+  }
+
   rename(name: string): Product {
     return new Product(
       this.id,

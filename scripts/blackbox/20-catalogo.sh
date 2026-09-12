@@ -55,6 +55,11 @@ body "en el orden que les dio" '[.data[].key] | join(",")' 'proveedor,familia'
 req PATCH "/custom-fields/$CF_FAMILIA" --token "$T_DIEGO" --if-match 1 --body '{"label":"Familia de producto"}'
 ok "renombra la familia con If-Match" 200
 body "y la etiqueta es la nueva" '.label' 'Familia de producto'
+# D-31 · la versión que vuelve encadena la siguiente edición sin releer.
+body "y devuelve la versión ya incrementada" '.version' '2'
+V_CF="$(jqv '.version')"
+req PATCH "/custom-fields/$CF_FAMILIA" --token "$T_DIEGO" --if-match "$V_CF" --body '{"label":"Familia de producto"}'
+ok "y con esa misma versión se vuelve a editar, sin 409 fantasma" 200
 
 req POST /custom-fields --token "$T_DIEGO" \
   --body '{"entity":"PRODUCT","key":"marca","label":"Marca","type":"SELECT"}'
@@ -310,6 +315,10 @@ problem "y no crea lotes: CREATE_BATCH es de OPERATOR para arriba" 403 insuffici
 step "12 · edición con control de versión"
 req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 1 --body '{"name":"Tornillo M8 inoxidable"}'
 ok "con el If-Match que toca" 200
+# D-31 · la versión que vuelve es la que quedó en la fila, así que encadena
+# la siguiente edición sin releer el producto.
+body "y devuelve la versión ya incrementada" '.version' '2'
+V_TOR="$(jqv '.version')"
 req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 1 --body '{"name":"Otro"}'
 problem "con uno viejo" 409 stale-version
 req PATCH "/products/$P_TOR" --token "$T_DIEGO" --body '{"name":"Otro"}'
@@ -317,10 +326,11 @@ problem "y sin ninguno" 400 missing-if-match
 
 # C-8 · sin movimientos todavía, el modo de seguimiento sí se puede cambiar.
 # (Con movimientos se bloquea, pero el ledger llega en la WAVE 3.)
-req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 2 --body '{"trackingMode":"LOT"}'
+req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match "$V_TOR" --body '{"trackingMode":"LOT"}'
 ok "sin movimientos, el modo de seguimiento cambia (C-8)" 200
 body "y es el nuevo" '.trackingMode' 'LOT'
-req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 3 --body '{"trackingMode":"QUANTITY"}'
+V_TOR="$(jqv '.version')"
+req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match "$V_TOR" --body '{"trackingMode":"QUANTITY"}'
 ok "y se deshace, que el resto del relato lo ve por cantidad" 200
 
 step "12b · C-9 · sin existencias, el producto se retira del catálogo"

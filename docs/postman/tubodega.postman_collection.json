@@ -561,7 +561,9 @@
                   "});",
                   "const b = pm.response.json();",
                   "pm.collectionVariables.set('juanId', b.id);",
-                  "pm.collectionVariables.set('juanVersion', 1);",
+                  "// La vista trae la versión (D-31): ya no hay que suponer que es 1.",
+                  "pm.test('la respuesta trae la versión', () => pm.expect(b.version).to.be.a('number'));",
+                  "pm.collectionVariables.set('juanVersion', b.version);",
                   "pm.collectionVariables.set('replayKey', pm.request.headers.get('idempotency-key'));"
                 ]
               }
@@ -838,7 +840,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set('juanVersion', 1);"
+                  "pm.collectionVariables.set('juanVersion', pm.response.json().version);"
                 ]
               }
             }
@@ -891,7 +893,68 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
-                  "pm.collectionVariables.set('juanVersion', 2);"
+                  "// D-31 · la versión que vuelve es la que quedó en la fila; el siguiente",
+                  "// PATCH la usa tal cual, y eso es justo lo que daba un 409 fantasma.",
+                  "const prev = Number(pm.collectionVariables.get('juanVersion'));",
+                  "pm.test('la versión vuelve ya incrementada', () => {",
+                  "  pm.expect(pm.response.json().version).to.eql(prev + 1);",
+                  "});",
+                  "pm.collectionVariables.set('juanVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar roles otra vez, con la versión recién devuelta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{juanVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users/{{juanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users",
+                "{{juanId}}"
+              ]
+            },
+            "description": "Sin D-31 esto daba un 409 fantasma: la respuesta anterior devolvía la versión sin incrementar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"OPERATOR\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La versión que devolvió el PATCH anterior vale como If-Match tal cual.",
+                  "// Que esto sea 200 y no 409 es exactamente lo que arregla D-31.",
+                  "pm.test('200, no un 409 fantasma', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('juanVersion', pm.response.json().version);"
                 ]
               }
             }
@@ -1036,7 +1099,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('201', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('familiaId', pm.response.json().id);"
+                  "pm.collectionVariables.set('familiaId', pm.response.json().id);",
+                  "pm.collectionVariables.set('familiaVersion', pm.response.json().version);"
                 ]
               }
             }
@@ -1136,6 +1200,67 @@
                   "pm.test('la etiqueta es la nueva', () => {",
                   "  pm.expect(pm.response.json().label).to.eql('Familia de producto');",
                   "});",
+                  "// D-31 · la versión que vuelve es la que quedó en la fila; el siguiente",
+                  "// PATCH la usa tal cual, y eso es justo lo que daba un 409 fantasma.",
+                  "const prev = Number(pm.collectionVariables.get('familiaVersion'));",
+                  "pm.test('la versión vuelve ya incrementada', () => {",
+                  "  pm.expect(pm.response.json().version).to.eql(prev + 1);",
+                  "});",
+                  "pm.collectionVariables.set('familiaVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renombrar el campo otra vez, con la versión recién devuelta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{familiaVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields/{{familiaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields",
+                "{{familiaId}}"
+              ]
+            },
+            "description": "Encadena con lo que devolvió el PATCH anterior, sin releer la definición (D-31).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Familia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La versión que devolvió el PATCH anterior vale como If-Match tal cual.",
+                  "// Que esto sea 200 y no 409 es exactamente lo que arregla D-31.",
+                  "pm.test('200, no un 409 fantasma', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('familiaVersion', pm.response.json().version);"
                 ]
               }
@@ -1191,7 +1316,8 @@
                   "  pm.response.to.have.status(201);",
                   "  pm.expect(pm.response.headers.get('location')).to.be.a('string');",
                   "});",
-                  "pm.collectionVariables.set('torId', pm.response.json().id);"
+                  "pm.collectionVariables.set('torId', pm.response.json().id);",
+                  "pm.collectionVariables.set('torVersion', pm.response.json().version);"
                 ]
               }
             }
@@ -1695,7 +1821,7 @@
               },
               {
                 "key": "if-match",
-                "value": "\"1\""
+                "value": "\"{{torVersion}}\""
               }
             ],
             "url": {
@@ -1730,6 +1856,67 @@
                   "pm.test('el nombre es el nuevo', () => {",
                   "  pm.expect(pm.response.json().name).to.eql('Tornillo M8 inoxidable');",
                   "});",
+                  "// D-31 · la versión que vuelve es la que quedó en la fila; el siguiente",
+                  "// PATCH la usa tal cual, y eso es justo lo que daba un 409 fantasma.",
+                  "const prev = Number(pm.collectionVariables.get('torVersion'));",
+                  "pm.test('la versión vuelve ya incrementada', () => {",
+                  "  pm.expect(pm.response.json().version).to.eql(prev + 1);",
+                  "});",
+                  "pm.collectionVariables.set('torVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Modificar el tornillo otra vez, con la versión recién devuelta",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{torVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}"
+              ]
+            },
+            "description": "Encadena con lo que devolvió el PATCH anterior, sin releer el producto (D-31).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tornillo M8\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La versión que devolvió el PATCH anterior vale como If-Match tal cual.",
+                  "// Que esto sea 200 y no 409 es exactamente lo que arregla D-31.",
+                  "pm.test('200, no un 409 fantasma', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('torVersion', pm.response.json().version);"
                 ]
               }

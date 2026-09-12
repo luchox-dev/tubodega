@@ -54,13 +54,13 @@ export class UpdateProduct {
         : await this.fields.listByEntity(ctx.orgId, CustomEntity.PRODUCT);
     const next = unwrap(product.update(input, defs));
 
-    await this.products.save(next, input.expectedVersion);
+    const version = await this.products.save(next, input.expectedVersion);
     await this.events.publish([
       catalogEvent(this.ids, 'product.updated', ctx.orgId, ctx.traceId, this.clock.now(), {
         productId: next.id,
         sku: next.sku,
       }),
     ]);
-    return next;
+    return next.withVersion(version);
   }
 }

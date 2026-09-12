@@ -40,13 +40,13 @@ export class UpdateUserRoles {
 
     // T-2 lives in the domain (spec 10 §10); the count comes from here.
     const next = unwrap(user.withRoles(input.roles, await this.users.countActiveOwners(ctx.orgId)));
-    await this.users.save(next.withVersion(input.expectedVersion));
+    const version = await this.users.save(next, input.expectedVersion);
     await this.events.publish([
       tenancyEvent(this.ids, 'user.roles_changed', ctx.orgId, ctx.traceId, this.clock.now(), {
         userId: user.id,
         roles: [...next.roles],
       }),
     ]);
-    return next;
+    return next.withVersion(version);
   }
 }

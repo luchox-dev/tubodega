@@ -82,6 +82,27 @@ export class CustomFieldDefinition {
     );
   }
 
+  /**
+   * The version the row ended up with. The entity deliberately does not bump it
+   * — the repository is the only writer that knows — but what comes back from a
+   * write has to carry the new one, or a client that PATCHes twice using the
+   * version it was just handed gets a spurious 409 (decision D-31).
+   */
+  withVersion(version: number): CustomFieldDefinition {
+    return new CustomFieldDefinition(
+      this.id,
+      this.orgId,
+      this.entity,
+      this.key,
+      this.label,
+      this.type,
+      this.options,
+      this.required,
+      this.position,
+      version,
+    );
+  }
+
   /** The type never changes here: that is a use-case decision (D-10), because
    *  only it can count the entities that already hold a value. */
   withMetadata(patch: {

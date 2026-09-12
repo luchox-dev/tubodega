@@ -43,7 +43,7 @@ export class KyselyCustomFieldRepository implements CustomFieldDefinitionReposit
     return this.countIn(orgId, entity, key, true);
   }
 
-  async save(def: CustomFieldDefinition, expectedVersion?: number): Promise<void> {
+  async save(def: CustomFieldDefinition, expectedVersion?: number): Promise<number> {
     const data = {
       entity: def.entity,
       key: def.key as string,
@@ -54,15 +54,17 @@ export class KyselyCustomFieldRepository implements CustomFieldDefinitionReposit
       position: def.position,
     };
     try {
-      await this.dao.update(
+      const row = await this.dao.update(
         def.orgId,
         def.id,
         data,
         expectedVersion !== undefined ? { expectedVersion } : {},
       );
+      return row.version;
     } catch (e) {
       if (!(e instanceof RecordNotFoundError)) throw e;
-      await this.dao.create({ id: def.id, orgId: def.orgId, ...data });
+      const row = await this.dao.create({ id: def.id, orgId: def.orgId, ...data });
+      return row.version;
     }
   }
 

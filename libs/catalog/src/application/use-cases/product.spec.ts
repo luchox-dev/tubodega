@@ -124,6 +124,18 @@ describe('UpdateProduct', () => {
       t.update.execute(aContext(), { id: 'nope' as ProductId, name: 'x', expectedVersion: 1 }),
     ).rejects.toMatchObject({ type: 'not-found', status: 404 });
   });
+
+  // Lo encontró la colección de Postman: lo que vuelve de una escritura tiene que
+  // llevar la versión con la que quedó la fila, o un cliente que edita dos veces
+  // con la versión que acaba de recibir se lleva un 409 fantasma (D-31).
+  it('devuelve la versión que quedó guardada, no la que traía', async () => {
+    const t = build();
+    const p = await t.create.execute(aContext(), NEW);
+    const once = await t.update.execute(aContext(), { id: p.id, name: 'uno', expectedVersion: 1 });
+    expect(once.version).toBe(2);
+    const twice = await t.update.execute(aContext(), { id: p.id, name: 'dos', expectedVersion: once.version });
+    expect(twice.version).toBe(3);
+  });
 });
 
 describe('DeactivateProduct', () => {

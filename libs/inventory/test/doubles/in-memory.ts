@@ -147,8 +147,11 @@ export class InMemoryCustomFieldRepository implements CustomFieldDefinitionRepos
     return 0;
   }
 
-  async save(def: CustomFieldDefinition): Promise<void> {
+  // Nodes only ever read the definitions; the version is here to satisfy the
+  // port, which carries it for the sake of the catalogue's own PATCH (D-31).
+  async save(def: CustomFieldDefinition): Promise<number> {
     this.rows.push(def);
+    return def.version;
   }
 
   /** Convenience for arranging: put a definition in without going through a use case. */

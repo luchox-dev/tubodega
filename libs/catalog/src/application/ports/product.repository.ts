@@ -23,8 +23,12 @@ export interface ProductRepository {
   /** For the import: one round trip instead of one per row. */
   findManyBySkus(orgId: OrgId, skus: readonly Sku[]): Promise<Map<string, Product>>;
   list(orgId: OrgId, filter: ProductFilter, page: ProductPage): Promise<Page<Product>>;
-  /** Insert or update by id with optimistic locking. Raises SkuTakenError on C-1. */
-  save(product: Product, expectedVersion?: number): Promise<void>;
+  /**
+   * Insert or update by id with optimistic locking. Raises SkuTakenError on C-1.
+   * Returns the version the row ended up with: the caller has to be able to
+   * hand it back to the client, and only the repository knows it (D-31).
+   */
+  save(product: Product, expectedVersion?: number): Promise<number>;
   saveMany(products: readonly Product[]): Promise<void>;
 }
 

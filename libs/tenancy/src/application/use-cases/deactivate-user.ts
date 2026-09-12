@@ -37,7 +37,9 @@ export class DeactivateUser {
     if (!user.active) return;
 
     const next = unwrap(user.deactivate(await this.users.countActiveOwners(ctx.orgId)));
-    await this.users.save(next);
+    // The version read a moment ago is the lock: without it the T-2 count above
+    // could be raced by a concurrent write and this would overwrite it blind.
+    await this.users.save(next, user.version);
     await this.events.publish([
       tenancyEvent(this.ids, 'user.deactivated', ctx.orgId, ctx.traceId, this.clock.now(), { userId: user.id }),
     ]);

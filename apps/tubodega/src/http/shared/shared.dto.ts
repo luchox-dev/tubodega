@@ -14,6 +14,7 @@ export class UserView {
   @ApiProperty({ example: 'Marta' }) name!: string;
   @ApiProperty({ example: ['OWNER'], isArray: true, enum: ['OWNER', 'ADMIN', 'OPERATOR', 'VIEWER'] }) roles!: string[];
   @ApiProperty({ example: true }) active!: boolean;
+  @ApiProperty({ example: 1, description: 'Se envía en If-Match para modificarlo' }) version!: number;
 }
 
 /** The cursor envelope of spec 03 §6, the same for every collection. */

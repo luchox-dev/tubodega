@@ -170,6 +170,24 @@ describe('UpdateUserRoles', () => {
     expect(events.published[0]!.data).toMatchObject({ userId: 'u-2', roles: ['ADMIN'] });
   });
 
+  // Lo encontró la colección de Postman: lo que vuelve de una escritura tiene que
+  // llevar la versión con la que quedó la fila, o un cliente que edita dos veces
+  // con la versión que acaba de recibir se lleva un 409 fantasma (D-31).
+  it('devuelve la versión que quedó guardada, no la que traía', async () => {
+    const once = await updateRoles().execute(admin, {
+      id: 'u-2' as UserId,
+      roles: [Role.ADMIN],
+      expectedVersion: 1,
+    });
+    expect(once.version).toBe(2);
+    const twice = await updateRoles().execute(admin, {
+      id: 'u-2' as UserId,
+      roles: [Role.VIEWER],
+      expectedVersion: once.version,
+    });
+    expect(twice.version).toBe(3);
+  });
+
   it('T-2 · taking OWNER away from the only active owner is refused', async () => {
     await expect(
       updateRoles().execute(admin, { id: 'u-1' as UserId, roles: [Role.ADMIN], expectedVersion: 1 }),

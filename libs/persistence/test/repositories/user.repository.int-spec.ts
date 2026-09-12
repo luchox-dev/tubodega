@@ -48,10 +48,26 @@ describe('KyselyUserRepository', () => {
     await withRollback(uow, { pool: 'system' }, async () => {
       const org = await newOrg();
       const u = newUser(org.id, 'a@x.co');
-      await users.save(u);
-      await users.save(unwrap(u.withRoles([Role.ADMIN], 1))); // version 1 → 2
-      await expect(users.save(unwrap(u.withRoles([Role.VIEWER], 1)))).rejects.toBeInstanceOf(VersionConflictError);
+      expect(await users.save(u)).toBe(1);
+      expect(await users.save(unwrap(u.withRoles([Role.ADMIN], 1)), 1)).toBe(2);
+      await expect(users.save(unwrap(u.withRoles([Role.VIEWER], 1)), 1)).rejects.toBeInstanceOf(
+        VersionConflictError,
+      );
       expect((await users.findById(org.id, u.id))?.roles).toEqual(new Set([Role.ADMIN]));
+    });
+  });
+
+  // D-31: what `save` returns has to be the version of the row, or the use case
+  // cannot hand the client something it can use as the next If-Match.
+  it('la versión devuelta encadena tres escrituras seguidas', async () => {
+    await withRollback(uow, { pool: 'system' }, async () => {
+      const org = await newOrg();
+      const u = newUser(org.id, 'a@x.co');
+      const v1 = await users.save(u);
+      const v2 = await users.save(unwrap(u.withRoles([Role.ADMIN], 2)), v1);
+      const v3 = await users.save(unwrap(u.withRoles([Role.VIEWER], 2)), v2);
+      expect([v1, v2, v3]).toEqual([1, 2, 3]);
+      expect((await users.findById(org.id, u.id))?.version).toBe(3);
     });
   });
 

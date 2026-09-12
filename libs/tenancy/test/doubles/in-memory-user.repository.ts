@@ -5,6 +5,15 @@ import { Role } from '../../src/domain/role.js';
 import type { User } from '../../src/domain/user.js';
 import type { UserFilter, UserPage, UserRepository } from '../../src/application/ports/user.repository.js';
 
+/** Stands in for the VersionConflictError the DAO raises; the edge turns that
+ *  one into 409 stale-version. */
+export class StaleVersionError extends Error {
+  constructor(id: string, expected: number, actual: number) {
+    super(`user#${id}: se esperaba la versión ${expected} y hay la ${actual}`);
+    this.name = 'StaleVersionError';
+  }
+}
+
 export class InMemoryUserRepository implements UserRepository {
   readonly rows = new Map<UserId, User>();
 
@@ -48,12 +57,23 @@ export class InMemoryUserRepository implements UserRepository {
     return { data, hasMore, ...(hasMore && last ? { nextCursor: encodeCursor([...key(last)]) } : {}) };
   }
 
-  async save(user: User) {
+  async save(user: User, expectedVersion?: number): Promise<number> {
+    // The unique index the database holds, so the double raises where it raises.
     for (const other of this.rows.values()) {
       if (other.id !== user.id && other.orgId === user.orgId && other.email === user.email) {
         throw new EmailTakenError(user.email);
       }
     }
-    this.rows.set(user.id, user);
+    // And the optimistic lock, for the same reason: a double that always wins
+    // the race cannot fail the test that a stale If-Match must fail.
+    const current = this.rows.get(user.id);
+    if (expectedVersion !== undefined && current !== undefined && current.version !== expectedVersion) {
+      throw new StaleVersionError(user.id, expectedVersion, current.version);
+    }
+    // The database bumps on update and starts at 1 on insert; the double does
+    // the same, or the caller could not tell the two apart.
+    const stored = current === undefined ? user : user.withVersion(current.version + 1);
+    this.rows.set(user.id, stored);
+    return stored.version;
   }
 }

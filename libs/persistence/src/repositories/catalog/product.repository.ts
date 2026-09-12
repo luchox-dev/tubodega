@@ -81,10 +81,10 @@ export class KyselyProductRepository implements ProductRepository {
    * and the import has to be able to record the bad row and carry on with the
    * next one — which it cannot do inside an aborted transaction (D-9).
    */
-  async save(product: Product, expectedVersion?: number): Promise<void> {
+  async save(product: Product, expectedVersion?: number): Promise<number> {
     const data = productValues(product);
     try {
-      await this.uow.run(() =>
+      const row = await this.uow.run(() =>
         this.dao.update(
           product.orgId,
           product.id,
@@ -92,14 +92,15 @@ export class KyselyProductRepository implements ProductRepository {
           expectedVersion !== undefined ? { expectedVersion } : {},
         ),
       );
+      return row.version;
     } catch (e) {
       if (e instanceof RecordNotFoundError) {
-        await this.uow
+        const row = await this.uow
           .run(() => this.dao.create({ id: product.id, orgId: product.orgId, ...data }))
           .catch(translate(product.sku));
-        return;
+        return row.version;
       }
-      translate(product.sku)(e);
+      return translate(product.sku)(e);
     }
   }
 

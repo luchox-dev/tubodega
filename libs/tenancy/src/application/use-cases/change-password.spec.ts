@@ -45,7 +45,9 @@ describe('ChangePassword', () => {
     expect(after.passwordHash).toBe('hashed:nueva');
     expect(after.roles).toEqual(new Set([Role.OPERATOR, Role.OWNER]));
     expect(after.active).toBe(true);
-    expect(after.version).toBe(1);
+    // Todo UPDATE incrementa la versión, también el que solo cambia el hash:
+    // «nothing else» son los roles y el estado, no la versión.
+    expect(after.version).toBe(2);
   });
 
   it('a user that vanished mid-request is invalid credentials, not a crash', async () => {
