@@ -5,30 +5,81 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - ./db/init:/docker-entrypoint-initdb.d:ro
       - dbdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      # -h 127.0.0.1 on purpose, and it is the whole point of this healthcheck.
+      # While it initialises an empty volume, the official entrypoint starts a
+      # temporary server with listen_addresses='' -- unix socket only -- to run
+      # /docker-entrypoint-initdb.d. Without -h, pg_isready talks to that same
+      # socket and answers 0 with 01-roles.sql still half done: compose calls
+      # the service healthy, `migrate` starts, and its TCP connection to
+      # db:5432 is refused. Only the definitive server listens on TCP, and it
+      # starts after the init files have run, so -h turns the check into proof
+      # that the roles and databases exist.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U postgres"]
+      interval: 3s
       timeout: 3s
-      retries: 10
+      retries: 20
+      start_period: 10s
+
+  # Init container: applies the migrations and dies. `prisma migrate deploy`
+  # runs here and not in an entrypoint of the application image so that what
+  # runs in production carries neither the Prisma CLI nor the schema nor the
+  # migrations (04 §5). It is idempotent and takes an advisory lock, so the
+  # second `up` finds nothing pending and exits at once.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/tubodega/Dockerfile
+      target: migrate
+    image: tubodega-migrate:local
+    env_file:
+      - .env.docker
+    depends_on:
+      db:
+        condition: service_healthy
+    # Quoted, and "no" on purpose. Unquoted, YAML reads it as the boolean false
+    # and compose rejects it; and any restarting policy would relaunch a one-shot
+    # container even after it exits 0, leaving migrate deploy in an endless loop
+    # that never lets `up` converge.
+    restart: "no"
 
   tubodega:
     build:
       context: .
       dockerfile: apps/tubodega/Dockerfile
+      # Explicit: the migrate stage sits before runtime in the Dockerfile so the
+      # default target does not move, but saying it here means the order of the
+      # stages stops being a correctness condition.
+      target: runtime
     image: tubodega:local
-    environment:
-      NODE_ENV: production
-      PORT: 3000
+    # The whole environment, from one file. No `environment:` block beside it:
+    # it would take precedence over env_file and become a second source of truth.
+    env_file:
+      - .env.docker
+    volumes:
+      # Named, not a bind mount: it is born empty, inheriting owner and mode from
+      # the /app/media that the Dockerfile handed to `node`. A bind mount would
+      # keep the host directory's owner and the uploads would fail on any machine
+      # whose uid is not 1000.
+      - media:/app/media
     ports:
-      - "3000:3000"
-    restart: unless-stopped
+      - "${APP_PORT:-3000}:3000"
+    # Bounded: unless-stopped turned a failed environment validation into an
+    # endless restart loop that also buried the error in the log.
+    restart: on-failure:3
     depends_on:
       db:
         condition: service_healthy
+      # The only safety net there is: the pg pools open lazily and no
+      # OnModuleInit touches the database, so an application pointed at an
+      # unmigrated schema would start up happily and 500 on every request.
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   dbdata: {}
+  media: {}
