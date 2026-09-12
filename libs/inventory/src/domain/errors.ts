@@ -274,3 +274,83 @@ export class ReasonRequiredError extends DomainError {
     });
   }
 }
+
+/** I-13, from the partial UNIQUE (org_id, reverses_id). */
+export class AlreadyReversedError extends DomainError {
+  readonly type = 'already-reversed';
+  readonly status = 409;
+  constructor(id: string) {
+    super(`El movimiento "${id}" ya fue compensado: un error se corrige una vez`);
+  }
+}
+
+/**
+ * Decision D-10. The client's UUIDv7 is the primary key, so a retry that slips
+ * past the idempotency table still hits it — which is I-7's last line.
+ */
+export class MovementIdTakenError extends DomainError {
+  readonly type = 'movement-id-taken';
+  readonly status = 409;
+  constructor(id: string) {
+    super(`Ya existe un movimiento con el id "${id}"`);
+  }
+}
+
+export class MovementNotFoundError extends DomainError {
+  readonly type = 'not-found';
+  readonly status = 404;
+  constructor() {
+    super('No se encontró el movimiento');
+  }
+}
+
+/**
+ * I-9 and decision D-10. A serial is one physical unit: it cannot be on two
+ * shelves at once. Only entering from a boundary trips this — moving it between
+ * two custodial nodes is the same unit leaving and entering in one entry.
+ */
+export class SerialAlreadyPlacedError extends DomainError {
+  readonly type = 'serial-already-placed';
+  readonly status = 422;
+  constructor(serial: string) {
+    super(`La unidad "${serial}" ya está en el inventario: una serie es una sola cosa`, {
+      errors: [{ pointer: '/batchId', code: 'serial-already-placed' }],
+    });
+  }
+}
+
+export class BatchTooLargeError extends DomainError {
+  readonly type = 'batch-too-large';
+  readonly status = 422;
+  constructor(count: number, max: number) {
+    super(`Un lote admite hasta ${max} movimientos y llegaron ${count}`, {
+      errors: [{ pointer: '/movements', code: 'batch-too-large' }],
+    });
+  }
+}
+
+/** A product that no longer exists for the business does not move either. */
+export class ProductInactiveError extends DomainError {
+  readonly type = 'product-inactive';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`"${sku}" está retirado del catálogo y no admite movimientos`, {
+      errors: [{ pointer: '/productId', code: 'product-inactive' }],
+    });
+  }
+}
+
+/**
+ * I-4, the most frequent error of the daily operation. Its detail names the node
+ * by its readable path — not by its uuid — and carries available and requested,
+ * because that is where the message the operator reads comes from.
+ */
+export class InsufficientStockError extends DomainError {
+  readonly type = 'insufficient-stock';
+  readonly status = 422;
+  constructor(path: string, available: string, requested: string) {
+    super(`En "${path}" hay ${available} y se intentan mover ${requested}`, {
+      errors: [{ pointer: '/quantity', code: 'insufficient-stock', available, requested }],
+    });
+  }
+}
