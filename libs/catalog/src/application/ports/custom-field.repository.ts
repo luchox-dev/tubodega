@@ -11,7 +11,8 @@ export interface CustomFieldDefinitionRepository {
   countEntitiesMissing(orgId: OrgId, entity: CustomEntity, key: FieldKey): Promise<number>;
   /** D-10: how many already hold one, which is what locks the type. */
   countEntitiesWith(orgId: OrgId, entity: CustomEntity, key: FieldKey): Promise<number>;
-  save(def: CustomFieldDefinition, expectedVersion?: number): Promise<void>;
+  /** Returns the version the row ended up with, for the same reason as D-31. */
+  save(def: CustomFieldDefinition, expectedVersion?: number): Promise<number>;
 }
 
 export const CUSTOM_FIELD_REPOSITORY = Symbol('CustomFieldDefinitionRepository');

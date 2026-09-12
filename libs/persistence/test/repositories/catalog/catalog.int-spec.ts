@@ -306,4 +306,27 @@ describe('catalogue repositories', () => {
       name: 'VersionConflictError',
     });
   });
+
+  // D-31: what `save` returns has to be the version of the row, or the use case
+  // cannot hand the client something it can use as the next If-Match.
+  it('la versión devuelta encadena tres escrituras seguidas', async () => {
+    const p = newProduct();
+    const v1 = await tx(() => products.save(p));
+    const v2 = await tx(() => products.save(p.rename('Dos'), v1));
+    const v3 = await tx(() => products.save(p.rename('Tres'), v2));
+    expect([v1, v2, v3]).toEqual([1, 2, 3]);
+    expect((await tx(() => products.findById(orgId, p.id)))!.version).toBe(3);
+  });
+
+  it('la definición de campo propio también devuelve la versión guardada', async () => {
+    const def = unwrap(
+      CustomFieldDefinition.create({
+        id: v7() as CustomFieldId, orgId, entity: CustomEntity.PRODUCT,
+        key: `k${v7().slice(-8)}`, label: 'Uno', type: CustomType.TEXT,
+      }),
+    );
+    const v1 = await tx(() => fields.save(def));
+    const v2 = await tx(() => fields.save(def.withMetadata({ label: 'Dos' }), v1));
+    expect([v1, v2]).toEqual([1, 2]);
+  });
 });

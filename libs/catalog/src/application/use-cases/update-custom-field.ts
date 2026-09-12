@@ -43,7 +43,7 @@ export class UpdateCustomField {
     }
 
     const next = def.withMetadata(input);
-    await this.fields.save(next, input.expectedVersion);
-    return next;
+    const version = await this.fields.save(next, input.expectedVersion);
+    return next.withVersion(version);
   }
 }

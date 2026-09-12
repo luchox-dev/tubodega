@@ -14,6 +14,15 @@ import type {
 
 const key = (orgId: string, id: string) => `${orgId}:${id}`;
 
+/** Stands in for the VersionConflictError the DAO raises; the edge turns that
+ *  one into 409 stale-version. */
+export class StaleVersionError extends Error {
+  constructor(id: string, expected: number, actual: number) {
+    super(`${id}: se esperaba la versión ${expected} y hay la ${actual}`);
+    this.name = 'StaleVersionError';
+  }
+}
+
 export class InMemoryProductRepository implements ProductRepository {
   readonly rows = new Map<string, Product>();
 
@@ -47,13 +56,24 @@ export class InMemoryProductRepository implements ProductRepository {
     return { data, hasMore, ...(hasMore ? { nextCursor: encodeCursor([data.at(-1)!.id]) } : {}) };
   }
 
-  async save(product: Product): Promise<void> {
+  async save(product: Product, expectedVersion?: number): Promise<number> {
+    // The unique index the database holds, so the double raises where it raises.
     for (const p of this.rows.values()) {
       if (p.orgId === product.orgId && p.sku === product.sku && p.id !== product.id) {
         throw new SkuTakenError(product.sku);
       }
     }
-    this.rows.set(key(product.orgId, product.id), product);
+    // And the optimistic lock, for the same reason: a double that always wins
+    // the race cannot fail the test that a stale If-Match must fail.
+    const current = this.rows.get(key(product.orgId, product.id));
+    if (expectedVersion !== undefined && current !== undefined && current.version !== expectedVersion) {
+      throw new StaleVersionError(product.id, expectedVersion, current.version);
+    }
+    // The database bumps on update and starts at 1 on insert; the double does
+    // the same, or the caller could not tell the two apart.
+    const stored = current === undefined ? product : product.withVersion(current.version + 1);
+    this.rows.set(key(product.orgId, product.id), stored);
+    return stored.version;
   }
 
   async saveMany(products: readonly Product[]): Promise<void> {
@@ -151,8 +171,14 @@ export class InMemoryCustomFieldRepository implements CustomFieldDefinitionRepos
     return this.used;
   }
 
-  async save(def: CustomFieldDefinition): Promise<void> {
-    this.rows.set(key(def.orgId, def.id), def);
+  async save(def: CustomFieldDefinition, expectedVersion?: number): Promise<number> {
+    const current = this.rows.get(key(def.orgId, def.id));
+    if (expectedVersion !== undefined && current !== undefined && current.version !== expectedVersion) {
+      throw new StaleVersionError(def.id, expectedVersion, current.version);
+    }
+    const stored = current === undefined ? def : def.withVersion(current.version + 1);
+    this.rows.set(key(def.orgId, def.id), stored);
+    return stored.version;
   }
 
   /** Convenience for arranging: put a definition in without going through a use case. */
