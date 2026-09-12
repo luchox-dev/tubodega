@@ -56,3 +56,73 @@ jobs:
       - run: pnpm db:check
       - run: pnpm test
       - run: pnpm test:e2e
+
+  # Hermano de `gates`, no un paso suyo: atraviesa un socket de verdad y eso
+  # pide levantar la aplicación, que es lento. En paralelo no alarga la ruta
+  # crítica, y atrapa la clase de fallo que fastify.inject() no puede ver.
+  blackbox:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      PGPASSWORD: postgres
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://tubodega_app:app@localhost:5432/tubodega
+      DATABASE_URL_SYSTEM: postgresql://tubodega_system:system@localhost:5432/tubodega
+      DATABASE_URL_MIGRATOR: postgresql://tubodega_migrator:migrator@localhost:5432/tubodega
+      DATABASE_POOL_SIZE: 10
+      # Exportado a propósito: es lo que habilita la comprobación del
+      # 401 token-expired, que sin el secreto no se puede hacer a ciegas.
+      JWT_SECRET: ci-secret-ci-secret-ci-secret-ci-secret
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 30d
+      MEDIA_ROOT: .media-ci
+      OUTBOX_INTERVAL_MS: 1000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Roles and databases
+        run: psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f db/init/01-roles.sql
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm build
+
+      - name: Start the application
+        run: |
+          pnpm start:prod > /tmp/tubodega.log 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3000/v1/openapi.json && exit 0
+            sleep 1
+          done
+          echo "La aplicación no respondió en 60 s:" >&2
+          cat /tmp/tubodega.log >&2
+          exit 1
+
+      - run: pnpm blackbox
+
+      - name: Application log
+        if: failure()
+        run: cat /tmp/tubodega.log
