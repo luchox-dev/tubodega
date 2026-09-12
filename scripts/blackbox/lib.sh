@@ -1,5 +1,7 @@
-# Ayudantes de las suites de caja negra. Se hace `source` desde cada suite y
-# desde el runner; no se ejecuta por sí solo.
+# El cliente HTTP del repositorio en shell, y los ayudantes que lo rodean. Se
+# hace `source` desde cada suite de caja negra, desde el runner y desde
+# scripts/seed.sh; no se ejecuta por sí solo. Tiene dos consumidores, así que un
+# cambio en `req` o en `alta` puede romper la siembra además de las suites.
 #
 # Nada de `set -e`: una suite recorre entera y cuenta. Saber cuántas cosas se
 # rompieron vale más que saber cuál se rompió primero.

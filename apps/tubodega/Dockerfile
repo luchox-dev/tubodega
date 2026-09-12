@@ -82,3 +82,21 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/v1/openapi.json || exit 1
 
 CMD ["node", "dist/apps/tubodega/main.js"]
+
+# ---------------------------------------------------------------- seed
+# El servicio opcional `seed` de compose.yaml, detrás del perfil del mismo
+# nombre: `docker compose --profile seed up`. Siembra por HTTP contra la
+# aplicación ya sana, así que no necesita ni la base ni Prisma, solo un cliente.
+#
+# Va la última del fichero a propósito y sin riesgo: `tubodega` declara
+# `target: runtime` explícito en compose.yaml, justo para que el orden de las
+# etapas deje de ser una condición de correctitud.
+#
+# Reutiliza ${NODE_IMAGE} y no un alpine pelado: ya está en el grafo de build,
+# así que el perfil cuesta una capa de apk en vez de otra base que descargar y
+# que mantener al día. lib.sh pide bash >= 4.3 por los namerefs, más curl y jq.
+FROM ${NODE_IMAGE} AS seed
+RUN apk add --no-cache bash curl jq
+WORKDIR /app
+COPY scripts ./scripts
+CMD ["bash", "scripts/seed.sh"]

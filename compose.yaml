@@ -80,6 +80,29 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Opcional, y por eso detrás de un perfil: `docker compose up` a secas ni lo
+  # crea. Siembra el mundo de ejemplo de scripts/seed.sh por HTTP, así que no
+  # necesita ni la base ni Prisma; solo que la aplicación responda.
+  #
+  #   docker compose --profile seed up
+  seed:
+    profiles: ["seed"]
+    build:
+      context: .
+      dockerfile: apps/tubodega/Dockerfile
+      target: seed
+    image: tubodega-seed:local
+    environment:
+      # Una dirección de la red interna, no configuración de la aplicación: por
+      # eso va aquí y no en .env.docker, que no conoce BASE.
+      BASE: http://tubodega:3000
+    depends_on:
+      # Espera a la aplicación y no a `migrate`: su healthcheck ya prueba que el
+      # contrato responde, y eso implica que las migraciones corrieron.
+      tubodega:
+        condition: service_healthy
+    restart: "no"
+
 volumes:
   dbdata: {}
   media: {}
