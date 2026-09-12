@@ -195,7 +195,7 @@ it('I-5 · el saldo materializado siempre coincide con la suma del ledger', asyn
 });
 ```
 
-Las tres propiedades que se prueban así:
+Las cuatro propiedades que se prueban así:
 
 - **I-5** — reconciliación de saldo contra ledger, tras cualquier secuencia válida
 - **Conservación** — la suma de todo lo que salió por nodos `TERMINAL`, más el
@@ -204,9 +204,11 @@ Las tres propiedades que se prueban así:
 - **I-18** — el pendiente de todo check-out está entre cero y su cantidad tras
   cualquier secuencia de check-ins parciales y compensaciones
 
-Estas tres son afirmaciones sobre el sistema entero, no sobre una operación. Un
+Estas cuatro son afirmaciones sobre el sistema entero, no sobre una operación. Un
 ejemplo escrito a mano solo prueba el caso que a alguien se le ocurrió; la
-generación encuentra la secuencia de siete pasos que nadie imaginó.
+generación encuentra la secuencia de siete pasos que nadie imaginó. Encontró una
+en el plan 6: una serie vendida, devuelta por el proveedor a otra estantería, y
+una compensación de la venta que la dejaba en dos sitios a la vez (D-41).
 
 ## 8. Reglas de arquitectura
 

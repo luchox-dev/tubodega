@@ -232,7 +232,7 @@ export class RecordMovement {
     }
 
     const quantity = unwrap(Quantity.of(input.quantity));
-    await this.guardSerial(ctx.orgId, product, batch, fromNode, toNode, placedSerials);
+    await guardSerial(this.balances, ctx.orgId, product, batch, fromNode, toNode, placedSerials);
 
     let settles: { movement: Movement; pending: Quantity } | undefined;
     if (input.settlesId !== undefined) {
@@ -268,24 +268,43 @@ export class RecordMovement {
       ...(settles !== undefined ? { pending: settles.pending.minus(quantity) } : {}),
     };
   }
+}
 
-  /**
-   * I-9 with a real mechanism (spec 02 §9: "domain validation"). Only an entry
-   * coming *in* from a boundary can place a second copy of a serial: moving it
-   * between two custodial nodes is the same unit leaving and entering in one
-   * entry, and the CHECK of I-4 covers the inverse case.
-   */
-  private async guardSerial(
-    orgId: OrgId, product: Product, batch: Batch | undefined,
-    fromNode: Node, toNode: Node, placedSerials: Set<string>,
-  ): Promise<void> {
-    if (product.trackingMode !== TrackingMode.SERIAL || batch === undefined) return;
-    if (!toNode.isCustodial() || fromNode.isCustodial()) return;
-    const already =
-      placedSerials.has(batch.id) || (await this.balances.custodialTotal(orgId, batch.id)).isPositive();
-    if (already) throw new SerialAlreadyPlacedError(batch.serial ?? batch.id);
-    placedSerials.add(batch.id);
-  }
+/**
+ * The only pair of ends that can put a *second* copy of a serial on a shelf:
+ * coming in from outside. Moving one between two custodial nodes is the same
+ * unit leaving and entering in one entry, and the CHECK of I-4 covers that.
+ */
+export const entersFromBoundary = (fromNode: Node, toNode: Node): boolean =>
+  toNode.isCustodial() && !fromNode.isCustodial();
+
+/**
+ * I-9 with a real mechanism (spec 02 §9: "domain validation").
+ *
+ * A free function and not a method because **both** ways of writing an entry
+ * have to ask it (decision D-41). Reversing a dispatch is an entry coming in
+ * from a TERMINAL, so it can put back a serial that has meanwhile been received
+ * again somewhere else — and `custodialTotal` reads zero right up until it does.
+ *
+ * `placedSerials` carries the SERIAL batches one call has already placed, so
+ * I-9 holds *within* a single batched request too: `custodialTotal` only sees
+ * what is committed.
+ */
+export async function guardSerial(
+  balances: StockBalanceRepository,
+  orgId: OrgId,
+  product: Product,
+  batch: Batch | undefined,
+  fromNode: Node,
+  toNode: Node,
+  placedSerials: Set<string> = new Set(),
+): Promise<void> {
+  if (product.trackingMode !== TrackingMode.SERIAL || batch === undefined) return;
+  if (!entersFromBoundary(fromNode, toNode)) return;
+  const already =
+    placedSerials.has(batch.id) || (await balances.custodialTotal(orgId, batch.id)).isPositive();
+  if (already) throw new SerialAlreadyPlacedError(batch.serial ?? batch.id);
+  placedSerials.add(batch.id);
 }
 
 /** Double entry: what leaves the origin is exactly what enters the destination. */

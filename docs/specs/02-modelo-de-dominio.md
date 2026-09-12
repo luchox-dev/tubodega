@@ -328,7 +328,7 @@ regla: una invariante cuya única garantía es *"el código tiene cuidado"* se r
 | **I-6** | Ninguna fila es accesible desde otra organización | `org_id` en toda tabla + RLS de Postgres |
 | **I-7** | Reintentar una escritura no la duplica | Tabla `idempotency_key` con reserva y confirmación ([07 §5](07-composicion-y-contexto-de-ejecucion.md)) + `id` de cliente como clave primaria |
 | **I-8** | `batchId` es nulo si y solo si el producto es `QUANTITY` | Validación de dominio + `CHECK` con `tracking_mode` desnormalizado en el movimiento |
-| **I-9** | Un producto `SERIAL` tiene a lo sumo una unidad en nodos custodiables | Validación de dominio + prueba de invariante |
+| **I-9** | Un producto `SERIAL` tiene a lo sumo una unidad en nodos custodiables | Validación de dominio en **todo** asiento que entra desde la frontera —recepción y compensación de despacho por igual— + prueba de invariante |
 | **I-10** | La jerarquía de nodos es un árbol: solo `INTERNAL`, sin ciclos | `CHECK (parent_id IS NULL OR kind = 'INTERNAL')` + detección de ciclo al asignar padre |
 | **I-11** | `dueAt` solo existe en movimientos hacia un nodo `CUSTODY` | Validación de dominio + `CHECK` con `to_node_kind` desnormalizado |
 | **I-12** | Una compensación invierte exactamente al movimiento que referencia | Validación de dominio: mismo producto, mismo lote, misma cantidad, nodos invertidos |

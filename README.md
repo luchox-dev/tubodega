@@ -78,7 +78,10 @@ clave con el mismo cuerpo devuelve la respuesta guardada con
 
 Las veinte tablas del esquema ya existen, con sus `CHECK`, RLS en las
 diecinueve que llevan `org_id`, y `UPDATE`/`DELETE` revocados sobre `movement`
-desde el primer día. El ledger llega en la WAVE 3.
+desde el primer día. El ledger está en pie desde el plan 5 y cerrado desde el 6:
+se recibe, se ubica, se traslada, se despacha, se presta, se devuelve y se
+compensa, y hay pruebas de propiedades que lo comprueban contra secuencias que
+nadie escribió a mano.
 
 ## Arranque local
 
@@ -344,7 +347,6 @@ que el contrato sabe crear; lo que aún no existe:
 
 | Todavía no siembra | Llega en |
 |---|---|
-| Movimientos y existencias | plan 6 |
 | Plantillas e instancias de proceso | plan 8 |
 | Reglas de alerta | plan 9 |
 
