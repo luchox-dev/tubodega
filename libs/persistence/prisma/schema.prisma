@@ -52,6 +52,9 @@ model AppUser {
   organization Organization   @relation(fields: [orgId], references: [id])
   roles        UserRole[]
   sessions     RefreshToken[]
+  uploads      MediaUpload[]
+  movements    Movement[]
+  processes    ProcessInstance[]
 
   @@unique([orgId, email])
   @@unique([orgId, id])
@@ -124,4 +127,396 @@ model IdempotencyKey {
   @@id([orgId, key])
   @@index([expiresAt])
   @@map("idempotency_key")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Catalog (spec 04 §3.2) — what moves.
+// ───────────────────────────────────────────────────────────────────────────
+
+enum TrackingMode {
+  QUANTITY
+  LOT
+  SERIAL
+
+  @@map("tracking_mode_enum")
+}
+
+enum CodeKind {
+  EAN
+  UPC
+  INTERNAL_QR
+  SUPPLIER_REF
+  OTHER
+
+  @@map("code_kind_enum")
+}
+
+enum CustomEntity {
+  PRODUCT
+  NODE
+  BATCH
+
+  @@map("custom_entity_enum")
+}
+
+enum CustomType {
+  TEXT
+  NUMBER
+  DATE
+  BOOLEAN
+  SELECT
+
+  @@map("custom_type_enum")
+}
+
+/// The catalogue entry. It never knows how much there is of anything: that is
+/// inventory's question (spec 11 §1).
+model Product {
+  id           String       @id @db.Uuid
+  orgId        String       @map("org_id") @db.Uuid
+  sku          String       @db.VarChar(64)
+  name         String
+  description  String?
+  trackingMode TrackingMode @map("tracking_mode")
+  uom          String       @db.VarChar(16)
+  active       Boolean      @default(true)
+  customFields Json         @default("{}") @map("custom_fields")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  version      Int          @default(1)
+
+  codes     ProductCode[]
+  media     ProductMedia[]
+  batches   Batch[]
+  movements Movement[]
+  balances  StockBalance[]
+
+  @@unique([orgId, sku])
+  @@unique([orgId, id])
+  @@index([orgId, active, name])
+  @@index([customFields(ops: JsonbOps)], type: Gin)
+  @@map("product")
+}
+
+/// What a scanner reads. Unique per organization so a scan is never ambiguous (C-2).
+model ProductCode {
+  id        String   @id @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  value     String   @db.VarChar(128)
+  kind      CodeKind
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  product Product @relation(fields: [orgId, productId], references: [orgId, id])
+
+  @@unique([orgId, value])
+  @@unique([orgId, id])
+  @@index([orgId, productId])
+  @@map("product_code")
+}
+
+model ProductMedia {
+  id          String   @id @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  productId   String   @map("product_id") @db.Uuid
+  storageKey  String   @map("storage_key")
+  contentType String   @map("content_type") @db.VarChar(64)
+  byteSize    BigInt   @map("byte_size")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  product Product @relation(fields: [orgId, productId], references: [orgId, id])
+
+  @@unique([orgId, id])
+  @@index([orgId, productId])
+  @@map("product_media")
+}
+
+/// The waiting room of POST /v1/uploads: a photo that belongs to no product
+/// yet. Unclaimed after 24 h it is purged with its file (spec 11 §4).
+model MediaUpload {
+  id          String    @id @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  storageKey  String    @unique @map("storage_key")
+  contentType String    @map("content_type") @db.VarChar(64)
+  byteSize    BigInt    @map("byte_size")
+  uploadedBy  String    @map("uploaded_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz
+
+  uploader AppUser @relation(fields: [orgId, uploadedBy], references: [orgId, id])
+
+  @@unique([orgId, id])
+  // Partial (WHERE claimed_at IS NULL); the predicate is added by hand.
+  @@index([createdAt])
+  @@map("media_upload")
+}
+
+/// A lot or a serial number. CHECK (lot_code IS NOT NULL OR serial IS NOT NULL)
+/// is added by hand (C-3).
+model Batch {
+  id           String    @id @db.Uuid
+  orgId        String    @map("org_id") @db.Uuid
+  productId    String    @map("product_id") @db.Uuid
+  lotCode      String?   @map("lot_code") @db.VarChar(64)
+  serial       String?   @db.VarChar(128)
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz
+  customFields Json      @default("{}") @map("custom_fields")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  product   Product    @relation(fields: [orgId, productId], references: [orgId, id])
+  movements Movement[]
+
+  // Both partial; predicates added by hand (C-5, C-6).
+  @@unique([orgId, productId, lotCode])
+  @@unique([orgId, serial])
+  @@unique([orgId, id])
+  // Partial (WHERE expires_at IS NOT NULL); used by the alert sweep.
+  @@index([orgId, expiresAt])
+  @@map("batch")
+}
+
+/// What each organization wants to add to a product, node or batch. The values
+/// live in the owner's custom_fields jsonb, validated against these (C-7).
+model CustomFieldDefinition {
+  id        String       @id @db.Uuid
+  orgId     String       @map("org_id") @db.Uuid
+  entity    CustomEntity
+  key       String       @db.VarChar(64)
+  label     String
+  type      CustomType
+  options   Json?
+  required  Boolean      @default(false)
+  position  Int          @default(0)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  version   Int          @default(1)
+
+  @@unique([orgId, entity, key])
+  @@unique([orgId, id])
+  @@map("custom_field_definition")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Inventory (spec 04 §3.3 - §3.5) — where it is and how much there is.
+// ───────────────────────────────────────────────────────────────────────────
+
+enum NodeKind {
+  INTERNAL
+  CUSTODY
+  TERMINAL
+  SOURCE
+
+  @@map("node_kind_enum")
+}
+
+/// A place. The tree is materialised in `path` ("BOD-A/Z1/E3/B2"); cycles are
+/// prevented by the domain, not by a CHECK (spec 04 §3.3).
+model Node {
+  id           String   @id @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  kind         NodeKind
+  code         String   @db.VarChar(64)
+  name         String
+  parentId     String?  @map("parent_id") @db.Uuid
+  path         String
+  active       Boolean  @default(true)
+  customFields Json     @default("{}") @map("custom_fields")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  version      Int      @default(1)
+
+  parent        Node?          @relation("NodeTree", fields: [orgId, parentId], references: [orgId, id])
+  children      Node[]         @relation("NodeTree")
+  movementsFrom Movement[]     @relation("MovementFrom")
+  movementsTo   Movement[]     @relation("MovementTo")
+  balances      StockBalance[]
+
+  @@unique([orgId, code])
+  @@unique([orgId, id])
+  // text_pattern_ops added by hand: Prisma emits opclasses but does not
+  // introspect them, so declaring it here makes `db:check` drift forever.
+  @@index([orgId, path])
+  // Partial (WHERE active); predicate added by hand.
+  @@index([orgId, kind])
+  @@map("node")
+}
+
+/// The ledger. Append-only in the type, in the repository and in the database
+/// role (I-3). The four denormalised columns exist so the CHECKs are
+/// enforceable without reading another table (spec 04 §3.4).
+model Movement {
+  id                String       @id @db.Uuid
+  orgId             String       @map("org_id") @db.Uuid
+  productId         String       @map("product_id") @db.Uuid
+  batchId           String?      @map("batch_id") @db.Uuid
+  fromNodeId        String       @map("from_node_id") @db.Uuid
+  toNodeId          String       @map("to_node_id") @db.Uuid
+  quantity          Decimal      @db.Decimal(18, 3)
+  occurredAt        DateTime     @map("occurred_at") @db.Timestamptz
+  recordedAt        DateTime     @default(now()) @map("recorded_at") @db.Timestamptz
+  actorId           String       @map("actor_id") @db.Uuid
+  reason            String?
+  dueAt             DateTime?    @map("due_at") @db.Timestamptz
+  reversesId        String?      @map("reverses_id") @db.Uuid
+  settlesId         String?      @map("settles_id") @db.Uuid
+  processInstanceId String?      @map("process_instance_id") @db.Uuid
+  traceId           String       @map("trace_id") @db.Uuid
+  trackingMode      TrackingMode @map("tracking_mode")
+  fromNodeKind      NodeKind     @map("from_node_kind")
+  toNodeKind        NodeKind     @map("to_node_kind")
+
+  product    Product    @relation(fields: [orgId, productId], references: [orgId, id])
+  batch      Batch?     @relation(fields: [orgId, batchId], references: [orgId, id])
+  fromNode   Node       @relation("MovementFrom", fields: [orgId, fromNodeId], references: [orgId, id])
+  toNode     Node       @relation("MovementTo", fields: [orgId, toNodeId], references: [orgId, id])
+  actor      AppUser    @relation(fields: [orgId, actorId], references: [orgId, id])
+  reverses   Movement?  @relation("MovementReverses", fields: [orgId, reversesId], references: [orgId, id])
+  reversedBy Movement[] @relation("MovementReverses")
+  settles    Movement?  @relation("MovementSettles", fields: [orgId, settlesId], references: [orgId, id])
+  settledBy  Movement[] @relation("MovementSettles")
+
+  // Partial (WHERE reverses_id IS NOT NULL): one compensation per movement (I-13).
+  @@unique([orgId, reversesId])
+  @@unique([orgId, id])
+  @@index([orgId, occurredAt(sort: Desc)])
+  @@index([orgId, productId, occurredAt(sort: Desc)])
+  @@index([orgId, fromNodeId, occurredAt(sort: Desc)])
+  @@index([orgId, toNodeId, occurredAt(sort: Desc)])
+  // Partial (WHERE due_at IS NOT NULL): overdue custody alerts.
+  @@index([orgId, toNodeId, dueAt])
+  // Partial (WHERE settles_id IS NOT NULL): outstanding balance of a check-out.
+  @@index([orgId, settlesId])
+  @@map("movement")
+}
+
+/// Materialised balance. `id` exists only because Prisma demands a unique key
+/// of NOT NULL columns and batch_id is nullable; nothing reads it (spec 04 §3.5).
+model StockBalance {
+  id        String   @id @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  nodeId    String   @map("node_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  batchId   String?  @map("batch_id") @db.Uuid
+  nodeKind  NodeKind @map("node_kind")
+  quantity  Decimal  @db.Decimal(18, 3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+
+  node    Node    @relation(fields: [orgId, nodeId], references: [orgId, id])
+  product Product @relation(fields: [orgId, productId], references: [orgId, id])
+
+  // The natural key. NULLS NOT DISTINCT is added by hand: without it two
+  // QUANTITY rows with batch_id NULL would not collide.
+  @@unique([orgId, nodeId, productId, batchId])
+  @@unique([orgId, id])
+  // Both partial (WHERE quantity <> 0).
+  @@index([orgId, productId])
+  @@index([orgId, nodeId])
+  @@map("stock_balance")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Process (spec 04 §3.6) and Alerts (§3.7). Tables only: waves 4 and 5.
+// ───────────────────────────────────────────────────────────────────────────
+
+enum ProcessState {
+  OPEN
+  COMPLETED
+  CANCELLED
+
+  @@map("process_state_enum")
+}
+
+model ProcessTemplate {
+  id        String   @id @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  code      String   @db.VarChar(64)
+  version   Int
+  steps     Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  instances ProcessInstance[]
+
+  @@unique([orgId, code, version])
+  @@unique([orgId, id])
+  @@map("process_template")
+}
+
+model ProcessInstance {
+  id              String       @id @db.Uuid
+  orgId           String       @map("org_id") @db.Uuid
+  templateCode    String       @map("template_code") @db.VarChar(64)
+  templateVersion Int          @map("template_version")
+  state           ProcessState
+  currentStepId   String?      @map("current_step_id") @db.VarChar(64)
+  context         Json         @default("{}")
+  actorId         String       @map("actor_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  version         Int          @default(1)
+
+  // The composite key is what guarantees the recorded version really existed.
+  template    ProcessTemplate  @relation(fields: [orgId, templateCode, templateVersion], references: [orgId, code, version])
+  actor       AppUser          @relation(fields: [orgId, actorId], references: [orgId, id])
+  completions StepCompletion[]
+
+  @@unique([orgId, id])
+  @@index([orgId, state])
+  @@map("process_instance")
+}
+
+model StepCompletion {
+  id          String   @id @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  instanceId  String   @map("instance_id") @db.Uuid
+  stepId      String   @map("step_id") @db.VarChar(64)
+  actorId     String   @map("actor_id") @db.Uuid
+  payload     Json
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz
+
+  instance ProcessInstance @relation(fields: [orgId, instanceId], references: [orgId, id])
+
+  @@unique([orgId, instanceId, stepId])
+  @@unique([orgId, id])
+  @@map("step_completion")
+}
+
+enum AlertKind {
+  BATCH_EXPIRING
+  BATCH_EXPIRED
+  CUSTODY_DUE
+  CUSTODY_OVERDUE
+
+  @@map("alert_kind_enum")
+}
+
+/// Uniqueness over the open ones is what makes the evaluator idempotent (A-1).
+/// Partial and not total: a resolved alert must be able to rise again.
+model Alert {
+  id          String    @id @db.Uuid
+  orgId       String    @map("org_id") @db.Uuid
+  kind        AlertKind
+  subjectType String    @map("subject_type") @db.VarChar(32)
+  subjectId   String    @map("subject_id") @db.Uuid
+  dueAt       DateTime  @map("due_at") @db.Timestamptz
+  raisedAt    DateTime  @default(now()) @map("raised_at") @db.Timestamptz
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz
+
+  // Both partial (WHERE resolved_at IS NULL); predicates added by hand.
+  @@unique([orgId, kind, subjectType, subjectId])
+  @@unique([orgId, id])
+  @@index([orgId, dueAt])
+  @@map("alert")
+}
+
+model AlertRule {
+  orgId         String    @map("org_id") @db.Uuid
+  kind          AlertKind
+  thresholdDays Int       @map("threshold_days")
+  enabled       Boolean   @default(true)
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+
+  @@id([orgId, kind])
+  @@map("alert_rule")
 }
