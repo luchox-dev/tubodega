@@ -85,7 +85,7 @@ Decisiones que los specs dejan abiertas o que afectan al orden. Cada una es revi
 | D-18 | **`MovementCounter` y `StockChecker` se implementan en el plan 3**, sin esperar a `libs/inventory`. | Leen `movement` y `stock_balance`, y el `path` que `product-has-stock` necesita sale de un `innerJoin` contra `node`, que existe desde `full_schema`. Los adaptadores viven en `apps/tubodega/src/adapters/catalog/`, así que R-4 sigue intacta y `app.module.ts` nunca registra un stub. |
 | D-19 | **La WAVE 2 se cierra en dos suites:** `w2a-cargar-el-catalogo` (plan 3, casos 1-11 y 16) y `w2-cargar-catalogo-y-ubicaciones` (plan 4, que absorbe la narrativa y añade 12-15). | La división en planes exige que cada uno cierre con algo probable por HTTP; un plan 3 sin HTTP de catálogo no lo cumplía. |
 | D-20 | **Toda clave foránea se escribe compuesta `(org_id, x_id) REFERENCES x (org_id, id)`**, aunque [04 §3](docs/specs/04-persistencia.md) las dibuje simples: manda §2. | Postgres **no aplica RLS al comprobar una FK**. Con una clave simple, una organización podría apuntar un movimiento al `product_id` de otra y la política no lo vería nunca. Obliga a `@@unique([orgId, id])` en toda tabla de negocio, la auto-referencia `node.parent_id` y las dos de `movement` incluidas. |
-| D-11 | **`GET /v1/nodes/{id}/tree`** devuelve `{ node, children: [...] }` anidado. **`POST /v1/products/import`** recibe `{ rows: ProductRow[] }` con máximo 1000 filas por petición (`422 import-too-large`). | Forma no fijada por [12 §7](docs/specs/12-inventory.md) ni [11 §4](docs/specs/11-catalog.md). |
+| D-11 | **`GET /v1/nodes/{id}/tree`** devuelve `{ node, children: [...] }` anidado. **`POST /v1/products/import`** recibe `{ rows: ProductRow[] }` con máximo 1000 filas por petición (`422 import-too-large`). El tope lo comprueba el caso de uso y **no** un `@ArrayMaxSize` en el DTO: con el validador en el borde la respuesta era `400 validation-failed`, y mil una filas se entienden perfectamente — lo que las rechaza es una regla de negocio ([03 §5](docs/specs/03-contrato-api.md)). | Forma no fijada por [12 §7](docs/specs/12-inventory.md) ni [11 §4](docs/specs/11-catalog.md). |
 | D-12 | **Rate limit en memoria** (ventana deslizante por organización, una instancia). | [03 §11](docs/specs/03-contrato-api.md) solo exige la infraestructura con un límite generoso; un almacén compartido es una extensión. |
 
 ## 4. Mapa de archivos (estado final)
@@ -549,6 +549,11 @@ Narrativa: Marta registra «Distribuidora La Esquina», invita a Diego, Juan y S
 
 Narrativa: Diego (ADMIN) migra la hoja de cálculo y organiza la bodega; Juan (OPERATOR) escanea y registra una remesa con lote.
 
+> **Desviación (D-19).** Esta tabla se reparte en dos suites. Los casos **1-11 y 16** ya se
+> entregaron con el plan 3 en `w2a-cargar-el-catalogo.e2e-spec.ts`; los **12-15** son de nodos y
+> llegan con el plan 4, que absorbe la narrativa entera. Los mismos casos se recorren además por
+> HTTP contra un servidor real en `scripts/blackbox/20-catalogo.sh`.
+
 | # | Caso de uso real | Llamadas | Afirmaciones |
 |---|---|---|---|
 | 1 | Diego define un campo propio | `POST /v1/custom-fields {entity:PRODUCT, key:'proveedor', type:TEXT}` y otro `SELECT` `{key:'familia', options:[…]}`; `PATCH /v1/custom-fields/{familia}` con `If-Match` cambiando `label`, y luego cambiando `type` cuando ya hay valores | `201`; `GET /v1/custom-fields?entity=PRODUCT` los lista en orden; `200`; `422 custom-field-type-locked` |
@@ -786,7 +791,7 @@ Narrativa: Marta revisa la bandeja cada mañana; el sistema le dice qué se venc
 
 ### F6.4 — Cobertura y puertas finales
 
-**Entrega:** `vitest.config.ts` con `coverage.thresholds` por directorio (100/100/95/90/85) y `perFile: false`; `dependency-cruiser` con las 6 librerías; `pnpm typecheck` cubre `test/`; CI verde con las cinco puertas + snapshot OpenAPI; checklist manual «todo endpoint del snapshot tiene un caso feliz y uno de error en alguna suite e2e» ([06 §6](docs/specs/06-pruebas-y-calidad.md)), adjunto en el PR de cierre.
+**Entrega:** `vitest.config.ts` con `coverage.thresholds` por directorio (100/100/95/90/85) y `perFile: false`; `dependency-cruiser` con las 6 librerías; `pnpm typecheck` cubre `test/`; CI verde con las cinco puertas + snapshot OpenAPI; el checklist «todo endpoint del snapshot tiene un caso feliz y uno de error» ([06 §6](docs/specs/06-pruebas-y-calidad.md)) **ya no es manual y ya está entregado**: el runner de `pnpm blackbox` lo cruza en cada corrida contra los paths del contrato publicado y falla nombrando lo que falte (tanda 3c).
 
 ### F6.5 — Rendimiento nocturno
 
@@ -869,6 +874,9 @@ Cada plan es un documento propio (`docs/superpowers/plans/2026-MM-DD-NN-<nombre>
 | **1** | **hecho** | **Primeros endpoints: registro, login y `/me`** | F1.0 (parcial), F1.1, F1.2 (solo tablas de tenancy), F1.3, F1.4 (base mínima), F1.6-F1.9 (parcial), F1.11 (parcial) | `POST /v1/organizations`, `POST /v1/auth/login`, `GET /v1/me`, `GET /v1/openapi.json`. RLS real, `problem+json`, `X-Request-Id`, token vencido, login ambiguo entre dos empresas. Con `curl` contra `pnpm start:dev` y Postgres de `docker compose`. |
 | 2 | **hecho** | Cierre de la WAVE 1: equipo, sesiones e idempotencia | resto de F1.0, F1.2 (esquema completo, migración `0002`), F1.4 (DSL, `findPage`, tipo), F1.5, F1.7-F1.8 (resto), F1.10, F1.11 (resto) + e2e W1 | Usuarios y roles (`/v1/users`), refresh/logout, cambio de contraseña, `Idempotency-Key` con replay y `409`, `If-Match`, `404` cross-org, despachador de outbox en el log, CI con las cinco puertas, snapshot OpenAPI. |
 | 3 | **hecho** | Catálogo, de punta a punta | F1.2 (`full_schema`), F1.5, F2.1-F2.4, F2.7 y los adaptadores de solo lectura de F2.6 | Los 18 endpoints de catálogo: productos, códigos, lotes/series, campos custom, import de 500 filas, fotos, escaneo `GET /v1/codes/{value}/resolve`. Suite `w2a-cargar-el-catalogo`. |
+| **3b** | **hecho** *(derivado)* | Saldar la deuda del ciclo rojo-verde | — | 25 mutaciones probadas, las 25 rojas; la prueba que le faltaba al filtro de nodos custodiables; el spec 04 §5.1 corregido; el guion de caja negra recuperado. Merge `8231a1d`, bitácora en [03b](2026-09-12-03b-bitacora-mutaciones.md). |
+| **3c** | **hecho** *(derivado)* | La caja negra cubre el contrato entero | — | `pnpm blackbox`: tres suites, 249 comprobaciones, y un cruce que exige de cada operación un camino feliz y uno de error ([06 §6](docs/specs/06-pruebas-y-calidad.md)). Job hermano en CI. Merge `22789d8`. |
+| **3d** | **hecho** *(derivado)* | La colección de Postman al día | — | Las 30 operaciones en Postman, 70 peticiones afirmando su código. Merge `e1c0651`. |
 | 4 | pendiente | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Árbol de bodega (`/v1/nodes`, `tree`, `move`), sembrador de nodos de frontera, suite e2e «Cargar el catálogo y las ubicaciones» completa. |
 | 5 | pendiente | El ledger: dominio, casos de uso y persistencia | F3.1-F3.4 | Sin endpoints nuevos; `pnpm test` y las pruebas de integración del ledger (savepoint, interbloqueo, `REVOKE`). |
 | 6 | pendiente | Mover mercancía por HTTP y cierre de la WAVE 3 | F3.5-F3.6 + e2e W3 | `/v1/movements`, `/batch`, `/reverse`, `/v1/stock`, `/v1/stock/custodies`; criterios 3-4-6-7-8-9; pruebas de propiedades. |
