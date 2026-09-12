@@ -107,7 +107,6 @@ export function plan(
   const loans: Loan[] = [];
   const written = new Map<number, PlannedMove>();
   const reversed = new Set<number>();
-  const placedSerials = new Set<string>();
 
   const key = (node: string, product: string, batch?: string) => `${node}|${product}|${batch ?? ''}`;
   const at = (node: string, product: string, batch?: string) => balance.get(key(node, product, batch))?.qty ?? 0;
@@ -126,15 +125,26 @@ export function plan(
   const held = (kind: NodeShape['kind']) =>
     [...balance.values()].filter((p) => kindOf.get(p.node) === kind && p.qty > 0);
 
-  /** An item that can still enter the building: a serial already placed cannot. */
+  /** What I-9 actually measures: units of a batch sitting in custodial nodes. */
+  const custodialTotal = (product: string, batch: string | undefined) =>
+    [...balance.values()]
+      .filter((p) => p.product === product && p.batch === batch && custodial(p.node))
+      .reduce((sum, p) => sum + p.qty, 0);
+
+  /**
+   * An item that can still come in. A serial can — even one that was here
+   * before — as long as it is not on a shelf right now: it was sold, and the
+   * supplier is sending one back. That is a legitimate entry, and it is half of
+   * the sequence that found the hole in I-9.
+   */
   const receivable = (a: number, b: number): { product: string; batch?: string } | undefined => {
     const p = pick(products, a);
     if (p === undefined) return undefined;
     if (p.trackingMode === 'SERIAL') {
-      const free = p.batches.filter((x) => !placedSerials.has(x));
+      const free = p.batches.filter((x) => custodialTotal(p.alias, x) === 0);
       const batch = pick(free, b);
       if (batch !== undefined) return { product: p.alias, batch };
-      // Every serial is out there already; fall back to something countable.
+      // Every serial is on a shelf already; fall back to something countable.
       const byQuantity = products.find((x) => x.trackingMode === 'QUANTITY');
       return byQuantity === undefined ? undefined : { product: byQuantity.alias };
     }
@@ -223,9 +233,20 @@ export function plan(
     }
   };
 
+  /**
+   * Undoing a dispatch is an entry coming in from the boundary, so I-9 applies
+   * to it (D-41): if an identical serial is already on a shelf, the system
+   * refuses the compensation. The generator still produces the sequence — that
+   * is the one worth generating — and the model only mirrors the refusal.
+   */
+  const refusedBySerialRule = (m: PlannedMove): boolean =>
+    isSerial(m.product) && custodial(m.from) && !custodial(m.to)
+    && custodialTotal(m.product, m.batch) > 0;
+
   const apply = (op: PlannedOp): void => {
     if (op.kind === 'reverse') {
       const target = written.get(op.targetRef)!;
+      if (refusedBySerialRule(target)) return;
       const q = Math.round(Number(target.quantity) * 1000);
       move(target.to, target.product, target.batch, -q);
       move(target.from, target.product, target.batch, q);
@@ -249,7 +270,6 @@ export function plan(
     move(op.from, op.product, op.batch, -q);
     move(op.to, op.product, op.batch, q);
     written.set(op.ref, op);
-    if (op.kind === 'receive' && op.batch !== undefined && isSerial(op.product)) placedSerials.add(op.batch);
     if (op.kind === 'checkOut') {
       loans.push({
         ref: op.ref, custody: op.to, product: op.product,

@@ -296,6 +296,14 @@ sitio— y en ese caso falla igual que cualquier movimiento. La salida correcta 
 traer el stock de vuelta primero. El sistema no inventa existencias para cuadrar una
 corrección.
 
+Y falla también por **I-9**, que es menos evidente: deshacer un despacho es un
+asiento que *entra* desde la frontera hacia un nodo custodiable, exactamente igual
+que una recepción. Si entre el despacho y la compensación la misma serie volvió a
+entrar por otro sitio —cosa legítima: el sistema no puede saber que es la misma
+pieza hasta que la ve—, la compensación la pondría en dos estanterías a la vez, y se
+rechaza con `serial-already-placed`. La guarda es la misma que usa `RecordMovement`
+y la consultan los dos (D-41 del plan 6).
+
 ```ts
 interface RecordMovementBatch {                          // RECORD_MOVEMENT
   execute(ctx, input: { movements: RecordMovementInput[] })   // máx. 500

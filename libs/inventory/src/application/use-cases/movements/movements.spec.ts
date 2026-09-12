@@ -50,7 +50,9 @@ function build() {
   return {
     nodes, balances, movements, products, batches, events, record,
     batch: new RecordMovementBatch(record, movements, balances, events, fakeIds, fixedClock),
-    reverse: new ReverseMovement(movements, balances, nodes, events, fakeIds, fixedClock),
+    reverse: new ReverseMovement(
+      movements, balances, nodes, products as never, batches as never, events, fakeIds, fixedClock,
+    ),
   };
 }
 
@@ -395,6 +397,53 @@ describe('ReverseMovement', () => {
     await expect(
       t.reverse.execute(w.ctx, { movementId: movement.id, reason: 'me equivoqué' }),
     ).rejects.toMatchObject({ type: 'insufficient-stock' });
+  });
+
+  // D-41 · La compensación de un despacho es una entrada desde la frontera, así
+  // que puede devolver a la estantería una serie que mientras tanto volvió a
+  // entrar por otro sitio. Hasta el plan 6, `guardSerial` solo la miraba al
+  // recibir y nadie preguntaba nada al compensar.
+  describe('I-9 · compensar un despacho también coloca una serie', () => {
+    const conSerie = async () => {
+      const t = build();
+      const w = await aWarehouse(t);
+      const taladro = t.products.add(aProduct({ sku: 'TAL-BOSCH', trackingMode: TrackingMode.SERIAL }));
+      const bsh = t.batches.add(aBatch(taladro, { serial: 'BSH-001' }));
+      const serie = { productId: taladro.id, batchId: bsh.id, quantity: '1' };
+      await move(t, w, serie);
+      const { movement: venta } = await move(t, w, {
+        ...serie, fromNodeId: w.b2.id, toNodeId: w.sale.id,
+      });
+      return { t, w, serie, venta };
+    };
+
+    it('si la serie volvió a entrar en otro sitio, la compensación se rechaza', async () => {
+      const { t, w, serie, venta } = await conSerie();
+      // El proveedor manda otra unidad con la misma serie, y el sistema hace
+      // bien en aceptarla: en custodia no queda ninguna.
+      await move(t, w, { ...serie, toNodeId: w.b3.id });
+      await expect(
+        t.reverse.execute(w.ctx, { movementId: venta.id, reason: 'la venta se anuló' }),
+      ).rejects.toMatchObject({ type: 'serial-already-placed' });
+    });
+
+    it('y si no está en ninguna parte, la compensación pasa', async () => {
+      const { t, w, venta } = await conSerie();
+      const { reversal } = await t.reverse.execute(w.ctx, { movementId: venta.id, reason: 'la venta se anuló' });
+      expect(reversal.toNodeId).toBe(w.b2.id);
+    });
+
+    // La guarda no puede dispararse al deshacer una recepción —sale de un nodo
+    // custodiable— ni un traslado, o no habría forma de corregir ninguno.
+    it('deshacer una recepción no la dispara', async () => {
+      const t = build();
+      const w = await aWarehouse(t);
+      const taladro = t.products.add(aProduct({ sku: 'TAL-BOSCH', trackingMode: TrackingMode.SERIAL }));
+      const bsh = t.batches.add(aBatch(taladro, { serial: 'BSH-001' }));
+      const { movement } = await move(t, w, { productId: taladro.id, batchId: bsh.id, quantity: '1' });
+      const { reversal } = await t.reverse.execute(w.ctx, { movementId: movement.id, reason: 'no era esa' });
+      expect(reversal.toNodeId).toBe(w.supplier.id);
+    });
   });
 
   it('un movimiento que no existe es un 404', async () => {

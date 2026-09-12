@@ -8,7 +8,7 @@ import { withRollback } from '../support/db.js';
 import { arbitraryMovementSequence } from './arbitraries.js';
 import { serialCustodialTotals, serialsInTwoPlaces } from './checks.js';
 import {
-  applySequence, createInvariantHarness, fcParams, seedInvariantWorld, shapeOf,
+  applySequence, createInvariantHarness, fcParams, seedInvariantWorld, serialHeavyShape,
   type InvariantHarness, type InvariantWorld,
 } from './harness.js';
 import type { BatchId } from '@app/catalog';
@@ -25,7 +25,7 @@ describe('propiedad · I-9 · una serie no está en dos sitios a la vez', () => 
 
   it('ninguna serie aparece en dos nodos custodiables, y el puerto dice lo mismo', async () => {
     await fc.assert(
-      fc.asyncProperty(arbitraryMovementSequence({ ...shapeOf(w), maxLen: 12 }), async (ops) => {
+      fc.asyncProperty(arbitraryMovementSequence({ ...serialHeavyShape(w), maxLen: 12 }), async (ops) => {
         await withRollback(h.uow, { pool: 'tenant', orgId: w.orgId }, async () => {
           const outcomes = await applySequence(h, w, ops);
           expect(outcomes.some((o) => o.ok)).toBe(true);
@@ -41,7 +41,10 @@ describe('propiedad · I-9 · una serie no está en dos sitios a la vez', () => 
           }
         });
       }),
-      fcParams(),
+      // Más corridas que las otras tres: la secuencia que de verdad pone a
+      // prueba I-9 —sale vendida, vuelve a entrar, y alguien deshace la venta—
+      // aparece en dos de cada mil, así que cincuenta no la verían nunca.
+      fcParams({ numRuns: 1500 }),
     );
-  }, 120_000);
+  }, 150_000);
 });

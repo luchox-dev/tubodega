@@ -55,10 +55,30 @@ export interface InvariantWorld {
   node(alias: string): NodeId;
 }
 
+export interface WorldShape {
+  readonly products: readonly ProductShape[];
+  readonly nodes: readonly NodeShape[];
+}
+
 /** What the generator needs to know about the world: shapes, never ids. */
-export const shapeOf = (w: InvariantWorld): { products: readonly ProductShape[]; nodes: readonly NodeShape[] } => ({
-  products: w.products,
-  nodes: w.nodes,
+export const shapeOf = (w: InvariantWorld): WorldShape => ({ products: w.products, nodes: w.nodes });
+
+/**
+ * A narrower world for the I-9 property: one serial product with two serials,
+ * one shelf pair, one of each boundary. The interleavings that matter to a
+ * serial — out through a TERMINAL, back in from a SOURCE, then a compensation —
+ * are rare in the full world simply because three quarters of the catalogue is
+ * not serialised. Narrowing the *shape* concentrates the search where the
+ * invariant lives; the seeded world is the same one.
+ *
+ * One by-quantity product stays: it is the fallback `receivable` needs when
+ * every serial is already on a shelf, and without it a step would have nothing
+ * left to degrade to.
+ */
+export const serialHeavyShape = (w: InvariantWorld): WorldShape => ({
+  products: w.products.filter((p) => p.alias === 'SER-A' || p.alias === 'QTY-A')
+    .map((p) => (p.alias === 'SER-A' ? { ...p, batches: p.batches.slice(0, 2) } : p)),
+  nodes: w.nodes.filter((n) => ['BIN-1', 'BIN-2', 'CUS-1', 'TRM-1', 'SRC-1'].includes(n.alias)),
 });
 
 const PRODUCTS: readonly ProductShape[] = [
@@ -243,8 +263,10 @@ export async function applySequence(
  * fast-check prints `Seed: N, Path: p`; `FC_SEED=N FC_PATH=p` replays it exactly,
  * and that pair is what goes in the report.
  */
-export const fcParams = (): fc.Parameters<unknown> => ({
-  numRuns: Number(process.env.FC_NUM_RUNS ?? 50),
+export const fcParams = (over: { readonly numRuns?: number } = {}): fc.Parameters<unknown> => ({
+  // A property whose interesting states are rarer needs more cases, and says so
+  // at the call site. The environment still wins, so a long run is one variable.
+  numRuns: Number(process.env.FC_NUM_RUNS ?? over.numRuns ?? 50),
   ...(process.env.FC_SEED !== undefined ? { seed: Number(process.env.FC_SEED) } : {}),
   ...(process.env.FC_PATH !== undefined ? { path: process.env.FC_PATH } : {}),
   // Shrinking is the whole value of the technique: without it a counterexample
