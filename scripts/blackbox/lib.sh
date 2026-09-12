@@ -61,6 +61,10 @@ plantilla() {
     s#^/codes/.+/resolve\$#/codes/{value}/resolve#;
     s#^/nodes/$u/(move|tree)\$#/nodes/{id}/\1#;
     s#^/nodes/$u\$#/nodes/{id}#;
+    s#^/movements/batch\$#/movements/batch#;
+    s#^/movements/$u/reverse\$#/movements/{id}/reverse#;
+    s#^/movements/$u\$#/movements/{id}#;
+    s#^/stock/custodies\$#/stock/custodies#;
   " <<<"$p")"
   printf '/v1%s' "$p"
 }
