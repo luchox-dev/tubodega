@@ -24,9 +24,12 @@ las reglas del ledger acabarían duplicadas en dos sitios y divergirían.
 ## 2. Entidades y tipos del dominio
 
 ```ts
-type ProcessInstanceId = Branded<string, 'ProcessInstanceId'>;
-type StepId            = Branded<string, 'StepId'>;
-type TemplateCode      = Branded<string, 'TemplateCode'>;  // RECEPCION, TRASLADO, ...
+// `ProcessInstanceId` vive en `libs/common` porque `inventory` lo referencia
+// (`Movement.processInstanceId`, [01 §4](01-arquitectura.md)). Los otros dos no
+// los nombra nadie fuera de este módulo, así que viven en `libs/process`.
+type ProcessInstanceId = Branded<string, 'ProcessInstanceId'>;   // @app/common
+type StepId            = Branded<string, 'StepId'>;              // libs/process
+type TemplateCode      = Branded<string, 'TemplateCode'>;        // libs/process — RECEPCION, ...
 
 enum StepType {
   SCAN_ITEM, CAPTURE_BATCH, CAPTURE_QTY, CAPTURE_PHOTO, SELECT_NODE,
@@ -116,14 +119,16 @@ class ProcessInstance {
 
 class ProcessContext {
   readonly values: ReadonlyMap<StepId, StepPayload>;
-  readonly draft: MovementDraft[];     // intención acumulada
+  readonly draft: MovementDraft;             // intención acumulada — una, ver §3
+  readonly storageKeys: readonly StorageKey[];   // lo que dejó CAPTURE_PHOTO
 
   with(stepId: StepId, payload: StepPayload): ProcessContext;
-  withDraft(draft: MovementDraft): ProcessContext;
+  withDraft(patch: Partial<MovementDraft>): ProcessContext;   // funde, no añade
+  withStorageKeys(keys: readonly StorageKey[]): ProcessContext;
 }
 
 interface MovementDraft {
-  productId; batchId?; fromNodeId?; toNodeId?;
+  productId?; batchId?; fromNodeId?; toNodeId?;
   quantity?: Quantity; reason?: string; dueAt?: Date;
   newBatch?: BatchDraft;               // lote que aún no existe; CONFIRM lo crea antes de mover
 }
@@ -132,6 +137,22 @@ interface BatchDraft {
   productId; lotCode?: string; serial?: string; expiresAt?: Date;
 }
 ```
+
+**El borrador es uno y `withDraft` funde.** §3 dice que una instancia produce a lo
+sumo un movimiento, así que un array con un `withDraft` en singular no dejaba claro
+si añadía o reemplazaba. Cada paso aporta su campo —el escaneo el producto, la
+cantidad la cantidad, la ubicación el destino— sobre el mismo borrador. El día de la
+instancia multi-línea ([90 §12](90-extensiones-previstas.md)) esto vuelve a ser una
+lista, y `CONFIRM` ya emite una lista de borradores.
+
+**`occurredAt` no está en el borrador.** Lo pone el aplicador de efectos con el
+puerto `Clock` al construir el `RecordMovementInput`, que sí lo exige: la hora del
+asiento es el instante en que se confirma, no uno que el motor arrastre desde que se
+abrió la instancia — y una instancia puede estar abierta desde ayer.
+
+**Las claves de foto no van en el borrador**, van en su propio campo del contexto:
+no son parte del movimiento, alimentan un efecto distinto (`ATTACH_MEDIA`) y sobre
+un producto, no sobre una posición.
 
 `MovementDraft` tiene todos los campos opcionales porque se rellena a lo largo del
 proceso: el paso de escaneo pone el producto, el de cantidad la cantidad, el de
@@ -221,16 +242,38 @@ interface StepHandler<P extends StepPayload = StepPayload> {
   readonly type: StepType;
 
   parse(raw: unknown, config: StepConfig): Result<P>;
-  validate(payload: P, ctx: ProcessContext, deps: HandlerDeps): Promise<Result<P>>;
-  apply(payload: P, ctx: ProcessContext): ProcessContext;
+  validate(payload: P, ctx: ProcessContext, deps: HandlerDeps,
+           config: StepConfig): Promise<Result<P>>;
+  apply(payload: P, ctx: ProcessContext, config: StepConfig): ProcessContext;
 }
 
-interface HandlerDeps {              // solo lectura
-  readonly resolveCode: ResolveCodePort;
-  readonly findNode: FindNodePort;
-  readonly findProduct: FindProductPort;
+/**
+ * Solo lectura, y construido por `application/` a partir de los repositorios de
+ * `catalog` e `inventory` — no hay puertos puente (ver §8).
+ */
+interface HandlerDeps {
+  readonly resolveCode:      (orgId, raw: string) => Promise<ResolvedCode | null>;
+  readonly findNode:         (orgId, id: NodeId) => Promise<Node | null>;
+  readonly findNodeByCode:   (orgId, code: string) => Promise<Node | null>;
+  readonly findProduct:      (orgId, id: ProductId) => Promise<Product | null>;
+  readonly findBatchByLot:   (orgId, productId: ProductId, lotCode: string) => Promise<Batch | null>;
+  readonly findBatchBySerial:(orgId, serial: string) => Promise<Batch | null>;
+  readonly clock:            Clock;
 }
 ```
+
+**Las tres firmas reciben el `config` del paso**, y no solo `parse`. `SELECT_NODE`
+lee `config.allowedKinds` al validar y `config.role` al aplicar, para saber si el
+nodo va al lado origen o al destino; `CONFIRM` resuelve `config.defaults.fromNodeCode`
+al validar. Sin el `config` ahí, los tres manejadores que dependen de él no podrían
+hacer su trabajo, y §5 lo da por hecho.
+
+**`HandlerDeps` lleva seis lecturas y un reloj**, no tres lecturas. `CAPTURE_BATCH`
+tiene que decidir entre un lote que existe y uno por crear, y eso son dos búsquedas
+—por `(producto, lotCode)` y por `serial`—; `CONFIRM` resuelve sus `defaults` por
+**código** de nodo y no por id; y `SET_DUE_DATE` valida «futura», que es una pregunta
+sobre el ahora y por tanto sobre el puerto `Clock`
+([06 §4](06-pruebas-y-calidad.md): ninguna regla llama a `new Date()`).
 
 Tres reglas que definen el motor entero:
 
@@ -268,15 +311,28 @@ producto va a pasar por ella; el manejador sí.
 
 ```ts
 type Effect =
-  | { kind: 'CREATE_BATCH';   draft: BatchDraft }
-  | { kind: 'EMIT_MOVEMENTS'; drafts: MovementDraft[] }
-  | { kind: 'ATTACH_MEDIA';   productId: ProductId; storageKeys: StorageKey[] };
+  | { kind: 'CREATE_BATCH';   draft: BatchDraft; feeds: number }
+  | { kind: 'EMIT_MOVEMENTS'; drafts: readonly MovementDraft[] }
+  | { kind: 'ATTACH_MEDIA';   productId: ProductId; storageKeys: readonly StorageKey[] };
 ```
 
 El motor produce efectos; **el aplicador de efectos** —en `application/`— los ejecuta
 llamando a los casos de uso de los otros módulos, todo dentro de la transacción de la
 petición, **en este orden**: `CREATE_BATCH` primero (el movimiento necesita el
 `batchId`), `EMIT_MOVEMENTS` después, `ATTACH_MEDIA` al final.
+
+**`feeds` dice a qué borrador alimenta el lote nuevo**: es el índice dentro de
+`EMIT_MOVEMENTS.drafts`, y el aplicador escribe el `id` del `Batch` recién creado en
+el `batchId` de ese borrador antes de emitir nada. Sin ese enlace el orden de los dos
+efectos no sirve de nada —el `batchId` no tendría dónde aterrizar—. Hoy siempre vale
+`0`, porque la instancia produce una línea (§3); el día multi-línea el campo ya está
+y el aplicador no cambia.
+
+Los tres efectos los aplican los casos de uso públicos de los otros módulos, con sus
+invariantes intactas: `CreateBatch` de [11 §4](11-catalog.md), `RecordMovementBatch`
+de [12 §4.2](12-inventory.md) y `AttachMedia` de [11 §4](11-catalog.md) **en su forma
+de `storageKeys`**, que es la que exige `RECORD_MOVEMENT` y no `MANAGE_CATALOG`: quien
+confirma una recepción es el operario, y esa es exactamente la regla que lo permite.
 
 No hay efecto de alerta. Las alertas se levantan por reconciliación
 ([14 §4](14-alerts.md)): una que un proceso insertara sin que la respalde una de
@@ -296,11 +352,19 @@ Postgres, sin HTTP, sin contenedor. Es la mitad de la cobertura del 100 % que
 | `SCAN_ITEM` | `{ code }` | El código resuelve a producto activo | `productId`, `batchId` si el código era una serie existente |
 | `CAPTURE_BATCH` | `{ lotCode?, serial?, expiresAt? }` o `null` | Según `trackingMode` del producto en contexto — ver abajo | `batchId` si el lote existe; `newBatch` si no |
 | `CAPTURE_QTY` | `{ quantity }` | Positiva; entera si la unidad no admite decimales (`UNIT`, `BOX`, `PACK`) | `quantity` |
-| `CAPTURE_PHOTO` | `{ storageKeys[] }` | Entre 1 y 5 imágenes | Efecto `ATTACH_MEDIA` |
+| `CAPTURE_PHOTO` | `{ storageKeys[] }` | Entre 1 y 5 imágenes, todas en la zona de espera y sin reclamar | `storageKeys` (el efecto lo emite `CONFIRM`) |
 | `SELECT_NODE` | `{ nodeId }` | Existe, activo, y del `kind` que exija `config.allowedKinds` | `fromNodeId` o `toNodeId`, según `config.role` |
 | `SET_DUE_DATE` | `{ dueAt }` | Futura; el destino es `CUSTODY` | `dueAt` |
 | `CAPTURE_REASON` | `{ reason }` | Entre 3 y 500 caracteres | `reason` |
-| `CONFIRM` | `{}` | El borrador está completo y es coherente | Efecto `EMIT_MOVEMENTS`; cierra la instancia |
+| `CONFIRM` | `{}` | El borrador está completo y es coherente | Los efectos de §4.3; cierra la instancia |
+
+**Ningún manejador produce efectos, ni siquiera `CAPTURE_PHOTO`.** `apply` devuelve
+un `ProcessContext`, y su firma no tiene por dónde devolver otra cosa; y P-6 dice que
+los efectos se aplican **solo al completar**. Las claves de foto se acumulan en
+`ProcessContext.storageKeys` y es `CONFIRM` quien, al cerrar, emite los tres efectos
+que correspondan: `CREATE_BATCH` si el borrador trae `newBatch`, `EMIT_MOVEMENTS`
+siempre, y `ATTACH_MEDIA` si hay claves. Un proceso abandonado a mitad no adjunta
+nada — que es la mitad no evidente de P-6: no ensucia el inventario **ni el catálogo**.
 
 `SELECT_NODE` es un solo manejador parametrizado y no dos —origen y destino— porque
 la lógica de validar un nodo es idéntica; lo que cambia es dónde deja el resultado.
@@ -348,6 +412,11 @@ Es lo que permite que un ajuste positivo no pida al operario que "elija" el
 nodo `SOURCE:adjustment-in`, que es el único posible. Cualquier lado que el
 borrador ya traiga tiene prioridad sobre el `default`.
 
+El código se resuelve con `findNodeByCode` de `HandlerDeps` (§4.2) y no con una lista
+de uuids: los ocho nodos de frontera los siembra `SeedBoundaryNodes` por `code`
+([04 §6](04-persistencia.md)), y son distintos en cada organización. Un `default` que
+nombrara un id sería una plantilla de fábrica que solo vale para una empresa.
+
 ## 6. Las seis plantillas de fábrica
 
 Se siembran al crear una organización, en versión 1.
@@ -384,6 +453,114 @@ AJUSTE_SALIDA   origen(INTERNAL) → item → lote → cantidad → motivo
 CUSTODIA        origen(INTERNAL) → item → lote → cantidad → tenedor(CUSTODY)
                                        → vencimiento → confirmar
 ```
+
+Las cinco, escritas: son la constante `FACTORY_TEMPLATES` del dominio, y el esquema
+de arriba no basta para sembrarlas —no dice ni un `id` de paso, ni un `required`, ni
+una transición—. **Solo `RECEPCION` lleva el paso `foto`**; es la única operación en
+la que hay algo que fotografiar que el catálogo no tenga ya.
+
+```jsonc
+// TRASLADO — de una ubicación interna a otra
+{ "code": "TRASLADO", "version": 1, "steps": [
+  { "id": "origen",   "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "FROM", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "item" }] },
+  { "id": "item",     "type": "SCAN_ITEM",     "required": true,
+    "transitions": [{ "to": "lote" }] },
+  { "id": "lote",     "type": "CAPTURE_BATCH", "required": false,
+    "transitions": [{ "to": "cantidad" }] },
+  { "id": "cantidad", "type": "CAPTURE_QTY",   "required": true,
+    "transitions": [{ "to": "destino" }] },
+  { "id": "destino",  "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "TO", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "confirmar" }] },
+  { "id": "confirmar","type": "CONFIRM",       "required": true,
+    "transitions": [{ "to": null }] }
+]}
+
+// SALIDA — venta, consumo o devolución al proveedor
+{ "code": "SALIDA", "version": 1, "steps": [
+  { "id": "origen",   "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "FROM", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "item" }] },
+  { "id": "item",     "type": "SCAN_ITEM",     "required": true,
+    "transitions": [{ "to": "lote" }] },
+  { "id": "lote",     "type": "CAPTURE_BATCH", "required": false,
+    "transitions": [{ "to": "cantidad" }] },
+  { "id": "cantidad", "type": "CAPTURE_QTY",   "required": true,
+    "transitions": [{ "to": "destino" }] },
+  { "id": "destino",  "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "TO", "allowedKinds": ["TERMINAL"] },
+    "transitions": [{ "to": "confirmar" }] },
+  { "id": "confirmar","type": "CONFIRM",       "required": true,
+    "transitions": [{ "to": null }] }
+]}
+
+// AJUSTE_ENTRADA — aparece stock que no estaba contado. Sin paso `origen`: lo fija CONFIRM
+{ "code": "AJUSTE_ENTRADA", "version": 1, "steps": [
+  { "id": "item",     "type": "SCAN_ITEM",     "required": true,
+    "transitions": [{ "to": "lote" }] },
+  { "id": "lote",     "type": "CAPTURE_BATCH", "required": false,
+    "transitions": [{ "to": "cantidad" }] },
+  { "id": "cantidad", "type": "CAPTURE_QTY",   "required": true,
+    "transitions": [{ "to": "motivo" }] },
+  { "id": "motivo",   "type": "CAPTURE_REASON","required": true,
+    "transitions": [{ "to": "destino" }] },
+  { "id": "destino",  "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "TO", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "confirmar" }] },
+  { "id": "confirmar","type": "CONFIRM",       "required": true,
+    "config": { "defaults": { "fromNodeCode": "adjustment-in" } },
+    "transitions": [{ "to": null }] }
+]}
+
+// AJUSTE_SALIDA — falta stock que estaba contado. Sin paso `destino`: lo fija CONFIRM
+{ "code": "AJUSTE_SALIDA", "version": 1, "steps": [
+  { "id": "origen",   "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "FROM", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "item" }] },
+  { "id": "item",     "type": "SCAN_ITEM",     "required": true,
+    "transitions": [{ "to": "lote" }] },
+  { "id": "lote",     "type": "CAPTURE_BATCH", "required": false,
+    "transitions": [{ "to": "cantidad" }] },
+  { "id": "cantidad", "type": "CAPTURE_QTY",   "required": true,
+    "transitions": [{ "to": "motivo" }] },
+  { "id": "motivo",   "type": "CAPTURE_REASON","required": true,
+    "transitions": [{ "to": "confirmar" }] },
+  { "id": "confirmar","type": "CONFIRM",       "required": true,
+    "config": { "defaults": { "toNodeCode": "adjustment-out" } },
+    "transitions": [{ "to": null }] }
+]}
+
+// CUSTODIA — préstamo a un tenedor, con fecha de devolución
+{ "code": "CUSTODIA", "version": 1, "steps": [
+  { "id": "origen",      "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "FROM", "allowedKinds": ["INTERNAL"] },
+    "transitions": [{ "to": "item" }] },
+  { "id": "item",        "type": "SCAN_ITEM",     "required": true,
+    "transitions": [{ "to": "lote" }] },
+  { "id": "lote",        "type": "CAPTURE_BATCH", "required": false,
+    "transitions": [{ "to": "cantidad" }] },
+  { "id": "cantidad",    "type": "CAPTURE_QTY",   "required": true,
+    "transitions": [{ "to": "tenedor" }] },
+  { "id": "tenedor",     "type": "SELECT_NODE",   "required": true,
+    "config": { "role": "TO", "allowedKinds": ["CUSTODY"] },
+    "transitions": [{ "to": "vencimiento" }] },
+  { "id": "vencimiento", "type": "SET_DUE_DATE",  "required": true,
+    "transitions": [{ "to": "confirmar" }] },
+  { "id": "confirmar",   "type": "CONFIRM",       "required": true,
+    "transitions": [{ "to": null }] }
+]}
+```
+
+`motivo` es `required: true` en las dos de ajuste, y no por gusto del diseño: un
+asiento cuyo extremo sea `adjustment-in`, `adjustment-out` o `shrinkage` exige
+`reason` en el dominio ([02 §10](02-modelo-de-dominio.md), `reason-required`).
+Un `motivo` opcional daría una plantilla que llega a `CONFIRM` y falla siempre.
+
+`vencimiento` también es `required: true`: sin `dueAt` no hay nada que vencer, y una
+custodia que nadie tiene que devolver no genera las alertas de [14](14-alerts.md), que
+es la mitad de por qué existe el préstamo.
 
 Seis procesos, ocho manejadores, un motor. **La diferencia entre una recepción y un
 traslado es qué `allowedKinds` lleva un paso.** Ese es el indicador de que la
@@ -425,9 +602,26 @@ interface CancelProcess { /* RECORD_MOVEMENT · sin efectos, P-6 */ }
 interface GetProcessInstance { /* READ */ }
 interface ListProcessInstances { /* READ · filtros: state, templateCode, actorId */ }
 
-interface ListTemplates  { /* READ */ }
+interface ListTemplates     { /* READ */ }
+interface GetActiveTemplate { /* READ · 404 template-not-found */ }
 interface CreateTemplateVersion { /* MANAGE_CATALOG · P-8, P-9 */ }
+
+/** Contexto de sistema: corre dentro de CreateOrganization, cuando no hay token. */
+interface SeedFactoryTemplates {
+  execute(orgId: OrgId): Promise<void>;     // idempotente por (code, version)
+}
 ```
+
+**Ninguna acción nueva.** Los ocho endpoints de §10 se reparten entre
+`RECORD_MOVEMENT`, `MANAGE_CATALOG` y `READ`, que ya existen en la matriz de
+[10 §2](10-tenancy.md): el `OPERATOR` opera procesos y no versiona plantillas, que es
+exactamente el reparto que el producto quiere.
+
+`SeedFactoryTemplates` **no recibe `RequestContext` y no llama a `requireAction`**,
+por lo mismo que `SeedBoundaryNodes`: cuando corre no hay organización ni token
+([07 §2](07-composicion-y-contexto-de-ejecucion.md)), y un contexto con roles
+inventados sería una autorización que no puede fallar. Tampoco publica eventos:
+`organization.created` ya cuenta el hecho.
 
 Secuencia de `CompleteStep`, dentro de una transacción:
 
@@ -477,34 +671,44 @@ interface StepCompletionRepository {
   append(completion): Promise<void>;        // sin update, sin delete
 }
 
-// Provistos por catalog e inventory: solo lectura, para validar
+// Lo que devuelve la resolución de un código, en `HandlerDeps` (§4.2)
 interface ResolvedCode {
   readonly product: Product;
   readonly batch?: Batch;                 // presente si el código era una serie
 }
-
-interface ResolveCodePort  { resolve(orgId, code): Promise<ResolvedCode | null>; }
-interface FindNodePort     { byId(orgId, id): Promise<Node | null>; }
-interface FindProductPort  { byId(orgId, id): Promise<Product | null>; }
-
-// Para aplicar efectos
-interface BatchCreator    { create(ctx, draft: BatchDraft): Promise<Batch>; }
-interface MovementRecorder {
-  recordBatch(ctx, drafts: MovementDraft[]): Promise<Movement[]>;
-}
-interface MediaAttacher   { attach(ctx, productId, keys: StorageKey[]): Promise<void>; }
 ```
 
-`MovementRecorder` es deliberadamente estrecho: expone solo el registro por lote, que
-es lo único que el motor necesita. Un puerto que expusiera todo `inventory` invitaría
-a que el motor empezara a hacer cosas que no le tocan. No lleva clave de
-idempotencia: la petición que completa el paso ya la tiene, y todo lo que ocurre
+### No hay puertos puente hacia catalog ni inventory
+
+`process` depende de `tenancy`, `catalog` e `inventory` ([01 §5](01-arquitectura.md)),
+así que **inyecta sus repositorios y sus casos de uso directamente**, sin declarar un
+puerto propio ni escribir un adaptador que lo reexporte:
+
+| Lo que el motor necesita | De dónde sale, tal cual |
+|---|---|
+| Resolver un código | `ResolveCode` de [11 §4](11-catalog.md) — devuelve `null`, no lanza |
+| Nodo por id / por código | `NodeRepository.findById` · `.findByCode` de [12 §5](12-inventory.md) |
+| Producto por id | `ProductRepository.findById` de [11 §5](11-catalog.md) |
+| Lote por `(producto, lotCode)` / por serie | `BatchRepository.findByLotCode` · `.findBySerial` |
+| Crear el lote nuevo | `CreateBatch` de [11 §4](11-catalog.md) — exige `CREATE_BATCH` |
+| Asentar el movimiento | `RecordMovementBatch` de [12 §4.2](12-inventory.md) |
+| Adjuntar las fotos | `AttachMedia` de [11 §4](11-catalog.md), forma `storageKeys` |
+
+Es la misma decisión que tomó `RecordMovement` con `PRODUCT_REPOSITORY` y
+`BATCH_REPOSITORY`, y antes `CreateNode` con `CUSTOM_FIELD_REPOSITORY`: las firmas
+ya son exactamente las que hacen falta, y un puerto que las reexporte es un fichero
+que envejece aparte del que copia. La `application/` del motor construye con ellas el
+`HandlerDeps` de §4.2, que sigue siendo de solo lectura por tipo.
+
+**`RecordMovementBatch` y no `RecordMovement`**, aunque hoy la instancia produzca una
+sola línea (§3): es la puerta que el día multi-línea ya recibe una lista, y la que
+hace cierta la promesa de todo-o-nada de P-7 con un solo `applyDelta`. No lleva clave
+de idempotencia: la petición que completa el paso ya la tiene, y todo lo que ocurre
 dentro de ella está cubierto ([07 §5](07-composicion-y-contexto-de-ejecucion.md)).
 
-`MediaAttacher` reclama claves de la zona de espera de `POST /v1/uploads`
-([11 §4](11-catalog.md)); una clave que no esté ahí, o que ya fue reclamada, es
-`invalid-step-payload`. Los tres los implementa la aplicación
-([07 §7](07-composicion-y-contexto-de-ejecucion.md)).
+Los adaptadores cruzados de [07 §7](07-composicion-y-contexto-de-ejecucion.md) que
+este módulo sí necesita se reducen a **uno**: el sembrador de las plantillas de
+fábrica, que `CreateOrganization` invoca vía `OrgProvisioner` ([10 §5](10-tenancy.md)).
 
 ## 9. Persistencia
 
@@ -519,6 +723,25 @@ fila.
 
 La clave foránea compuesta `(org_id, template_code, template_version)` es la que
 convierte P-1 en una garantía de la base de datos.
+
+**Un paso omitido guarda el literal JSON `null`, no un `NULL` de SQL.**
+`step_completion.payload` es `jsonb NOT NULL`, así que omitir un paso (§4.2) escribe
+`'null'::jsonb`. Distinguirlos importa: un `NULL` de SQL no cabe en la columna, y la
+diferencia entre «este paso se omitió» y «este paso no existe» es precisamente la
+fila.
+
+**`process_instance.version` es bloqueo optimista interno, no contrato.** Ningún
+endpoint de §10 pide `If-Match`, y no debe pedirlo: quien avanza un proceso es un
+cliente que sigue lo que el servidor le indica paso a paso, y el `409 wrong-step` de
+P-2 ya le dice que llegó tarde con un mensaje que sabe leer. La columna existe para
+que dos `complete` simultáneos no se pisen el contexto; el que pierda verá el
+`step-already-completed` de P-3.
+
+**`step_completion` es append-only y necesita las dos capas**, como `movement`
+([04 §3.4](04-persistencia.md)): el tipo del DAO —que no tiene `update` ni `delete`—
+y un `REVOKE UPDATE, DELETE ON step_completion FROM tubodega_app, tubodega_system`.
+La migración `full_schema` solo revoca sobre `movement`; la segunda capa de esta
+tabla llega con el módulo.
 
 ## 10. Endpoints
 
@@ -552,6 +775,8 @@ procesos, solo seguir lo que el servidor le va indicando.
 | `type` | Estado | Cuándo |
 |---|---|---|
 | `template-not-found` | 404 | El código no existe o no tiene versión activa |
+| `process-instance-not-found` | 404 | La instancia no existe, o es de otra organización (I-6: nunca `403`) |
+| `process-instance-id-taken` | 409 | `StartProcess` con un `id` de cliente ya usado, con otra `Idempotency-Key` |
 | `instance-closed` | 409 | P-4 |
 | `wrong-step` | 409 | P-2; el detalle nombra el paso actual |
 | `step-already-completed` | 409 | P-3 |
@@ -563,11 +788,29 @@ procesos, solo seguir lo que el servidor le va indicando.
 | `upload-not-found` | 422 | `CAPTURE_PHOTO` con una clave que no está en la zona de espera o ya fue reclamada |
 | `unknown-step-type` | 422 | La plantilla usa un tipo sin manejador registrado |
 | `branching-not-supported` | 422 | P-8; una plantilla con más de una transición por paso |
+| `invalid-template` | 422 | Una transición apunta a un `id` de paso que no existe, un paso es inalcanzable desde el primero, o ninguno cierra con `to: null` |
 | `template-has-instances` | 409 | P-9 |
 
 `branching-not-supported` merece un mensaje explícito y no un fallo genérico: es la
 señal de que alguien ha llegado al límite del MVP, y el mensaje debe decirle que la
 capacidad está prevista y qué falta para habilitarla.
+
+`invalid-template` es su hermano aburrido y hace falta igual: `unknown-step-type`
+cubre el tipo que nadie sabe ejecutar y `branching-not-supported` la rama, pero una
+plantilla cuyo `confirmar` transite a un paso mal escrito pasa las dos y **se siembra
+rota**. El fallo aparecería mucho después, en la instancia de alguien, como un 500.
+
+**Una clave de foto que no está en la zona de espera, o que ya fue reclamada, es
+`upload-not-found` (422)** y no `invalid-step-payload`: es el mismo `type` que ya
+devuelve `POST /v1/products/{id}/media` en [11 §9](11-catalog.md) para la misma
+condición, y el cliente que reintenta una subida no debería tener que aprenderse dos
+nombres para el mismo problema. `invalid-step-payload` queda para lo que la palabra
+dice: una forma de payload que el manejador no sabe leer.
+
+`process-instance-id-taken` es el molde de `movement-id-taken` ([12 §9](12-inventory.md)):
+`StartProcess` acepta un `id` del cliente, así que puede chocar contra la clave
+primaria con una `Idempotency-Key` distinta, y un choque de PK sin `type` propio
+saldría como un 500.
 
 ## 13. Pruebas
 
@@ -598,7 +841,7 @@ abandonada a la mitad que no deja rastro en el inventario ni en el catálogo.
 | Extensión | Qué ya lo permite | Qué falta |
 |---|---|---|
 | **Flujos con ramas** | Transiciones como lista, pasos por `id`, versionado, `ProcessRunner` como interfaz | `GraphRunner`, un evaluador de condiciones, y retirar P-8 |
-| **Plantillas por tenant** | La tabla ya es por organización y versionada; el MVP solo controla quién escribe | Endpoint de edición y validación de plantilla |
+| **Plantillas por tenant** | La tabla ya es por organización y versionada; `POST /v1/process-templates/{code}/versions` ya existe, con su validador (§10, P-8, P-9) | Editar una plantilla **sembrada** sin versionarla, y una interfaz para escribirlas: hoy hay que mandar los pasos en JSON |
 | **Pasos nuevos** | El registro de manejadores | Una clase por paso. Nada más. |
 | **Conteo cíclico** | Es una plantilla más: `SELECT_NODE → SCAN_ITEM → CAPTURE_QTY → CONFIRM`, con `CONFIRM` emitiendo la diferencia como ajuste | Entidad de tarea de conteo y selección de qué contar |
 | **Picking** | Una plantilla que recorre líneas de un pedido | Entidad de pedido y reservas en `inventory` |
