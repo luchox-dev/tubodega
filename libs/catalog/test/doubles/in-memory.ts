@@ -176,9 +176,6 @@ export class FakeStockChecker implements StockChecker {
   }
 }
 
-/** The unit of work a use case sees: a savepoint is just a nested call here. */
-export const fakeUow = { run: <T>(fn: () => Promise<T>) => fn() };
-
 let seq = 0;
 export const fakeIds = { next: () => `018f0000-0000-7000-8000-${String(++seq).padStart(12, '0')}` };
 export const fixedClock = { now: () => new Date('2026-09-12T12:00:00.000Z') };

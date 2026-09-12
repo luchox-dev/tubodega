@@ -3,7 +3,7 @@ import { Role } from '@app/tenancy';
 import { aContext } from '../../../test/builders/a-context.js';
 import {
   InMemoryBatchRepository, InMemoryCustomFieldRepository, InMemoryProductCodeRepository,
-  InMemoryProductRepository, RecordingEventPublisher, fakeIds, fakeUow, fixedClock,
+  InMemoryProductRepository, RecordingEventPublisher, fakeIds, fixedClock,
 } from '../../../test/doubles/in-memory.js';
 import { CreateBatch } from './create-batch.js';
 import { CreateProduct } from './create-product.js';
@@ -20,7 +20,7 @@ const build = () => {
   const events = new RecordingEventPublisher();
   return {
     products, batches, fields, events,
-    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock, fakeUow),
+    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock),
     createBatch: new CreateBatch(products, batches, fields, events, fakeIds, fixedClock),
     listBatches: new ListBatches(products, batches),
     define: new DefineCustomField(fields, events, fakeIds, fixedClock),

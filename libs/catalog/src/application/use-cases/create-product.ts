@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  CLOCK, EVENT_PUBLISHER, ID_GENERATOR, UNIT_OF_WORK, unwrap,
-  type Clock, type EventPublisher, type IdGenerator, type UnitOfWork,
+  CLOCK, EVENT_PUBLISHER, ID_GENERATOR, unwrap,
+  type Clock, type EventPublisher, type IdGenerator,
 } from '@app/common';
 import { Action, requireAction, type RequestContext } from '@app/tenancy';
 import { CustomEntity, type CodeKind, type TrackingMode } from '../../domain/enums.js';
@@ -32,7 +32,6 @@ export class CreateProduct {
     @Inject(EVENT_PUBLISHER) private readonly events: EventPublisher,
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     @Inject(CLOCK) private readonly clock: Clock,
-    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
   ) {}
 
   async execute(ctx: RequestContext, input: CreateProductInput): Promise<Product> {
@@ -53,10 +52,10 @@ export class CreateProduct {
           kind: raw.kind,
         }),
       );
-      // Each code in its own savepoint: a 23505 aborts the transaction, and
-      // without one the repository could not read which product holds it
-      // in order to name it in the error (decision D-9).
-      await this.uow.run(() => this.codes.save(code));
+      // The savepoint that makes a 23505 survivable lives in the repository,
+      // which is the only place that can roll back before reading which
+      // product already holds the value (decision D-9).
+      await this.codes.save(code);
     }
 
     await this.events.publish([

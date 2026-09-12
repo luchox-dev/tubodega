@@ -3,7 +3,7 @@ import { Role } from '@app/tenancy';
 import { aContext } from '../../../test/builders/a-context.js';
 import {
   InMemoryBatchRepository, InMemoryCustomFieldRepository, InMemoryProductCodeRepository,
-  InMemoryProductRepository, RecordingEventPublisher, fakeIds, fakeUow, fixedClock,
+  InMemoryProductRepository, RecordingEventPublisher, fakeIds, fixedClock,
 } from '../../../test/doubles/in-memory.js';
 import { AddProductCode } from './add-product-code.js';
 import { CreateProduct } from './create-product.js';
@@ -21,7 +21,7 @@ const build = () => {
   codes.skuOf = (id) => [...products.rows.values()].find((p) => p.id === id)?.sku;
   return {
     products, codes, batches, events,
-    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock, fakeUow),
+    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock),
     createBatch: new CreateBatch(products, batches, fields, events, fakeIds, fixedClock),
     add: new AddProductCode(products, codes, fakeIds),
     remove: new RemoveProductCode(products, codes),

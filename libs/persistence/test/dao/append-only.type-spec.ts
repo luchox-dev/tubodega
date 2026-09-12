@@ -3,7 +3,7 @@
 // and someone would eventually call it. This file is checked by
 // `pnpm typecheck`, before a database exists; vitest does not run it.
 import { expectTypeOf } from 'vitest';
-import { OutboxEventDao, UserDao } from '@app/persistence';
+import { MovementDao, OutboxEventDao, UserDao } from '@app/persistence';
 
 expectTypeOf<OutboxEventDao>().not.toHaveProperty('update');
 expectTypeOf<OutboxEventDao>().not.toHaveProperty('updateMany');
@@ -18,3 +18,13 @@ expectTypeOf<OutboxEventDao>().toHaveProperty('findPage');
 // A mutable table has the full set.
 expectTypeOf<UserDao>().toHaveProperty('update');
 expectTypeOf<UserDao>().toHaveProperty('delete');
+
+// The ledger stops at the append family for the same reason, and it matters
+// more here: `movement` is the history. UPDATE and DELETE are also revoked in
+// the database (I-3), but a type error arrives years earlier than a 42501.
+expectTypeOf<MovementDao>().not.toHaveProperty('update');
+expectTypeOf<MovementDao>().not.toHaveProperty('delete');
+expectTypeOf<MovementDao>().not.toHaveProperty('deleteMany');
+expectTypeOf<MovementDao>().not.toHaveProperty('upsert');
+expectTypeOf<MovementDao>().toHaveProperty('create');
+expectTypeOf<MovementDao>().toHaveProperty('countByProduct');

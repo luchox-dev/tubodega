@@ -5,7 +5,7 @@ import { aCustomField } from '../../../test/builders/a-custom-field.js';
 import {
   FakeMovementCounter, FakeStockChecker, InMemoryCustomFieldRepository,
   InMemoryProductCodeRepository, InMemoryProductRepository, RecordingEventPublisher,
-  fakeIds, fakeUow, fixedClock,
+  fakeIds, fixedClock,
 } from '../../../test/doubles/in-memory.js';
 import { CreateProduct } from './create-product.js';
 import { DeactivateProduct } from './deactivate-product.js';
@@ -22,7 +22,7 @@ const build = () => {
   const stock = new FakeStockChecker();
   return {
     products, codes, fields, events, movements, stock,
-    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock, fakeUow),
+    create: new CreateProduct(products, codes, fields, events, fakeIds, fixedClock),
     update: new UpdateProduct(products, fields, movements, events, fakeIds, fixedClock),
     deactivate: new DeactivateProduct(products, stock, events, fakeIds, fixedClock),
     get: new GetProduct(products),
