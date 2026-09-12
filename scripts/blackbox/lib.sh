@@ -13,6 +13,12 @@ if [[ -z "${BASH_VERSINFO:-}" ]] || ((BASH_VERSINFO[0] < 4)) ||
 fi
 
 BASE="${BASE:-http://localhost:3000}"
+# La base contra la que corre el servidor de $BASE. Solo la usa la comprobación
+# del REVOKE sobre movement, que es la única que habla SQL: el resto del guion
+# es caja negra de verdad. Hay que poder cambiarla porque la pila de compose
+# corre sobre tubodega_docker y `pnpm start:dev` sobre tubodega, y comprobar la
+# inmutabilidad del ledger en la base equivocada no comprueba nada.
+DB="${DB:-tubodega}"
 V="$BASE/v1"
 PASSWORD='correcthorse1!'
 

@@ -183,7 +183,7 @@ step "6 · el ledger es inmutable desde la base (I-3)"
 # primero —current_setting() no encuentra el parámetro— y la respuesta no dice
 # nada sobre el REVOKE, que es lo que se quiere comprobar.
 if docker compose version >/dev/null 2>&1; then
-  SQLOUT="$(docker compose exec -T db psql -U tubodega_app -d tubodega -v ON_ERROR_STOP=0 \
+  SQLOUT="$(docker compose exec -T db psql -U tubodega_app -d "$DB" -v ON_ERROR_STOP=0 \
     -c "SET app.current_org = '$ORG_ID'; UPDATE movement SET quantity = 1;" 2>&1)"
   if grep -q '42501\|permission denied' <<<"$SQLOUT"; then
     pass "UPDATE movement lo niega el permiso, no la aplicación"
