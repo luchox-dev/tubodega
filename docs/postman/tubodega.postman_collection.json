@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "tubodega — API v1",
-    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 2 — la WAVE 1 completa: registro, sesiones (login, refresh, logout), equipo (`/v1/users`), cambio de contraseña e idempotencia.\n\nFlujo sugerido: 1) Registrar organización → guarda orgId; 2) Login → guarda accessToken y refreshToken; 3) /me; 4) Equipo → crea a Juan y guarda juanId y juanVersion; 5) los casos de error.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. El pre-request también genera una `Idempotency-Key` nueva en cada POST, salvo donde la petición fija una a mano para demostrar el replay.\n\nTodo POST exige `Idempotency-Key` salvo /v1/organizations, /v1/auth/login, /v1/auth/refresh y /v1/auth/logout. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.",
+    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 3 — la WAVE 1 completa (registro, sesiones, equipo, contraseña, idempotencia) y el catálogo entero: campos propios, productos, importación, códigos, escaneo, lotes y series, y fotos. Las treinta operaciones que publica `GET /v1/openapi.json` están aquí.\n\nFlujo sugerido: ejecuta la colección en orden. 1) Organizaciones → guarda `orgId`; 2) Autenticación → `accessToken` y `refreshToken`; 3) Perfil; 4) Equipo → crea a Juan y guarda `juanId`; 5) Catálogo → campos propios, productos y sus ids; 6) Fotos → la zona de espera y las dos formas de adjuntar (D-14); 7) los casos de error.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. El pre-request también genera una `Idempotency-Key` nueva en cada POST, salvo donde la petición fija una a mano para demostrar el replay.\n\nTodo POST exige `Idempotency-Key` salvo /v1/organizations, /v1/auth/login, /v1/auth/refresh y /v1/auth/logout. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.\n\nLas dos peticiones multipart suben `docs/postman/pixel.png`: con newman, `--working-dir docs/postman`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -67,6 +67,42 @@
     },
     {
       "key": "lecId",
+      "value": ""
+    },
+    {
+      "key": "familiaId",
+      "value": ""
+    },
+    {
+      "key": "familiaVersion",
+      "value": "1"
+    },
+    {
+      "key": "campoVersion",
+      "value": "1"
+    },
+    {
+      "key": "torVersion",
+      "value": "1"
+    },
+    {
+      "key": "codigoId",
+      "value": ""
+    },
+    {
+      "key": "retiroId",
+      "value": ""
+    },
+    {
+      "key": "operarioToken",
+      "value": ""
+    },
+    {
+      "key": "storageKey",
+      "value": ""
+    },
+    {
+      "key": "mediaId",
       "value": ""
     }
   ],
@@ -256,7 +292,23 @@
                 }
               }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve un par de tokens', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.accessToken).to.be.a('string');",
+                  "  pm.expect(b.refreshToken).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Refresh — rota el par",
@@ -832,7 +884,60 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('201', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('campoId', pm.response.json().id);"
+                  "pm.collectionVariables.set('campoId', pm.response.json().id);",
+                  "pm.collectionVariables.set('campoVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Definir el campo propio «familia» (SELECT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields"
+              ]
+            },
+            "description": "Un SELECT sin `options` no es una definición: responde 422 invalid-custom-field.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity\": \"PRODUCT\",\n  \"key\": \"familia\",\n  \"label\": \"Familia\",\n  \"type\": \"SELECT\",\n  \"options\": [\n    \"ferretería\",\n    \"aseo\"\n  ],\n  \"position\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('familiaId', pm.response.json().id);"
                 ]
               }
             }
@@ -865,7 +970,78 @@
               ]
             },
             "description": "Ordenados por position."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('en el orden que les dio position', () => {",
+                  "  const keys = pm.response.json().data.map((d) => d.key);",
+                  "  pm.expect(keys).to.include.members(['proveedor', 'familia']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renombrar un campo propio (If-Match)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{familiaVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields/{{familiaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields",
+                "{{familiaId}}"
+              ]
+            },
+            "description": "La etiqueta cambia libremente; el `key` y el `type` no. Cambiar el tipo de un campo que ya tiene valores es 422 custom-field-type-locked (D-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Familia de producto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('la etiqueta es la nueva', () => {",
+                  "  pm.expect(pm.response.json().label).to.eql('Familia de producto');",
+                  "});",
+                  "pm.collectionVariables.set('familiaVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear el tornillo",
@@ -923,6 +1099,110 @@
           ]
         },
         {
+          "name": "Crear el taladro (por serie)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "description": "SERIAL: cada unidad se identifica por su número de serie.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"TAL-1\",\n  \"name\": \"Taladro Bosch\",\n  \"trackingMode\": \"SERIAL\",\n  \"uom\": \"UNIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('talId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear la leche (por lote)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "description": "LOT: las unidades se agrupan por remesa, con su vencimiento.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"LEC-1\",\n  \"name\": \"Leche entera\",\n  \"trackingMode\": \"LOT\",\n  \"uom\": \"L\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('lecId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "Importar la hoja de cálculo",
           "request": {
             "method": "POST",
@@ -951,10 +1231,10 @@
                 "import"
               ]
             },
-            "description": "Una fila con error no aborta el lote: sale en errors con su número de línea.",
+            "description": "Upsert por SKU: lo que existe se actualiza y lo que no, se crea. Una fila mala no aborta el lote — se reporta con su línea, 1-indexada, y el resto entra. Máximo 1000 filas.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"rows\": [\n    {\n      \"sku\": \"LEC-1\",\n      \"name\": \"Leche entera\",\n      \"trackingMode\": \"LOT\",\n      \"uom\": \"L\"\n    },\n    {\n      \"sku\": \"TAL-1\",\n      \"name\": \"Taladro\",\n      \"trackingMode\": \"SERIAL\",\n      \"uom\": \"UNIT\"\n    },\n    {\n      \"sku\": \"\",\n      \"name\": \"Fila mala\"\n    }\n  ]\n}",
+              "raw": "{\n  \"rows\": [\n    {\n      \"sku\": \"IMP-001\",\n      \"name\": \"Arandela M8\",\n      \"trackingMode\": \"QUANTITY\",\n      \"uom\": \"UNIT\",\n      \"customFields\": {\n        \"proveedor\": \"Ferretería Mundial\"\n      }\n    },\n    {\n      \"sku\": \"IMP-002\",\n      \"name\": \"Tuerca M8\",\n      \"trackingMode\": \"QUANTITY\",\n      \"uom\": \"UNIT\"\n    },\n    {\n      \"sku\": \"\",\n      \"name\": \"Fila sin SKU\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -968,12 +1248,13 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200 con 2 creadas y 1 error', () => {",
+                  "pm.test('200 con dos creadas y una fila mala', () => {",
                   "  pm.response.to.have.status(200);",
-                  "  const b = pm.response.json();",
-                  "  pm.expect(b.created).to.eql(2);",
-                  "  pm.expect(b.errors).to.have.lengthOf(1);",
-                  "  pm.expect(b.errors[0].line).to.eql(3);",
+                  "  const r = pm.response.json();",
+                  "  pm.expect(r.created).to.eql(2);",
+                  "  pm.expect(r.errors).to.have.lengthOf(1);",
+                  "  pm.expect(r.errors[0].line).to.eql(3);",
+                  "  pm.expect(r.errors[0].type).to.eql('validation-failed');",
                   "});"
                 ]
               }
@@ -1011,7 +1292,66 @@
               ]
             },
             "description": "Filtros: active, trackingMode, q. Cualquier otro parámetro es 400 invalid-filter."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const listado = pm.response.json().data;",
+                  "pm.test('envoltorio de página', () => {",
+                  "  pm.expect(listado).to.be.an('array');",
+                  "  pm.expect(pm.response.json().page).to.have.property('hasMore');",
+                  "});",
+                  "pm.test('la importación entró', () => {",
+                  "  pm.expect(listado.map((p) => p.sku)).to.include.members(['IMP-001', 'IMP-002']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver un producto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}"
+              ]
+            },
+            "description": "Trae también `media[]`: las fotos van con el producto, no en otro recurso."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('es el tornillo, y sabe de sus fotos', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.sku).to.eql('TOR-M8');",
+                  "  pm.expect(b.media).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Escanear el código de barras",
@@ -1036,7 +1376,23 @@
               ]
             },
             "description": "Busca en los códigos, luego en las series y por último en el SKU."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('resuelve al tornillo, sin lote', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.product.sku).to.eql('TOR-M8');",
+                  "  pm.expect(b.batch).to.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Escanear el SKU",
@@ -1061,7 +1417,21 @@
               ]
             },
             "description": "El operario puede teclear el SKU de la hoja y el sistema acierta igual."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el mismo producto que por código', () => {",
+                  "  pm.expect(pm.response.json().product.id).to.eql(pm.collectionVariables.get('torId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Crear una serie (con token de OPERATOR)",
@@ -1103,7 +1473,113 @@
                 }
               }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('la serie es la que se pidió', () => {",
+                  "  pm.expect(pm.response.json().serial).to.eql('BSH-001');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear un lote con vencimiento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{lecId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{lecId}}",
+                "batches"
+              ]
+            },
+            "description": "El `lotCode` es único por producto (C-6); el `serial`, por organización (C-5).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lotCode\": \"L-2026-09\",\n  \"expiresAt\": \"2026-10-01T00:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar los lotes de un producto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{lecId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{lecId}}",
+                "batches"
+              ]
+            },
+            "description": "Array plano. Un producto QUANTITY no tiene lotes en absoluto (C-4)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('está el lote que se creó', () => {",
+                  "  pm.expect(pm.response.json().map((b) => b.lotCode)).to.include('L-2026-09');",
+                  "});"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Modificar el tornillo",
@@ -1144,7 +1620,577 @@
                 }
               }
             }
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el nombre es el nuevo', () => {",
+                  "  pm.expect(pm.response.json().name).to.eql('Tornillo M8 inoxidable');",
+                  "});",
+                  "pm.collectionVariables.set('torVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir un código al taladro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{talId}}/codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{talId}}",
+                "codes"
+              ]
+            },
+            "description": "`kind`: EAN, UPC, INTERNAL_QR, SUPPLIER_REF u OTHER. El valor es único en toda la organización, no por producto (C-2).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"QR-TAL-1\",\n  \"kind\": \"INTERNAL_QR\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('codigoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar los códigos de un producto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{talId}}/codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{talId}}",
+                "codes"
+              ]
+            },
+            "description": "Array plano, sin envoltorio de página: son pocos por producto."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('está el que se acaba de añadir', () => {",
+                  "  pm.expect(pm.response.json().map((c) => c.value)).to.include('QR-TAL-1');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Quitar un código",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{talId}}/codes/{{codigoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{talId}}",
+                "codes",
+                "{{codigoId}}"
+              ]
+            },
+            "description": "Quitarlo dos veces es 404 code-not-found, no un 204 en silencio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear un producto que sobra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"RETIRO-1\",\n  \"name\": \"Para retirar\",\n  \"trackingMode\": \"QUANTITY\",\n  \"uom\": \"UNIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('retiroId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retirarlo del catálogo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{retiroId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{retiroId}}"
+              ]
+            },
+            "description": "Con existencias respondería 422 product-has-stock, y el detalle diría en qué nodos (C-9)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Y sigue ahí, inactivo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{retiroId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{retiroId}}"
+              ]
+            },
+            "description": "Se desactiva y no se borra: el histórico lo sigue nombrando."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('active es false', () => pm.expect(pm.response.json().active).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Fotos",
+      "description": "`POST /v1/products/{id}/media` acepta dos cosas distintas y pide permisos distintos por cada una (D-14). Con `{ storageKeys }` reclama lo que ya está en la zona de espera y le basta `RECORD_MOVEMENT`: quien anda con el móvil en el pasillo sube la foto y la engancha. Con `multipart/form-data` mete un archivo nuevo en el catálogo, y eso es `MANAGE_CATALOG`.\n\nLas dos peticiones multipart suben `docs/postman/pixel.png`. En Postman hay que volver a elegir el archivo tras importar; con newman basta `--working-dir docs/postman`.",
+      "item": [
+        {
+          "name": "Crear a Pedro (OPERATOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "users"
+              ]
+            },
+            "description": "Un operario vivo para demostrar D-14: el Juan del recorrido de equipo acaba desactivado.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pedro-{{slug}}@esquina.co\",\n  \"name\": \"Pedro\",\n  \"password\": \"{{password}}\",\n  \"roles\": [\n    \"OPERATOR\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Iniciar sesión como Pedro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Exento de Idempotency-Key, como todo lo que corre antes de haber una sesión.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"pedro-{{slug}}@esquina.co\",\n  \"password\": \"{{password}}\",\n  \"slug\": \"{{slug}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('operarioToken', pm.response.json().accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pedro sube una foto a la zona de espera",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "uploads"
+              ]
+            },
+            "description": "Solo image/jpeg, image/png y image/webp, hasta 10 MB. Devuelve una `storageKey` que caduca a las 24 h si nadie la reclama.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "pixel.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('devuelve clave y caducidad', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.storageKey).to.be.a('string');",
+                  "  pm.expect(b.expiresAt).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('storageKey', pm.response.json().storageKey);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Y la engancha al producto (RECORD_MOVEMENT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}",
+                "media"
+              ]
+            },
+            "description": "Reclamar la clave propia le basta a un OPERATOR. Reclamarla dos veces es 422 upload-not-found.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"storageKeys\": [\n    \"{{storageKey}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('devuelve la foto adjuntada', () => {",
+                  "  pm.expect(pm.response.json()).to.have.lengthOf(1);",
+                  "});",
+                  "pm.collectionVariables.set('mediaId', pm.response.json()[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Diego sube una directa (MANAGE_CATALOG)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}",
+                "media"
+              ]
+            },
+            "description": "La misma ruta en multipart exige MANAGE_CATALOG: con el token de Pedro sería 403 insufficient-role.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "pixel.png"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('se coloca detrás de la anterior', () => {",
+                  "  pm.expect(pm.response.json()[0].position).to.eql(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Quitar una foto",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}/media/{{mediaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}",
+                "media",
+                "{{mediaId}}"
+              ]
+            },
+            "description": "Quitarla dos veces es 404 not-found."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1998,6 +3044,402 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('400 invalid-filter', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El mismo código en otro producto → 409 code-taken",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{lecId}}/codes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{lecId}}",
+                "codes"
+              ]
+            },
+            "description": "El detalle nombra al producto que ya lo usa, para que quien escanea sepa a quién preguntar.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"value\": \"7501234567890\",\n  \"kind\": \"EAN\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 code-taken', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/code-taken');",
+                  "});",
+                  "pm.test('el detalle dice quién lo tiene', () => {",
+                  "  pm.expect(pm.response.json().detail).to.include('TOR-M8');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La misma serie dos veces → 409 serial-taken",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{talId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{talId}}",
+                "batches"
+              ]
+            },
+            "description": "Una serie identifica una unidad concreta: repetirla sería tener dos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serial\": \"BSH-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 serial-taken', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/serial-taken');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un lote sin lotCode → 422 batch-required",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{lecId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{lecId}}",
+                "batches"
+              ]
+            },
+            "description": "Un producto por lote no sabe qué remesa es sin su código.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 batch-required', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/batch-required');",
+                  "});",
+                  "pm.test('señala el campo que falta', () => {",
+                  "  pm.expect(pm.response.json().errors.map((e) => e.pointer)).to.include('/lotCode');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reclamar dos veces la misma clave → 422 upload-not-found",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}/media",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}",
+                "media"
+              ]
+            },
+            "description": "La zona de espera se reclama una vez. La clave ya no está.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"storageKeys\": [\n    \"{{storageKey}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 upload-not-found', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/upload-not-found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar el tipo de un campo con valores → 422 custom-field-type-locked",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{campoVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields/{{campoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields",
+                "{{campoId}}"
+              ]
+            },
+            "description": "Reinterpretaría datos que nadie acordó reinterpretar (D-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"NUMBER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 custom-field-type-locked', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/custom-field-type-locked');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un campo obligatorio retroactivo → 422 required-field-would-invalidate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields"
+              ]
+            },
+            "description": "Mil productos no se vuelven inválidos de un día para otro: un campo nace opcional y se vuelve obligatorio cuando todos lo tienen (C-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity\": \"PRODUCT\",\n  \"key\": \"ubicacion_fiscal\",\n  \"label\": \"Ubicación fiscal\",\n  \"type\": \"TEXT\",\n  \"required\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 required-field-would-invalidate', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/required-field-would-invalidate');",
+                  "});",
+                  "pm.test('el detalle cuenta cuántos quedarían inválidos', () => {",
+                  "  pm.expect(pm.response.json().detail).to.match(/\\d+ entidades/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una unidad de medida inventada → 422 validation-failed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "description": "Las nueve unidades de spec 11 §2, y ninguna más.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"RARO-1\",\n  \"name\": \"Raro\",\n  \"trackingMode\": \"QUANTITY\",\n  \"uom\": \"DOCENA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 validation-failed', () => {",
+                  "  pm.response.to.have.status(422);",
+                  "  pm.expect(pm.response.json().type).to.eql('https://tubodega.app/errors/validation-failed');",
+                  "});"
                 ]
               }
             }

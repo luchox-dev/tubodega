@@ -117,15 +117,27 @@ Si el correo existe en más de una organización, `login` responde
 ### Postman
 
 [`docs/postman/tubodega.postman_collection.json`](docs/postman/tubodega.postman_collection.json)
-trae todos los endpoints disponibles más una carpeta de casos de error, y
+trae **las treinta operaciones** del contrato, repartidas en carpetas por área, más
+dos de casos de error para ver `problem+json` de cerca; y
 [`tubodega.local.postman_environment.json`](docs/postman/tubodega.local.postman_environment.json)
-el entorno local. Importa ambos y ejecuta la colección en orden: el registro
-guarda `orgId`, el login guarda `accessToken` y `refreshToken`, y `slug`/`email`
-se generan únicos en cada corrida si están vacíos. Desde la terminal:
+el entorno local. Importa ambos y ejecuta la colección **en orden**: cada petición
+guarda lo que la siguiente necesita —`orgId`, `accessToken`, los ids de los
+productos, la `storageKey` de una foto— y `slug`/`email` se generan únicos en cada
+corrida, así que se puede repetir tantas veces como haga falta.
 
 ```bash
-pnpm dlx newman run docs/postman/tubodega.postman_collection.json --env-var baseUrl=http://localhost:3000
+pnpm dlx newman run docs/postman/tubodega.postman_collection.json \
+  --working-dir docs/postman --env-var baseUrl=http://localhost:3000
 ```
+
+El `--working-dir` es por las dos peticiones multipart, que suben
+[`pixel.png`](docs/postman/pixel.png) —un PNG de un píxel, que para el contrato lo
+que importa es el `content-type`—. En Postman hay que volver a elegir el archivo
+después de importar: las rutas locales no viajan dentro de un `.json`.
+
+Cada petición afirma su propio código de respuesta. Sin eso la colección sale
+verde aunque una petición devuelva un `404`, que es exactamente lo que le pasaba
+a la del lote mientras su id se quedaba sin fijar.
 
 La colección se actualiza en cada plan que añada endpoints.
 
