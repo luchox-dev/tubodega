@@ -9,10 +9,16 @@ export interface StockPositionRow {
   readonly quantity: string;
 }
 
+export interface NodePositionRow {
+  readonly productId: string;
+  readonly batchId?: string;
+  readonly quantity: string;
+}
+
 /**
  * Read-only for now: the upserts of spec 04 §3.5 arrive with the ledger in
- * wave 3. What exists is what C-9 needs — whether a product still has stock,
- * and where.
+ * wave 3. What exists is what C-9 and N-3 need — whether there is still stock,
+ * and what it is.
  */
 @Injectable()
 export class StockBalanceDao extends AbstractOrgDao<'stockBalance', string> {
@@ -41,5 +47,32 @@ export class StockBalanceDao extends AbstractOrgDao<'stockBalance', string> {
       .where('stockBalance.nodeKind', 'in', ['INTERNAL', 'CUSTODY'])
       .orderBy('node.path')
       .execute();
+  }
+
+  /**
+   * What sits on one node, for N-3. No join: the caller already holds the node
+   * whose deactivation it is blocking, so its readable path is in hand — unlike
+   * C-9, where the nodes are several and unknown.
+   *
+   * Index-backed by the partial (org_id, node_id) WHERE quantity <> 0, which is
+   * exactly the predicate below.
+   */
+  positionsOfNode(orgId: OrgId, nodeId: string, limit: number): Promise<NodePositionRow[]> {
+    return this.db
+      .selectFrom('stockBalance')
+      .select(['productId', 'batchId', 'quantity'])
+      .where('orgId', '=', orgId)
+      .where('nodeId', '=', nodeId)
+      .where('quantity', '<>', '0')
+      .orderBy('productId')
+      .limit(limit)
+      .execute()
+      .then((rows) =>
+        rows.map((r) => ({
+          productId: r.productId,
+          ...(r.batchId !== null ? { batchId: r.batchId } : {}),
+          quantity: r.quantity,
+        })),
+      );
   }
 }

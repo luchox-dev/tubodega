@@ -2294,6 +2294,475 @@
       ]
     },
     {
+      "name": "Ubicaciones",
+      "item": [
+        {
+          "name": "Las fuentes que la organización ya traía",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes?kind=SOURCE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "SOURCE"
+                }
+              ]
+            },
+            "description": "Los ocho nodos de frontera de [04 §6] los siembra el provisioner al dar de alta la organización: sin ellos la partida doble no tendría contra qué asentar. Nadie los creó por aquí."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('tres fuentes, sembradas al registrar', () => pm.expect(pm.response.json().data).to.have.lengthOf(3));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear la bodega",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "description": "Un nodo raíz: sin parentId, su path es su propio código.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTERNAL\",\n  \"code\": \"BOD-A\",\n  \"name\": \"Bodega A\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('bodegaId', pm.response.json().id);",
+                  "pm.test('el path de una raíz es su código', () => pm.expect(pm.response.json().path).to.eql('BOD-A'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear una zona dentro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "description": "Con parentId cuelga de una ubicación interna, y el path se concatena.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTERNAL\",\n  \"code\": \"Z1\",\n  \"name\": \"Zona 1\",\n  \"parentId\": \"{{bodegaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('zonaId', pm.response.json().id);",
+                  "pm.collectionVariables.set('zonaVersion', pm.response.json().version);",
+                  "pm.test('el path cuelga del padre', () => pm.expect(pm.response.json().path).to.eql('BOD-A/Z1'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear un bin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "description": "El tercer nivel del árbol.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTERNAL\",\n  \"code\": \"B2\",\n  \"name\": \"Bin 2\",\n  \"parentId\": \"{{zonaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('binId', pm.response.json().id);",
+                  "pm.collectionVariables.set('binVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un nodo por id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{binId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{binId}}"
+              ]
+            },
+            "description": "La versión que devuelve es la que se envía en If-Match."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el path es la cadena entera', () => pm.expect(pm.response.json().path).to.eql('BOD-A/Z1/B2'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El árbol, anidado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{bodegaId}}/tree",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{bodegaId}}",
+                "tree"
+              ]
+            },
+            "description": "Nodo y children, recursivo: el árbol es la estructura, y una lista plana obligaría a cada cliente a rederivarla."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('cuelga la zona', () => pm.expect(pm.response.json().children[0].node.code).to.eql('Z1'));",
+                  "pm.test('y de ella el bin', () => pm.expect(pm.response.json().children[0].children[0].node.code).to.eql('B2'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El subárbol, en plano",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes?under={{zonaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ],
+              "query": [
+                {
+                  "key": "under",
+                  "value": "{{zonaId}}"
+                }
+              ]
+            },
+            "description": "El filtro under toma el id de un nodo y devuelve sus descendientes estrictos, con cursor."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el bin está, la zona no se incluye a sí misma', () => pm.expect(pm.response.json().data.map(n => n.code)).to.eql(['B2']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renombrar un bin",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{binVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{binId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{binId}}"
+              ]
+            },
+            "description": "Exige If-Match. Solo cambia name y customFields: el tipo está desnormalizado en el histórico y el código es el segmento del path.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bin 2 · refrigerado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('binVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reorganizar: mover el bin a la bodega",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{binVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{binId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{binId}}",
+                "move"
+              ]
+            },
+            "description": "Recalcula el path del nodo y el de todo su subárbol en la misma transacción (N-1, N-2). No crea nada, así que responde 200.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{bodegaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el path se recalculó', () => pm.expect(pm.response.json().path).to.eql('BOD-A/B2'));",
+                  "pm.collectionVariables.set('binVersion', pm.response.json().version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retirar el bin",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{binId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{binId}}"
+              ]
+            },
+            "description": "Lo desactiva, no lo borra: el histórico de movimientos lo sigue nombrando."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "El árbol de la bodega: crear, leer, reorganizar y retirar. Los ocho nodos de frontera ya están antes de la primera petición."
+    },
+    {
       "name": "Contrato",
       "item": [
         {
@@ -3548,6 +4017,310 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Casos de error de las ubicaciones",
+      "item": [
+        {
+          "name": "Repetir un código de nodo → 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "description": "El código es único por organización, no por padre: el escáner no sabe bajo qué bodega está.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTERNAL\",\n  \"code\": \"BOD-A\",\n  \"name\": \"Otra bodega\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('node-code-taken', () => pm.expect(pm.response.json().type).to.include('node-code-taken'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Colgar un tenedor de una zona → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "description": "I-10: la jerarquía es un árbol de nodos INTERNAL. Un CUSTODY existe, pero en la raíz.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"CUSTODY\",\n  \"code\": \"juan\",\n  \"name\": \"Juan\",\n  \"parentId\": \"{{zonaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('parent-not-internal', () => pm.expect(pm.response.json().type).to.include('parent-not-internal'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar el árbol sobre sí mismo → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"1\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{bodegaId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{bodegaId}}",
+                "move"
+              ]
+            },
+            "description": "El destino no puede estar dentro del nodo que se mueve. Se comprueba con el path, sin recursión.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parentId\": \"{{zonaId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('node-cycle', () => pm.expect(pm.response.json().type).to.include('node-cycle'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar el tipo de un nodo → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"{{zonaVersion}}\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{zonaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{zonaId}}"
+              ]
+            },
+            "description": "El PATCH declara kind, code y parentId como prohibidos para rechazarlos en vez de ignorarlos en silencio: un 200 que no cambió nada sería peor.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"CUSTODY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('validation-failed, y señala /kind', () => {",
+                  "  pm.expect(pm.response.json().type).to.include('validation-failed');",
+                  "  pm.expect(pm.response.json().errors.map(e => e.pointer)).to.include('/kind');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retirar una bodega con zonas activas → 422",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes/{{bodegaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes",
+                "{{bodegaId}}"
+              ]
+            },
+            "description": "La bodega todavía cuelga la zona 1. Ni cascada —un DELETE de un recurso no debe escribir N filas que el cliente no nombró— ni silencio, que dejaría una zona activa bajo una bodega retirada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('node-has-children', () => pm.expect(pm.response.json().type).to.include('node-has-children'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un subárbol de un nodo que no existe → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes?under=018f0000-0000-7000-8000-00000000dead",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ],
+              "query": [
+                {
+                  "key": "under",
+                  "value": "018f0000-0000-7000-8000-00000000dead"
+                }
+              ]
+            },
+            "description": "El filtro under está declarado, así que no es un nombre inválido; su valor no nombra a nadie. Un 404 diría que /v1/nodes se esfumó, y una página vacía escondería el error de tecleo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('invalid-filter, y señala /under', () => {",
+                  "  pm.expect(pm.response.json().type).to.include('invalid-filter');",
+                  "  pm.expect(pm.response.json().errors.map(e => e.pointer)).to.include('/under');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Lo que el árbol no deja hacer, y con qué problem+json lo dice."
     }
   ]
 }

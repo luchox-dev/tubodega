@@ -27,6 +27,8 @@ import { KyselyProductRepository } from './repositories/catalog/product.reposito
 import { KyselyProductCodeRepository } from './repositories/catalog/product-code.repository.js';
 import { KyselyBatchRepository } from './repositories/catalog/batch.repository.js';
 import { KyselyCustomFieldRepository } from './repositories/catalog/custom-field.repository.js';
+import { KyselyNodeRepository } from './repositories/inventory/node.repository.js';
+import { KyselyStockBalanceRepository } from './repositories/inventory/stock-balance.repository.js';
 import {
   KyselyMediaUploadRepository,
   KyselyProductMediaRepository,
@@ -46,6 +48,8 @@ const ADAPTERS = [
   KyselyProductCodeRepository,
   KyselyBatchRepository,
   KyselyCustomFieldRepository,
+  KyselyNodeRepository,
+  KyselyStockBalanceRepository,
   KyselyMediaUploadRepository,
   KyselyProductMediaRepository,
 ];

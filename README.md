@@ -8,13 +8,14 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 3 — el catálogo completo, con su deuda saldada
+## Estado: Plan 4 — el catálogo y las ubicaciones
 
-Las treinta operaciones de abajo están vivas y probadas de tres formas: por dentro
-(`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de verdad
-(`pnpm blackbox`). Lo que vino después del plan 3 —la deuda del ciclo rojo-verde
-saldada por mutación, la caja negra completa y la colección de Postman al día— está
-en el índice de planes del [plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
+Las treinta y siete operaciones de abajo están vivas y probadas de tres formas: por
+dentro (`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de
+verdad (`pnpm blackbox`). El plan 4 cerró la WAVE 2 añadiendo las siete de
+ubicaciones, y con ellas el sitio donde la mercancía puede estar: el ledger de la
+WAVE 3 ya tiene dos extremos contra los que asentar. El índice completo está en el
+[plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
 
 | Endpoint | Acción | Qué hace |
 |---|---|---|
@@ -47,6 +48,13 @@ en el índice de planes del [plan maestro](docs/superpowers/plans/2026-09-06-00-
 | `GET /v1/custom-fields` | `READ` | Los campos propios; filtro `entity` |
 | `POST /v1/custom-fields` | `MANAGE_CATALOG` | Define uno; `required` solo si nadie queda inválido (C-10) |
 | `PATCH /v1/custom-fields/{id}` | `MANAGE_CATALOG` | Modifica; exige `If-Match` |
+| `GET /v1/nodes` | `READ` | El árbol en plano; filtros `kind`, `active` y `under` |
+| `POST /v1/nodes` | `MANAGE_NODES` | Dibuja un nodo; solo los `INTERNAL` anidan (I-10) |
+| `GET /v1/nodes/{id}` | `READ` | Uno por id, con su `path` y su versión |
+| `PATCH /v1/nodes/{id}` | `MANAGE_NODES` | Renombra; exige `If-Match`. No admite `kind`, `code` ni `parentId` |
+| `POST /v1/nodes/{id}/move` | `MANAGE_NODES` | Reasigna el padre y recalcula el `path` del subárbol (N-1, N-2) |
+| `DELETE /v1/nodes/{id}` | `MANAGE_NODES` | Lo desactiva; no si tiene saldo o hijos activos |
+| `GET /v1/nodes/{id}/tree` | `READ` | El subárbol anidado, inactivos incluidos |
 | `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
@@ -62,8 +70,7 @@ clave con el mismo cuerpo devuelve la respuesta guardada con
 
 Las veinte tablas del esquema ya existen, con sus `CHECK`, RLS en las
 diecinueve que llevan `org_id`, y `UPDATE`/`DELETE` revocados sobre `movement`
-desde el primer día. Las ubicaciones llegan en el plan 4 y el ledger en la
-WAVE 3.
+desde el primer día. El ledger llega en la WAVE 3.
 
 ## Arranque local
 
@@ -164,6 +171,7 @@ libs/common/             tipos del núcleo: Branded, Result, DomainError, Page, 
 libs/persistence/        schema.prisma, migraciones, tipos generados, Kysely, DAOs, repositorios (@app/persistence)
 libs/tenancy/            organización, usuarios, roles, autenticación (@app/tenancy)
 libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app/catalog)
+libs/inventory/          el grafo de nodos: dónde puede haber mercancía (@app/inventory)
 test/support/            harness de integración (withRollback) y cliente e2e
 scripts/blackbox.sh      caja negra: corre las suites de scripts/blackbox/ y cruza la cobertura
 docs/specs/              los specs; docs/superpowers/plans/ los planes; docs/postman/ la colección
@@ -239,13 +247,14 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 ### Caja negra
 
 [`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
-HTTP contra un servidor de verdad — 248 comprobaciones en tres suites, 249
+HTTP contra un servidor de verdad — 317 comprobaciones en cuatro suites, 318
 si exportas `JWT_SECRET`:
 
 | Suite | Qué recorre |
 |---|---|
 | [`10-tenencia.sh`](scripts/blackbox/10-tenencia.sh) | Marta abre el negocio: registro, sesiones, refresco y cierre, el equipo y sus roles, revocar un acceso, y que una empresa no vea a la de al lado |
 | [`20-catalogo.sh`](scripts/blackbox/20-catalogo.sh) | Diego migra la hoja de cálculo y Juan escanea en el pasillo: campos propios, importación, fotos, códigos, series y lotes |
+| [`25-ubicaciones.sh`](scripts/blackbox/25-ubicaciones.sh) | Diego dibuja el árbol de la bodega, lo reorganiza y retira un bin: la frontera que ya estaba, el subárbol que se mueve entero, los ciclos y las reglas del árbol |
 | [`30-transversal.sh`](scripts/blackbox/30-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger |
 
 ```bash
@@ -263,10 +272,10 @@ alguna queda sin cubrir, la nombra y sale distinto de cero: «completo» deja de
 ser una palabra y pasa a ser algo que se comprueba solo.
 
 ```
-  operaciones del contrato: 30
-  ejercitadas:              30
-  con camino feliz:         30
-  con camino de error:      30  (1 sin error posible)
+  operaciones del contrato: 37
+  ejercitadas:              37
+  con camino feliz:         37
+  con camino de error:      37  (1 sin error posible)
 ```
 
 **No sustituye a `pnpm test:e2e`, lo complementa.** La suite corre en proceso con
@@ -325,7 +334,6 @@ que el contrato sabe crear; lo que aún no existe:
 
 | Todavía no siembra | Llega en |
 |---|---|
-| Ubicaciones y nodos de frontera | plan 4 |
 | Movimientos y existencias | plan 6 |
 | Plantillas e instancias de proceso | plan 8 |
 | Reglas de alerta | plan 9 |

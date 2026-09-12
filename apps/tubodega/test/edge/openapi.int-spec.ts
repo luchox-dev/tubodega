@@ -23,7 +23,7 @@ describe('OpenAPI document', () => {
   });
   afterAll(() => started.stop());
 
-  it('publishes every endpoint of spec 10 §7 and 11 §7', () => {
+  it('publishes every endpoint of spec 10 §7, 11 §7 and 12 §7', () => {
     const paths = Object.keys(document.paths);
     expect(paths).toEqual(
       expect.arrayContaining([
@@ -47,6 +47,10 @@ describe('OpenAPI document', () => {
         '/v1/custom-fields',
         '/v1/custom-fields/{id}',
         '/v1/uploads',
+        '/v1/nodes',
+        '/v1/nodes/{id}',
+        '/v1/nodes/{id}/move',
+        '/v1/nodes/{id}/tree',
       ]),
     );
   });

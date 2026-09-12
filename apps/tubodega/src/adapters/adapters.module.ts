@@ -17,13 +17,17 @@ import {
   KyselyOutboxEventPublisher,
   KyselyProductCodeRepository,
   KyselyProductMediaRepository,
+  KyselyNodeRepository,
   KyselyProductRepository,
   KyselySessionRepository,
+  KyselyStockBalanceRepository,
   KyselyUserRepository,
   PersistenceModule,
 } from '@app/persistence';
 import { ORGANIZATION_REPOSITORY, ORG_PROVISIONER, SESSION_REPOSITORY, USER_REPOSITORY } from '@app/tenancy';
-import { CompositeOrgProvisioner, ORG_SEEDERS } from './tenancy/org-provisioner.adapter.js';
+import { InventoryModule, NODE_REPOSITORY, STOCK_BALANCE_REPOSITORY } from '@app/inventory';
+import { BoundaryNodesSeeder } from './inventory/boundary-nodes.seeder.js';
+import { CompositeOrgProvisioner, ORG_SEEDERS, type OrgSeeder } from './tenancy/org-provisioner.adapter.js';
 import { MovementCounterAdapter } from './catalog/movement-counter.adapter.js';
 import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
 
@@ -33,7 +37,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
  */
 @Global()
 @Module({
-  imports: [PersistenceModule],
+  imports: [PersistenceModule, InventoryModule],
   providers: [
     { provide: CLOCK, useClass: SystemClock },
     { provide: ID_GENERATOR, useClass: Uuidv7Generator },
@@ -41,12 +45,23 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     { provide: ORGANIZATION_REPOSITORY, useExisting: KyselyOrganizationRepository },
     { provide: USER_REPOSITORY, useExisting: KyselyUserRepository },
     { provide: SESSION_REPOSITORY, useExisting: KyselySessionRepository },
-    { provide: ORG_SEEDERS, useValue: [] },
+    BoundaryNodesSeeder,
+    {
+      provide: ORG_SEEDERS,
+      // useFactory and not useValue: useValue would hand the composite the
+      // classes instead of the instances, and seeder.seed() would blow up at
+      // runtime. Plans 8 and 9 extend this with one entry in `inject` and one
+      // parameter here (decision D-2).
+      inject: [BoundaryNodesSeeder],
+      useFactory: (nodes: BoundaryNodesSeeder): readonly OrgSeeder[] => [nodes],
+    },
     { provide: ORG_PROVISIONER, useClass: CompositeOrgProvisioner },
     { provide: PRODUCT_REPOSITORY, useExisting: KyselyProductRepository },
     { provide: PRODUCT_CODE_REPOSITORY, useExisting: KyselyProductCodeRepository },
     { provide: BATCH_REPOSITORY, useExisting: KyselyBatchRepository },
     { provide: CUSTOM_FIELD_REPOSITORY, useExisting: KyselyCustomFieldRepository },
+    { provide: NODE_REPOSITORY, useExisting: KyselyNodeRepository },
+    { provide: STOCK_BALANCE_REPOSITORY, useExisting: KyselyStockBalanceRepository },
     MovementCounterAdapter,
     StockCheckerAdapter,
     { provide: MOVEMENT_COUNTER, useExisting: MovementCounterAdapter },
@@ -74,6 +89,8 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     PRODUCT_CODE_REPOSITORY,
     BATCH_REPOSITORY,
     CUSTOM_FIELD_REPOSITORY,
+    NODE_REPOSITORY,
+    STOCK_BALANCE_REPOSITORY,
     MOVEMENT_COUNTER,
     STOCK_CHECKER,
     MEDIA_UPLOAD_REPOSITORY,

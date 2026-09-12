@@ -16,6 +16,7 @@ export default defineConfig({
     alias: {
       '@app/common': lib('common'),
       '@app/catalog': lib('catalog'),
+      '@app/inventory': lib('inventory'),
       '@app/persistence': lib('persistence'),
       '@app/tenancy': lib('tenancy'),
     },

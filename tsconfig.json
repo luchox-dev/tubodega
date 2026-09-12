@@ -28,6 +28,9 @@
       "@app/catalog": [
         "./libs/catalog/src/index.ts"
       ],
+      "@app/inventory": [
+        "./libs/inventory/src/index.ts"
+      ],
       "@app/persistence": [
         "./libs/persistence/src/index.ts"
       ],
@@ -46,6 +49,9 @@
     },
     {
       "path": "./libs/catalog/tsconfig.lib.json"
+    },
+    {
+      "path": "./libs/inventory/tsconfig.lib.json"
     },
     {
       "path": "./libs/persistence/tsconfig.lib.json"
