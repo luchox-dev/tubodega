@@ -97,10 +97,16 @@ describe('Row Level Security', () => {
   });
 
   it('nor can it reach into A by primary key on a catalogue table', async () => {
-    const rows = await h.uow.runAs({ pool: 'tenant', orgId: b.orgId }, () =>
-      h.ctx.current().selectFrom('product').select('id').where('id', '=', a.productId).execute(),
-    );
-    expect(rows).toEqual([]);
+    const byId = (productId: string) =>
+      h.uow.runAs({ pool: 'tenant', orgId: b.orgId }, () =>
+        h.ctx.current().selectFrom('product').select('id').where('id', '=', productId).execute(),
+      );
+
+    expect(await byId(a.productId)).toEqual([]);
+    // Y su propio producto sí, por la misma consulta: sin este segundo control,
+    // el caso pasaría igual con la política borrada —cero filas significaría
+    // ceguera y no aislamiento, y son cosas distintas.
+    expect(await byId(b.productId)).toEqual([{ id: b.productId }]);
   });
 
   it('the tenant pool without app.current_org cannot read at all', async () => {
