@@ -799,9 +799,11 @@ Narrativa: Marta revisa la bandeja cada mañana; el sistema le dice qué se venc
 
 ### F6.6 — Contenedor y despliegue
 
-**Entrega:** entrypoint que ejecuta `prisma migrate deploy` con `DATABASE_URL_MIGRATOR` y aborta si falla; `compose.yaml` con `db` + `app` y las tres URLs; `README` actualizado con comandos, roles y flujo de migración.
+**Entrega:** `compose.yaml` con `db` + `migrate` + `tubodega`, el entorno en un `.env.docker` versionado referenciado con `env_file:`, y `README` actualizado con comandos, roles y flujo de migración.
 
-**Hecho cuando:** `docker compose up --build` levanta base y app; `curl /v1/openapi.json` responde; un `POST /v1/organizations` real funciona contra el contenedor.
+**Hecho cuando:** `docker compose up --build` sobre volumen limpio levanta la base, la migra y arranca la aplicación; `curl /v1/openapi.json` responde; un `POST /v1/organizations` real funciona contra el contenedor.
+
+**Revisado, y entregada en el plan 3e:** las migraciones no corren en un entrypoint dentro de la imagen de producción, como decía la entrega original, sino en un **servicio `migrate` de un disparo** —patrón init container— que `tubodega` espera con `condition: service_completed_successfully`. El entrypoint habría obligado a meter el CLI de Prisma, `prisma.config.ts` y el directorio de migraciones dentro de la imagen que corre en producción, que es justo lo que [04 §5](docs/specs/04-persistencia.md) quiere evitar; el init container aplica las mismas migraciones, con el mismo advisory lock y el mismo rol, y deja la etapa `runtime` sin una sola línea de Prisma. La pila corre sobre su propia base `tubodega_docker`: contenedor y `pnpm start:dev` compartían `tubodega` pero guardan las fotos en sitios distintos. Lo que queda para el plan 10 es el despliegue de verdad, no el compose local.
 
 ---
 
@@ -877,13 +879,14 @@ Cada plan es un documento propio (`docs/superpowers/plans/2026-MM-DD-NN-<nombre>
 | **3b** | **hecho** *(derivado)* | Saldar la deuda del ciclo rojo-verde | — | 25 mutaciones probadas, las 25 rojas; la prueba que le faltaba al filtro de nodos custodiables; el spec 04 §5.1 corregido; el guion de caja negra recuperado. Merge `8231a1d`, bitácora en [03b](2026-09-12-03b-bitacora-mutaciones.md). |
 | **3c** | **hecho** *(derivado)* | La caja negra cubre el contrato entero | — | `pnpm blackbox`: tres suites, 249 comprobaciones, y un cruce que exige de cada operación un camino feliz y uno de error ([06 §6](docs/specs/06-pruebas-y-calidad.md)). Job hermano en CI. Merge `22789d8`. |
 | **3d** | **hecho** *(derivado)* | La colección de Postman al día | — | Las 30 operaciones en Postman, 70 peticiones afirmando su código. Merge `e1c0651`. |
+| **3e** | **hecho** *(derivado)* | `docker compose up --build`, a la primera | F6.6 | La pila entera en contenedores sobre volumen limpio: `db` + `migrate` (init container con `prisma migrate deploy`) + `tubodega`, entorno en `.env.docker` versionado y base propia `tubodega_docker`. `POST /v1/organizations` contra el contenedor, y las tres suites de la caja negra en verde con `BASE=http://localhost:3001 DB=tubodega_docker`. |
 | 4 | pendiente | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Árbol de bodega (`/v1/nodes`, `tree`, `move`), sembrador de nodos de frontera, suite e2e «Cargar el catálogo y las ubicaciones» completa. |
 | 5 | pendiente | El ledger: dominio, casos de uso y persistencia | F3.1-F3.4 | Sin endpoints nuevos; `pnpm test` y las pruebas de integración del ledger (savepoint, interbloqueo, `REVOKE`). |
 | 6 | pendiente | Mover mercancía por HTTP y cierre de la WAVE 3 | F3.5-F3.6 + e2e W3 | `/v1/movements`, `/batch`, `/reverse`, `/v1/stock`, `/v1/stock/custodies`; criterios 3-4-6-7-8-9; pruebas de propiedades. |
 | 7 | pendiente | Motor de procesos: dominio y manejadores | F4.1-F4.2 | Sin endpoints nuevos; `LinearRunner` recorriendo las seis plantillas de fábrica en pruebas. |
 | 8 | pendiente | Operar con procesos y cierre de la WAVE 4 | F4.3-F4.4 + e2e W4 | `/v1/process-templates`, `/v1/process-instances`, recepción guiada paso a paso con lote nuevo y foto; cancelación limpia. |
 | 9 | pendiente | Alertas y cierre de la WAVE 5 | F5.1-F5.3 + e2e W5 | `/v1/alerts`, `/summary`, `/evaluate`, `/v1/alert-rules`; criterio 5 completo. |
-| 10 | pendiente | Cierre del MVP | F6.1-F6.6 | Suite `mvp-acceptance` con los 10 criterios, purgas, rate limit, cobertura, benchmark nocturno, contenedor con `migrate deploy`. |
+| 10 | pendiente | Cierre del MVP | F6.1-F6.5 (F6.6 entregada en el plan 3e) | Suite `mvp-acceptance` con los 10 criterios, purgas, rate limit, cobertura, benchmark nocturno. |
 
 Reglas de la división:
 

@@ -597,9 +597,13 @@ Reglas:
   añade, luego se despliega, luego se retira. Nunca en un solo paso
 - Una migración aplicada **no se edita**: Prisma guarda su checksum y rechaza el
   historial si cambia. Lo que se olvidó va en la siguiente
-- Se aplican **antes de arrancar**, no al arrancar: `prisma migrate deploy` es el
-  primer paso del entrypoint del contenedor, con `DATABASE_URL_MIGRATOR`, y la
-  aplicación no se lanza si falla. Prisma no ofrece API programática de
+- Se aplican **antes de arrancar**, no al arrancar: `prisma migrate deploy` corre
+  en un servicio propio de un disparo —`migrate` en `compose.yaml`, patrón init
+  container— con `DATABASE_URL_MIGRATOR`, y la aplicación no arranca hasta que
+  ese servicio sale con 0 (`depends_on: condition:
+  service_completed_successfully`). Va ahí y no en un entrypoint para que la
+  imagen que corre en producción no cargue con el CLI de Prisma, el schema ni
+  las migraciones. Prisma no ofrece API programática de
   migración, y tampoco hace falta: `migrate deploy` toma un advisory lock, así
   que dos instancias desplegadas a la vez no compiten
 - **Schema y migraciones deben coincidir**, y CI lo comprueba: `prisma migrate
