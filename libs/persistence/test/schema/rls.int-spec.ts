@@ -1,109 +1,113 @@
 import { sql } from 'kysely';
 import { v7 } from 'uuid';
-import type { OrgId } from '@app/common';
 import { createPersistenceHarness } from '../../../../test/support/db.js';
+import { seedEveryTable, seedWorld, type World } from '../support/raw-rows.js';
 
 /**
- * I-6 with the repository filter deliberately bypassed: raw selects through
- * the tenant pool must return only the current organization's rows, and an
- * insert for another organization must be rejected (spec 04 §4, 06 §5).
- * Rows are committed for real (two organizations) and removed afterwards
- * with the system pool.
+ * I-6 with the repository filter deliberately bypassed: raw selects through the
+ * tenant pool must return only the current organization's rows, and an insert
+ * for another organization must be rejected (spec 04 §4, 06 §5). Every one of
+ * the 19 tables that carries org_id is covered — `organization` is the only
+ * business table without one, and without RLS, on purpose (spec 10 §6).
+ *
+ * This is the test that proves the second layer exists. The first layer is the
+ * repository adding `org_id = :currentOrg`, and a repository is a promise; a
+ * policy is a guarantee.
  */
-describe('Row Level Security (tenancy tables)', () => {
+describe('Row Level Security', () => {
   let h: Awaited<ReturnType<typeof createPersistenceHarness>>;
-  const orgA = v7() as OrgId;
-  const orgB = v7() as OrgId;
-  const userA = v7();
-  const userB = v7();
+  let a: World;
+  let b: World;
 
   beforeAll(async () => {
     h = await createPersistenceHarness();
-    await h.uow.runAs({ pool: 'system' }, async () => {
-      const db = h.ctx.current();
-      await db
-        .insertInto('organization')
-        .values([
-          { id: orgA, name: 'A', slug: `rls-a-${orgA.slice(-8)}` },
-          { id: orgB, name: 'B', slug: `rls-b-${orgB.slice(-8)}` },
-        ])
-        .execute();
-      await db
-        .insertInto('appUser')
-        .values([
-          { id: userA, orgId: orgA, email: 'a@rls.test', passwordHash: 'h', name: 'A' },
-          { id: userB, orgId: orgB, email: 'b@rls.test', passwordHash: 'h', name: 'B' },
-        ])
-        .execute();
-      await db
-        .insertInto('userRole')
-        .values([
-          { userId: userA, orgId: orgA, role: 'OWNER' },
-          { userId: userB, orgId: orgB, role: 'OWNER' },
-        ])
-        .execute();
-      await db
-        .insertInto('refreshToken')
-        .values([
-          { id: v7(), orgId: orgA, userId: userA, tokenHash: `ha-${orgA.slice(-8)}`, expiresAt: new Date() },
-          { id: v7(), orgId: orgB, userId: userB, tokenHash: `hb-${orgB.slice(-8)}`, expiresAt: new Date() },
-        ])
-        .execute();
-      await db
-        .insertInto('outboxEvent')
-        .values([
-          { id: v7(), orgId: orgA, type: 'probe', payload: '{}', traceId: v7() },
-          { id: v7(), orgId: orgB, type: 'probe', payload: '{}', traceId: v7() },
-        ])
-        .execute();
-    });
-  });
+    a = await seedWorld(h.uow, h.ctx, 'rls-a');
+    b = await seedWorld(h.uow, h.ctx, 'rls-b');
+    await seedEveryTable(h.uow, h.ctx, a);
+    await seedEveryTable(h.uow, h.ctx, b);
+  }, 60_000);
+  afterAll(() => h.close());
 
-  afterAll(async () => {
-    await h.uow.runAs({ pool: 'system' }, async () => {
-      const db = h.ctx.current();
-      for (const t of ['outboxEvent', 'refreshToken', 'userRole', 'appUser'] as const) {
-        await db.deleteFrom(t).where('orgId', 'in', [orgA, orgB]).execute();
-      }
-      await db.deleteFrom('organization').where('id', 'in', [orgA, orgB]).execute();
-    });
-    await h.close();
-  });
+  /** The 19 tables with org_id, as of the full_schema migration. */
+  const TABLES = [
+    'appUser',
+    'userRole',
+    'refreshToken',
+    'outboxEvent',
+    'idempotencyKey',
+    'product',
+    'productCode',
+    'productMedia',
+    'mediaUpload',
+    'batch',
+    'customFieldDefinition',
+    'node',
+    'movement',
+    'stockBalance',
+    'processTemplate',
+    'processInstance',
+    'stepCompletion',
+    'alert',
+    'alertRule',
+  ] as const;
 
-  const TABLES = ['appUser', 'userRole', 'refreshToken', 'outboxEvent'] as const;
+  it('covers every table that has an org_id column', async () => {
+    const { rows } = await sql<{ tablename: string }>`
+      select c.relname as tablename
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      join pg_attribute att on att.attrelid = c.oid and att.attname = 'org_id' and att.attnum > 0
+      where n.nspname = 'public' and c.relkind = 'r'
+    `.execute(h.factory.get('system'));
+
+    const camel = (t: string) => t.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+    expect(new Set(rows.map((r) => camel(r.tablename)))).toEqual(new Set(TABLES));
+  });
 
   it.each(TABLES)('%s: a tenant transaction for B sees only B, even without a WHERE', async (table) => {
-    const rows = await h.uow.runAs({ pool: 'tenant', orgId: orgB }, () =>
+    const rows = await h.uow.runAs({ pool: 'tenant', orgId: b.orgId }, () =>
       h.ctx.current().selectFrom(table).select('orgId').execute(),
     );
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.orgId === orgB)).toBe(true);
+    expect(rows.every((r) => r.orgId === b.orgId)).toBe(true);
   });
 
   it.each(TABLES)('%s: the system pool sees both organizations', async (table) => {
     const rows = await h.uow.runAs({ pool: 'system' }, () =>
-      h.ctx.current().selectFrom(table).select('orgId').where('orgId', 'in', [orgA, orgB]).execute(),
+      h.ctx
+        .current()
+        .selectFrom(table)
+        .select('orgId')
+        .where('orgId', 'in', [a.orgId, b.orgId])
+        .execute(),
     );
-    expect(new Set(rows.map((r) => r.orgId))).toEqual(new Set([orgA, orgB]));
+    expect(new Set(rows.map((r) => r.orgId))).toEqual(new Set([a.orgId, b.orgId]));
   });
 
   it('a tenant transaction for B cannot insert a row for A (WITH CHECK)', async () => {
     await expect(
-      h.uow.runAs({ pool: 'tenant', orgId: orgB }, () =>
+      h.uow.runAs({ pool: 'tenant', orgId: b.orgId }, () =>
         h.ctx
           .current()
           .insertInto('outboxEvent')
-          .values({ id: v7(), orgId: orgA, type: 'probe', payload: '{}', traceId: v7() })
+          .values({ id: v7(), orgId: a.orgId, type: 'probe', payload: '{}', traceId: v7() })
           .execute(),
       ),
     ).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('nor can it reach into A by primary key on a catalogue table', async () => {
+    const rows = await h.uow.runAs({ pool: 'tenant', orgId: b.orgId }, () =>
+      h.ctx.current().selectFrom('product').select('id').where('id', '=', a.productId).execute(),
+    );
+    expect(rows).toEqual([]);
   });
 
   it('the tenant pool without app.current_org cannot read at all', async () => {
     const db = h.factory.get('tenant');
     // 42704 (unrecognized parameter) on a fresh connection; 22P02 (''::uuid) once a
     // pooled connection has seen a SET LOCAL. Either way, RLS denies the read.
-    await expect(sql`select count(*) from app_user`.execute(db)).rejects.toMatchObject({
+    await expect(sql`select count(*) from product`.execute(db)).rejects.toMatchObject({
       code: expect.stringMatching(/^(42704|22P02)$/),
     });
   });
