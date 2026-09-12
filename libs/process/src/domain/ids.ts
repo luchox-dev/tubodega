@@ -10,6 +10,9 @@ import { InvalidTemplateCodeError } from './errors.js';
  */
 export type StepId = Branded<string, 'StepId'>;
 
+/** A row of `process_template`. The natural key is (org, code, version). */
+export type ProcessTemplateId = Branded<string, 'ProcessTemplateId'>;
+
 /** The business name of a process: RECEPCION, TRASLADO, AJUSTE_ENTRADA, ... */
 export type TemplateCode = Branded<string, 'TemplateCode'>;
 

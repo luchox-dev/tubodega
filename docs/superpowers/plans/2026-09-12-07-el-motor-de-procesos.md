@@ -201,24 +201,24 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 **Files:** `libs/process/src/domain/{template.ts, factory-templates.ts}` + specs;
 `libs/process/test/builders/a-template.ts`
 
-- [ ] **Step 1: spec primero.** El validador rechaza: dos transiciones en un paso
+- [x] **Step 1: spec primero.** El validador rechaza: dos transiciones en un paso
       (`branching-not-supported`, P-8); un `type` que no está en `StepType`
       (`unknown-step-type`); una transición a un `id` que no existe, un paso inalcanzable
       desde el primero, y una plantilla que no cierra con `to: null` (`invalid-template`).
       Y acepta: `firstStep()`, `step(id)`, `transitionsFrom(id)`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `invalid-template` es el que importa y el que el maestro no
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `invalid-template` es el que importa y el que el maestro no
       pedía: `unknown-step-type` cubre el tipo raro y `branching-not-supported` la rama, pero
       una plantilla cuyo `confirmar` transite a un paso mal escrito **pasa las dos y se
       siembra rota**, y el fallo aparece semanas después en la instancia de alguien, como un
       500.
-- [ ] **Step 4:** `FACTORY_TEMPLATES`, **copiadas literalmente** de
+- [x] **Step 4:** `FACTORY_TEMPLATES`, **copiadas literalmente** de
       [13 §6](docs/specs/13-process.md), que ya las trae en JSONC con `id`, `required`,
       `config` y `transitions`. No se inventa ninguna.
-- [ ] **Step 5:** la prueba que las cruza: **cada una de las seis pasa el validador**. Es
+- [x] **Step 5:** la prueba que las cruza: **cada una de las seis pasa el validador**. Es
       barata y es la única que impide sembrar una plantilla rota en cada organización nueva.
-- [ ] **Step 6: Run** → PASS.
-- [ ] **Step 7: Commit** `feat(process): la plantilla, su validador, y las seis de fábrica`
+- [x] **Step 6: Run** → PASS.
+- [x] **Step 7: Commit** `feat(process): la plantilla, su validador, y las seis de fábrica`
 
 ---
 
