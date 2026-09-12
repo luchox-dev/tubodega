@@ -880,6 +880,7 @@ Cada plan es un documento propio (`docs/superpowers/plans/2026-MM-DD-NN-<nombre>
 | **3c** | **hecho** *(derivado)* | La caja negra cubre el contrato entero | — | `pnpm blackbox`: tres suites, 249 comprobaciones, y un cruce que exige de cada operación un camino feliz y uno de error ([06 §6](docs/specs/06-pruebas-y-calidad.md)). Job hermano en CI. Merge `22789d8`. |
 | **3d** | **hecho** *(derivado)* | La colección de Postman al día | — | Las 30 operaciones en Postman, 70 peticiones afirmando su código. Merge `e1c0651`. |
 | **3e** | **hecho** *(derivado)* | `docker compose up --build`, a la primera | F6.6 | La pila entera en contenedores sobre volumen limpio: `db` + `migrate` (init container con `prisma migrate deploy`) + `tubodega`, entorno en `.env.docker` versionado y base propia `tubodega_docker`. `POST /v1/organizations` contra el contenedor, y las tres suites de la caja negra en verde con `BASE=http://localhost:3001 DB=tubodega_docker`. |
+| **3f** | **hecho** *(derivado)* | Un mundo sembrado, cuando haga falta | — | `pnpm seed` y `docker compose --profile seed up`: el reparto narrativo completo por HTTP —La Esquina, las cuatro personas, los campos propios, los cuatro SKU canónicos, un lote y una serie—, idempotente y con `SEED_SLUG` para sembrar mundos paralelos. |
 | 4 | pendiente | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Árbol de bodega (`/v1/nodes`, `tree`, `move`), sembrador de nodos de frontera, suite e2e «Cargar el catálogo y las ubicaciones» completa. |
 | 5 | pendiente | El ledger: dominio, casos de uso y persistencia | F3.1-F3.4 | Sin endpoints nuevos; `pnpm test` y las pruebas de integración del ledger (savepoint, interbloqueo, `REVOKE`). |
 | 6 | pendiente | Mover mercancía por HTTP y cierre de la WAVE 3 | F3.5-F3.6 + e2e W3 | `/v1/movements`, `/batch`, `/reverse`, `/v1/stock`, `/v1/stock/custodies`; criterios 3-4-6-7-8-9; pruebas de propiedades. |
@@ -893,6 +894,7 @@ Reglas de la división:
 - Un plan no empieza con el anterior en rojo (`pnpm lint && pnpm typecheck && pnpm test && pnpm test:e2e`).
 - Un plan no deja stubs en producción: si un puerto no tiene adaptador real todavía, el caso de uso que lo necesita **no se registra** en `app.module.ts` hasta el plan que lo trae.
 - Cada plan termina con un commit por tarea y una rama `plan/NN-<nombre>` integrada con `superpowers:finishing-a-development-branch`.
+- **Todo plan que añada endpoints actualiza la colección de Postman y `scripts/seed.sh`** en el mismo plan, no después. Los dos aparentan cubrir el contrato entero, así que uno que se queda atrás miente: la colección sale verde sin tocar lo nuevo, y el mundo sembrado parece completo mientras le falta justo lo que acabas de construir.
 - La decisión D-1 del maestro cambia: **el esquema es incremental**, una migración por plan que lo necesite (`0001_tenancy` en el plan 1, `0002_full_schema` en el plan 2). Sigue siendo solo hacia adelante y `pnpm db:check` sigue vigilando que schema y migraciones coincidan.
 
 ---

@@ -145,7 +145,8 @@ Cada petición afirma su propio código de respuesta. Sin eso la colección sale
 verde aunque una petición devuelva un `404`, que es exactamente lo que le pasaba
 a la del lote mientras su id se quedaba sin fijar.
 
-La colección se actualiza en cada plan que añada endpoints.
+La colección se actualiza en cada plan que añada endpoints, igual que
+[el seed](#datos-de-ejemplo).
 
 ## Layout
 
@@ -192,6 +193,7 @@ hacia abajo, solo se importan barriles, nadie importa `persistence`.
 | `pnpm test:e2e` | integración + e2e contra Postgres; migra `tubodega_test` sola |
 | `pnpm test:cov` | cobertura |
 | `pnpm blackbox` | caja negra con `curl` contra un servidor levantado |
+| `pnpm seed` | siembra el mundo de ejemplo por HTTP ([datos de ejemplo](#datos-de-ejemplo)) |
 | `pnpm openapi:write` | regenera `apps/tubodega/openapi.json` desde el código |
 
 ## Base de datos
@@ -284,6 +286,50 @@ En CI corre sola, en un job hermano de las cinco puertas
 contrato y ejecuta las tres suites. Va al lado y no dentro porque arrancar la
 aplicación es lento y no tiene por qué alargar la ruta crítica.
 
+## Datos de ejemplo
+
+Una base recién migrada está vacía, y para probar cualquier cosa interesante hay
+que construir antes la organización, la gente y el catálogo. Eso lo hace
+[`scripts/seed.sh`](scripts/seed.sh) de un tirón:
+
+```bash
+pnpm start:dev                       # en otra terminal
+pnpm seed                            # y dice con qué credenciales entrar
+SEED_SLUG=otra-esquina pnpm seed     # un segundo mundo, independiente
+docker compose --profile seed up     # o dentro de la red de compose
+```
+
+Siembra el reparto narrativo que el
+[plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md) §5 ya
+define: **Distribuidora La Esquina**, con Marta (`OWNER`), Diego (`ADMIN`), Juan
+(`OPERATOR`) y Sofía (`VIEWER`), dos campos propios, los cuatro productos
+canónicos —`TOR-M8`, `ARROZ-25`, `LECHE-1L` y `TAL-BOSCH`—, el código de barras
+del tornillo, el lote de leche con su vencimiento y la serie del taladro. Con eso
+`GET /v1/codes/{value}/resolve` ya tiene algo que resolver.
+
+Escribe **por HTTP**, no contra la base. Así respeta cada invariante sin
+reimplementar nada —argon2, los UUIDv7, las columnas `version`, el outbox, RLS— y
+no puede dejar un estado que la aplicación nunca permitiría; es el principio de
+[06 §6](docs/specs/06-pruebas-y-calidad.md) aplicado a la siembra: si algo no se
+puede montar por la API, es que a la API le falta algo. Por eso el servicio de
+compose espera a que la aplicación esté sana, y no solo a las migraciones.
+
+Si el mundo ya existe no toca nada y sale con `0`: re-sembrar a medias chocaría
+contra la unicidad de códigos (C-2), series (C-5) y lotes (C-6). Para otro mundo,
+otro `SEED_SLUG`.
+
+**El seed se actualiza en cada plan que añada endpoints**, igual que la colección
+de Postman. Uno que se queda atrás es peor que no tenerlo: aparenta un mundo
+completo mientras le falta justo lo que acabas de construir. Hoy siembra todo lo
+que el contrato sabe crear; lo que aún no existe:
+
+| Todavía no siembra | Llega en |
+|---|---|
+| Ubicaciones y nodos de frontera | plan 4 |
+| Movimientos y existencias | plan 6 |
+| Plantillas e instancias de proceso | plan 8 |
+| Reglas de alerta | plan 9 |
+
 ## Cómo está cableado SWC
 
 Rspack (`builder: "rspack"` en `nest-cli.json`) compila con `builtin:swc-loader`
@@ -299,13 +345,15 @@ docker compose up --build
 curl http://127.0.0.1:3000/v1/openapi.json
 ```
 
-Eso es todo, también sobre un volumen limpio. Tres servicios:
+Eso es todo, también sobre un volumen limpio. Tres servicios, más un cuarto
+opcional detrás de un perfil:
 
 | Servicio | Qué es | Cuándo termina |
 |---|---|---|
 | `db` | Postgres 16; [`db/init/01-roles.sql`](db/init/01-roles.sql) crea los tres roles y las cuatro bases la primera vez que se inicializa el volumen | vive |
 | `migrate` | init container de un disparo: `prisma migrate deploy` con `DATABASE_URL_MIGRATOR` | sale con 0 y muere |
 | `tubodega` | la aplicación, sobre `tubodega_docker` | vive |
+| `seed` | solo con `--profile seed`: siembra el mundo de ejemplo ([datos de ejemplo](#datos-de-ejemplo)) | sale con 0 y muere |
 
 `tubodega` espera a `migrate` con `condition: service_completed_successfully`,
 así que la base está migrada antes de que la aplicación abra sus pools, y una
