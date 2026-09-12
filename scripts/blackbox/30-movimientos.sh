@@ -65,6 +65,8 @@ frontera SUPPLIER SOURCE supplier-default
 frontera OPENING SOURCE opening-balance
 frontera SHRINK TERMINAL shrinkage
 frontera SALE TERMINAL sale
+frontera ADJ_IN SOURCE adjustment-in
+frontera ADJ_OUT TERMINAL adjustment-out
 
 req POST /products --token "$T_DIEGO" \
   --body '{"sku":"TOR-M8","name":"Tornillo M8 galvanizado","trackingMode":"QUANTITY","uom":"UNIT"}'
@@ -314,5 +316,80 @@ header "y lo dice" idempotency-replayed true
 
 req POST /movements --token "$T_JUAN" --body "$(jq -nc --arg i "$PRIMERO" --argjson c "$CUERPO" '$c + {id:$i}')" --no-cov
 problem "el mismo id de cliente con otra clave, no" 409 movement-id-taken
+
+# Lo que de verdad prueba I-7 sobre un ledger: no que la respuesta se repita,
+# sino que el saldo no subiera dos veces.
+req GET "/stock?nodeId=$B2&productId=$TOR&nonZeroOnly=false" --token "$T_JUAN" --no-cov
+body "y el saldo no sumó dos veces" '.data[0].quantity' '100.000'
+
+# ─────────────────────────────────────────────────────────────────────────────
+step "14 · lo que el primer día también trae"
+
+# Los ajustes exigen motivo por los dos lados; el consumo no, porque no es una
+# corrección (D-10, D-36).
+mov "$T_JUAN" "$(jq -nc --arg p "$TOR" --arg f "$B2" --arg t "$ADJ_OUT" \
+  '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:"1"}')"
+problem "el ajuste negativo sin motivo tampoco" 422 reason-required
+
+mov "$T_DIEGO" "$(jq -nc --arg p "$TOR" --arg f "$ADJ_IN" --arg t "$B2" \
+  '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:"5", reason:"aparecieron en el conteo"}')"
+ok "con motivo, el ajuste positivo entra" 201
+
+# I-8 por su tercer lado: el lote existe, pero es de otro producto.
+mov "$T_JUAN" "$(jq -nc --arg p "$LECHE" --arg b "$BSH" --arg f "$SUPPLIER" --arg t "$B2" \
+  '{productId:$p, batchId:$b, fromNodeId:$f, toNodeId:$t, quantity:"6"}')"
+problem "un lote de otro producto" 422 batch-product-mismatch
+
+# I-17: el préstamo que se dice saldar tiene que ser de lo mismo.
+mov "$T_JUAN" "$(jq -nc --arg p "$TAL" --arg b "$BSH" --arg f "$JUAN_NODO" --arg t "$B2" --arg s "$PRESTAMO_TOR" \
+  '{productId:$p, batchId:$b, fromNodeId:$f, toNodeId:$t, quantity:"1", settlesId:$s}')"
+problem "saldar el préstamo equivocado" 422 settles-mismatch
+
+# Una compensación puede quedarse sin saldo, y entonces falla como cualquier
+# movimiento: el sistema no inventa existencias para cuadrar una corrección.
+mov "$T_JUAN" "$(jq -nc --arg p "$TOR" --arg f "$SUPPLIER" --arg t "$B3" \
+  '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:"10"}')"
+ok "entra una remesa en B3" 201
+REMESA_B3="$(jqv '.movement.id')"
+
+req GET "/stock?nodeId=$B3&productId=$TOR&nonZeroOnly=false" --token "$T_JUAN" --no-cov
+mov "$T_JUAN" "$(jq -nc --arg p "$TOR" --arg f "$B3" --arg t "$B2" --arg q "$(jqv '.data[0].quantity')" \
+  '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:$q}')"
+ok "y se vacía B3 entero" 201
+
+req POST "/movements/$REMESA_B3/reverse" --token "$T_DIEGO" --no-cov --body '{"reason":"el proveedor se la lleva"}'
+problem "compensar lo que ya no está, no" 422 insufficient-stock
+body "y dice dónde faltaba" '.detail | test("BOD-A/Z1/E3/B3")' true
+
+# C-9: no se retira del catálogo lo que sigue en una estantería.
+req DELETE "/products/$TOR" --token "$T_DIEGO" --no-cov
+problem "un producto con existencias no se retira" 422 product-has-stock
+body "y el detalle dice en qué sitios está" '.nodes | length > 0' true
+
+# I-16, con un DELETE de verdad por delante.
+req POST /nodes --token "$T_DIEGO" --no-cov --body "$(jq -nc --arg p "$E3" '{kind:"INTERNAL", code:"B4", name:"B4", parentId:$p}')"
+B4="$(jqv '.id')"
+req DELETE "/nodes/$B4" --token "$T_DIEGO" --no-cov
+ok "un bin vacío sí se desactiva" 204
+mov "$T_JUAN" "$(jq -nc --arg p "$TOR" --arg f "$B2" --arg t "$B4" \
+  '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:"1"}')"
+problem "y ya no admite movimientos" 422 node-inactive
+
+# La hoja de cálculo de verdad: doscientas líneas por el socket, no por inject.
+req POST /nodes --token "$T_DIEGO" --no-cov --body "$(jq -nc --arg p "$E3" '{kind:"INTERNAL", code:"B5", name:"B5", parentId:$p}')"
+B5="$(jqv '.id')"
+req POST /movements/batch --token "$T_DIEGO" --no-cov \
+  --body "$(jq -nc --argjson l "$(linea "$B5" 1)" '{movements: [range(200) | $l]}')"
+ok "doscientas líneas de una vez" 201
+body "y son doscientos asientos" '.movements | length' 200
+req GET "/stock?nodeId=$B5&productId=$TOR" --token "$T_DIEGO" --no-cov
+body "que suman doscientos en el bin" '.data[0].quantity' '200.000'
+
+# 501 clavados: con 502 respondería el @ArrayMaxSize del DTO con un 400 pelado,
+# y lo que se quiere ver es la respuesta de negocio.
+req POST /movements/batch --token "$T_DIEGO" --no-cov \
+  --body "$(jq -nc --argjson l "$(linea "$B5" 1)" '{movements: [range(501) | $l]}')"
+problem "quinientas una, no" 422 batch-too-large
+body "y el detalle dice cuál es el tope" '.detail | test("500")' true
 
 resumen "movimientos"
