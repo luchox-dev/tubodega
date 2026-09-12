@@ -308,23 +308,23 @@ Es la prueba que [13 §13](docs/specs/13-process.md) exige y la que cierra el 10
 uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create` de
 `@app/inventory`.
 
-- [ ] **Step 1:** el mundo de papel en el doble de `HandlerDeps`: cuatro productos (uno por
+- [x] **Step 1:** el mundo de papel en el doble de `HandlerDeps`: cuatro productos (uno por
       modo más el de la serie), los nodos del reparto narrativo, y los ocho de frontera por
       `code` —`adjustment-in` y `adjustment-out` hacen falta de verdad, porque los `defaults`
       de las dos plantillas de ajuste los resuelven por código—.
-- [ ] **Step 2:** el recorrido. **18 combinaciones** (6 × 3), y las que no aplican se
+- [x] **Step 2:** el recorrido. **18 combinaciones** (6 × 3), y las que no aplican se
       afirman como el error que toca, no se saltan: `CAPTURE_BATCH` con `null` sobre un `LOT`
       sin lote del escaneo es `batch-step-required`, y con datos sobre un `QUANTITY` es
       `batch-step-not-allowed`.
-- [ ] **Step 3:** la aserción que cierra el círculo — el `MovementDraft` final se convierte
+- [x] **Step 3:** la aserción que cierra el círculo — el `MovementDraft` final se convierte
       en `RecordMovementInput` (con un `occurredAt` fijo, que aquí lo pone la prueba) y
       `Movement.create` lo acepta. **Es la única prueba que demuestra que el motor y el
       ledger hablan el mismo idioma**, y la que habría cazado que `MovementDraft` no tenía
       `occurredAt` si el refinamiento no lo hubiera visto antes.
       Ojo con las dos de ajuste: un extremo `adjustment-in`/`adjustment-out` exige `reason`
       en el dominio (D-36), y por eso su paso `motivo` es `required: true`.
-- [ ] **Step 4: Run** `pnpm test:cov libs/process` → PASS con `domain/**` al 100/100.
-- [ ] **Step 5: Commit** `test(process): las seis plantillas de punta a punta, y el asiento que producen`
+- [x] **Step 4: Run** `pnpm test:cov libs/process` → PASS con `domain/**` al 100/100.
+- [x] **Step 5: Commit** `test(process): las seis plantillas de punta a punta, y el asiento que producen`
 
 ---
 
