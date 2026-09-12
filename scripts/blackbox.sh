@@ -11,6 +11,8 @@
 #   pnpm start:dev                 # en otra terminal
 #   ./scripts/blackbox.sh
 #   BASE=http://otra-maquina:3000 ./scripts/blackbox.sh
+#   APP_PORT=3001 docker compose up -d      # y contra la pila de compose:
+#   BASE=http://localhost:3001 DB=tubodega_docker ./scripts/blackbox.sh
 #   ./scripts/blackbox.sh --only tenencia
 #
 # Exporta JWT_SECRET si quieres que corra además la comprobación del token

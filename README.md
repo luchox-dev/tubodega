@@ -68,7 +68,7 @@ WAVE 3.
 ## Arranque local
 
 ```bash
-docker compose up -d db          # Postgres 16 con los tres roles y tres bases (db/init)
+docker compose up -d db          # Postgres 16 con los tres roles y cuatro bases (db/init)
 cp .env.example .env
 pnpm install
 pnpm db:migrate                  # aplica migraciones y regenera los tipos de Kysely
@@ -166,7 +166,7 @@ libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app
 test/support/            harness de integración (withRollback) y cliente e2e
 scripts/blackbox.sh      caja negra: corre las suites de scripts/blackbox/ y cruza la cobertura
 docs/specs/              los specs; docs/superpowers/plans/ los planes; docs/postman/ la colección
-db/init/01-roles.sql     roles tubodega_migrator / _app / _system y bases dev, test y shadow
+db/init/01-roles.sql     roles tubodega_migrator / _app / _system y bases dev, test, shadow y docker
 compose.yaml             Postgres 16 para desarrollo, y la imagen de la aplicación
 .github/workflows/ci.yml los dos jobs: las cinco puertas y la caja negra
 .media/                  donde DiskMediaStorage escribe las fotos (MEDIA_ROOT)
@@ -205,6 +205,13 @@ Tres roles con tres cadenas de conexión ([07 §2](docs/specs/07-composicion-y-c
 | `DATABASE_URL_MIGRATOR` | `tubodega_migrator` | dueño de las tablas; solo `prisma migrate` |
 | `SHADOW_DATABASE_URL` | `tubodega_migrator` | desarrollo y CI: `migrate dev` y `db:check` |
 
+Y cuatro bases, que [`db/init/01-roles.sql`](db/init/01-roles.sql) crea la
+primera vez que se inicializa el volumen: `tubodega` para el desarrollo,
+`tubodega_test` para `pnpm test:e2e`, `tubodega_shadow` para `migrate dev` y
+`tubodega_docker` para la pila de compose. La última está separada a propósito:
+el contenedor guarda las fotos en su volumen y `pnpm start:dev` en `./.media`,
+así que compartir base dejaría filas apuntando a ficheros que están al otro lado.
+
 Prisma 7 lee las URLs de `prisma.config.ts`, no del schema. Lo que el
 lenguaje de Prisma no expresa —`CHECK`, RLS, índices parciales, `GRANT`— va a
 mano al final de cada `migration.sql` ([04 §5.1](docs/specs/04-persistencia.md)).
@@ -230,7 +237,8 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 ### Caja negra
 
 [`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
-HTTP contra un servidor de verdad — 248 comprobaciones en tres suites:
+HTTP contra un servidor de verdad — 248 comprobaciones en tres suites, 249
+si exportas `JWT_SECRET`:
 
 | Suite | Qué recorre |
 |---|---|
@@ -242,6 +250,7 @@ HTTP contra un servidor de verdad — 248 comprobaciones en tres suites:
 pnpm start:dev                       # en otra terminal
 pnpm blackbox                        # las tres suites y el informe de cobertura
 BASE=http://otra-maquina:3000 pnpm blackbox
+BASE=http://localhost:3001 DB=tubodega_docker pnpm blackbox   # contra la pila de compose
 ./scripts/blackbox.sh --only tenencia
 ```
 
@@ -285,24 +294,66 @@ los detecta. El alias `@app/<lib>` apunta al archivo `index.ts` (bajo
 
 ## Docker
 
-La imagen se construye y corre, pero **el servicio `tubodega` de `compose.yaml`
-todavía no trae su entorno**: `env.validation.ts` exige las tres cadenas de
-conexión y un `JWT_SECRET` de al menos 32 caracteres, ninguno con valor por
-defecto, así que un `docker compose up --build` a secas aborta al validar. Hay
-que pasárselo, y apuntando a `db:5432` —que es como se llama Postgres dentro de
-la red de compose— y no a `localhost`:
-
 ```bash
-docker compose up --build -d db
-docker compose run --rm --service-ports \
-  -e DATABASE_URL=postgresql://tubodega_app:app@db:5432/tubodega \
-  -e DATABASE_URL_SYSTEM=postgresql://tubodega_system:system@db:5432/tubodega \
-  -e DATABASE_URL_MIGRATOR=postgresql://tubodega_migrator:migrator@db:5432/tubodega \
-  -e JWT_SECRET=change-me-change-me-change-me-change-me \
-  tubodega
+docker compose up --build
 curl http://127.0.0.1:3000/v1/openapi.json
 ```
 
-El healthcheck usa `127.0.0.1` y la app escucha en `0.0.0.0` para ser
-alcanzable desde fuera del contenedor. El entrypoint con `migrate deploy` —y el
-`env_file` que ahorraría todo lo anterior— llegan en el plan 10.
+Eso es todo, también sobre un volumen limpio. Tres servicios:
+
+| Servicio | Qué es | Cuándo termina |
+|---|---|---|
+| `db` | Postgres 16; [`db/init/01-roles.sql`](db/init/01-roles.sql) crea los tres roles y las cuatro bases la primera vez que se inicializa el volumen | vive |
+| `migrate` | init container de un disparo: `prisma migrate deploy` con `DATABASE_URL_MIGRATOR` | sale con 0 y muere |
+| `tubodega` | la aplicación, sobre `tubodega_docker` | vive |
+
+`tubodega` espera a `migrate` con `condition: service_completed_successfully`,
+así que la base está migrada antes de que la aplicación abra sus pools, y una
+migración que falla impide el arranque en vez de dejar viva una aplicación
+contra un esquema viejo. Esa dependencia es la única red de seguridad que hay:
+los pools de `pg` se abren perezosamente y ningún `OnModuleInit` toca la base,
+de modo que una aplicación apuntada a un esquema inexistente arrancaría tan
+contenta y devolvería `500` en cada petición. `migrate deploy` es idempotente y
+toma un advisory lock ([04 §5](docs/specs/04-persistencia.md)): el segundo `up`
+no encuentra nada pendiente y sale en seguida.
+
+El entorno sale de [`.env.docker`](.env.docker), versionado a propósito —no hay
+un solo secreto real dentro— y referenciado con `env_file:`. Es `.env.example`
+con tres diferencias: el host de Postgres es `db`, que es como se llama dentro
+de la red de compose; la base es `tubodega_docker`; y `MEDIA_ROOT` es
+`/app/media`, que es donde se monta el volumen `media`.
+
+Los puertos publicados se pueden mover, que es lo que permite levantar la pila
+sin apagar el servidor de desarrollo:
+
+```bash
+APP_PORT=3001 docker compose up -d
+BASE=http://localhost:3001 DB=tubodega_docker pnpm blackbox   # las tres suites
+```
+
+### Dos detalles que cuesta descubrir solo
+
+El `Dockerfile` crea `/app/media` y se lo cede a `node` **antes** de `USER
+node`. No es higiene: un volumen nombrado vacío hereda dueño y permisos del
+directorio que tapa, y si ese directorio no existiera en la imagen Docker lo
+crearía `root:root` y la primera foto moriría con `EACCES`. La herencia ocurre
+**al crear el volumen y solo entonces**, así que arreglar la imagen no arregla
+un volumen que ya nació mal: probar de verdad «volumen limpio» es `docker
+compose down -v`, que borra también la base.
+
+El healthcheck de `db` usa `pg_isready -h 127.0.0.1` y no `pg_isready` a secas.
+Mientras inicializa un volumen vacío, el entrypoint oficial de Postgres levanta
+un servidor temporal **solo por socket unix** para correr los scripts de
+`/docker-entrypoint-initdb.d`. Sin `-h`, la sonda habla por ese mismo socket y
+contesta que sí con `01-roles.sql` a medias: compose da el servicio por sano,
+`migrate` arranca y su conexión TCP a `db:5432` es rechazada. Solo el servidor
+definitivo escucha en TCP, y arranca cuando el init ha terminado — de ahí que
+`-h` convierta la sonda en la prueba de que los roles y las bases existen. En
+CI no se ve porque un *service container* de GitHub Actions no puede montar
+`docker-entrypoint-initdb.d`, y el workflow corre ese SQL a mano.
+
+La imagen de producción sigue sin Prisma. El CLI es una `devDependency`, y el
+servicio `migrate` se construye con `target: migrate`, una etapa que solo trae
+`node_modules` de desarrollo, `prisma.config.ts` y `libs/persistence/prisma`: no
+compila la aplicación, así que arranca en segundos y un fallo de rspack no te
+deja sin poder migrar. El entrypoint de despliegue de verdad llega en el plan 10.

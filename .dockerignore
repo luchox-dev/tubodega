@@ -15,3 +15,5 @@ Dockerfile
 .dockerignore
 compose.yaml
 README.md
+
+.media*
