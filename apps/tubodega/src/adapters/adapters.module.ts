@@ -1,15 +1,22 @@
 import { Global, Module } from '@nestjs/common';
-import { CLOCK, EVENT_PUBLISHER, ID_GENERATOR, SystemClock, Uuidv7Generator } from '@app/common';
+import { ConfigService } from '@nestjs/config';
 import {
-  BATCH_REPOSITORY, CUSTOM_FIELD_REPOSITORY, MOVEMENT_COUNTER,
-  PRODUCT_CODE_REPOSITORY, PRODUCT_REPOSITORY, STOCK_CHECKER,
+  CLOCK, EVENT_PUBLISHER, ID_GENERATOR, SystemClock, Uuidv7Generator,
+  type EnvironmentVariables,
+} from '@app/common';
+import {
+  BATCH_REPOSITORY, CUSTOM_FIELD_REPOSITORY, DiskMediaStorage, MEDIA_ROOT,
+  MEDIA_STORAGE, MEDIA_UPLOAD_REPOSITORY, MOVEMENT_COUNTER, PRODUCT_CODE_REPOSITORY,
+  PRODUCT_MEDIA_REPOSITORY, PRODUCT_REPOSITORY, STOCK_CHECKER,
 } from '@app/catalog';
 import {
   KyselyBatchRepository,
   KyselyCustomFieldRepository,
+  KyselyMediaUploadRepository,
   KyselyOrganizationRepository,
   KyselyOutboxEventPublisher,
   KyselyProductCodeRepository,
+  KyselyProductMediaRepository,
   KyselyProductRepository,
   KyselySessionRepository,
   KyselyUserRepository,
@@ -44,6 +51,15 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     StockCheckerAdapter,
     { provide: MOVEMENT_COUNTER, useExisting: MovementCounterAdapter },
     { provide: STOCK_CHECKER, useExisting: StockCheckerAdapter },
+    { provide: MEDIA_UPLOAD_REPOSITORY, useExisting: KyselyMediaUploadRepository },
+    { provide: PRODUCT_MEDIA_REPOSITORY, useExisting: KyselyProductMediaRepository },
+    {
+      provide: MEDIA_ROOT,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) =>
+        config.get('MEDIA_ROOT', { infer: true }),
+    },
+    { provide: MEDIA_STORAGE, useClass: DiskMediaStorage },
   ],
   exports: [
     PersistenceModule,
@@ -60,6 +76,9 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     CUSTOM_FIELD_REPOSITORY,
     MOVEMENT_COUNTER,
     STOCK_CHECKER,
+    MEDIA_UPLOAD_REPOSITORY,
+    PRODUCT_MEDIA_REPOSITORY,
+    MEDIA_STORAGE,
   ],
 })
 export class AdaptersModule {}

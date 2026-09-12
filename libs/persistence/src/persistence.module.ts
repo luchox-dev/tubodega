@@ -27,6 +27,10 @@ import { KyselyProductRepository } from './repositories/catalog/product.reposito
 import { KyselyProductCodeRepository } from './repositories/catalog/product-code.repository.js';
 import { KyselyBatchRepository } from './repositories/catalog/batch.repository.js';
 import { KyselyCustomFieldRepository } from './repositories/catalog/custom-field.repository.js';
+import {
+  KyselyMediaUploadRepository,
+  KyselyProductMediaRepository,
+} from './repositories/catalog/media.repository.js';
 
 const DAOS = [
   OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao, IdempotencyKeyDao,
@@ -42,6 +46,8 @@ const ADAPTERS = [
   KyselyProductCodeRepository,
   KyselyBatchRepository,
   KyselyCustomFieldRepository,
+  KyselyMediaUploadRepository,
+  KyselyProductMediaRepository,
 ];
 
 /** Registered once by the root module; no domain library imports it (R-4). */

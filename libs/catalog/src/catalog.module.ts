@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AddProductCode } from './application/use-cases/add-product-code.js';
+import { AttachMedia } from './application/use-cases/attach-media.js';
 import { CreateBatch } from './application/use-cases/create-batch.js';
 import { CreateProduct } from './application/use-cases/create-product.js';
 import { DeactivateProduct } from './application/use-cases/deactivate-product.js';
@@ -9,8 +10,11 @@ import { ImportProducts } from './application/use-cases/import-products.js';
 import { ListBatches } from './application/use-cases/list-batches.js';
 import { ListCodes } from './application/use-cases/list-codes.js';
 import { ListCustomFields } from './application/use-cases/list-custom-fields.js';
+import { ListMedia } from './application/use-cases/list-media.js';
 import { ListProducts } from './application/use-cases/list-products.js';
+import { RemoveMedia } from './application/use-cases/remove-media.js';
 import { RemoveProductCode } from './application/use-cases/remove-product-code.js';
+import { StageUpload } from './application/use-cases/stage-upload.js';
 import { ResolveCode } from './application/use-cases/resolve-code.js';
 import { UpdateCustomField } from './application/use-cases/update-custom-field.js';
 import { UpdateProduct } from './application/use-cases/update-product.js';
@@ -36,6 +40,10 @@ const USE_CASES = [
   DefineCustomField,
   UpdateCustomField,
   ListCustomFields,
+  StageUpload,
+  AttachMedia,
+  RemoveMedia,
+  ListMedia,
 ];
 
 @Module({ providers: USE_CASES, exports: USE_CASES })

@@ -37,7 +37,7 @@ export class KyselyProductRepository implements ProductRepository {
     const out = new Map<string, Product>();
     // In chunks: a thousand-row import must not build a thousand-parameter IN.
     for (let i = 0; i < skus.length; i += 500) {
-      for (const row of await this.dao.findManyBySkus(orgId, skus.slice(i, i + 500) as string[])) {
+      for (const row of await this.dao.findManyBySkus(orgId, [...skus.slice(i, i + 500)])) {
         out.set(row.sku, toProduct(row));
       }
     }
