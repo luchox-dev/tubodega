@@ -246,7 +246,7 @@ Su acceso se restringe por identificador, siempre resuelto desde el token.
 | `GET` | `/v1/me` | `READ` | Usuario y organización actuales |
 | `GET` | `/v1/users` | `MANAGE_USERS` | Filtros: `active`, `role` |
 | `POST` | `/v1/users` | `MANAGE_USERS` | |
-| `PATCH` | `/v1/users/{id}` | `MANAGE_USERS` | `If-Match` obligatorio |
+| `PATCH` | `/v1/users/{id}` | `MANAGE_USERS` | `If-Match` obligatorio; la respuesta devuelve la `version` ya incrementada |
 | `DELETE` | `/v1/users/{id}` | `MANAGE_USERS` | Desactiva; no borra |
 | `POST` | `/v1/me/password` | `READ` | Exige contraseña actual |
 

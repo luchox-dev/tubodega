@@ -67,10 +67,10 @@ export class User {
   }
 
   /**
-   * The version the caller believes this user is at, taken from `If-Match`.
-   * Optimistic locking travels in the entity all the way to the DAO (spec
-   * 08 §7), so a stale header surfaces as 409 stale-version instead of
-   * silently overwriting someone else's change.
+   * The version the row ended up with. The entity deliberately does not bump it
+   * — the repository is the only writer that knows — but what comes back from a
+   * write has to carry the new one, or a client that PATCHes twice using the
+   * version it was just handed gets a spurious 409 (decision D-31).
    */
   withVersion(version: number): User {
     return new User(this.id, this.orgId, this.email, this.name, this.passwordHash, this.roles, this.active, version);

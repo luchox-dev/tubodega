@@ -89,15 +89,34 @@ export class KyselyUserRepository implements UserRepository {
     return { ...found, data: found.data.map((row) => toUser(row, byUser.get(row.id) ?? [])) };
   }
 
-  async save(user: User): Promise<void> {
+  /**
+   * Update first, insert if it was not there: the same shape as every other
+   * repository of the house. Returns the version the row ended up with — only
+   * the repository knows it, and whoever answers the client needs it (D-31).
+   */
+  async save(user: User, expectedVersion?: number): Promise<number> {
     const data = { email: user.email, name: user.name, passwordHash: user.passwordHash, active: user.active };
+    let version: number;
     try {
-      await this.users.update(user.orgId, user.id, data, { expectedVersion: user.version });
+      const row = await this.users.update(
+        user.orgId,
+        user.id,
+        data,
+        expectedVersion !== undefined ? { expectedVersion } : {},
+      );
+      version = row.version;
     } catch (e) {
-      if (!(e instanceof RecordNotFoundError)) translate(user)(e);
-      await this.users.create({ id: user.id, orgId: user.orgId, ...data }).catch(translate(user));
+      // `translate` never returns, but the compiler only knows that where the
+      // value is used: returning it is what makes the narrowing its job and not
+      // an assumption about the line below.
+      if (!(e instanceof RecordNotFoundError)) return translate(user)(e);
+      const row = await this.users.create({ id: user.id, orgId: user.orgId, ...data }).catch(translate(user));
+      version = row.version;
     }
+    // The roles live in `user_role`, a table without a version of its own, so
+    // this write does not move the one we are about to return.
     await this.roles.replaceForUser(user.orgId, user.id, [...user.roles]);
+    return version;
   }
 
   private async hydrate(row: UserModel): Promise<User> {

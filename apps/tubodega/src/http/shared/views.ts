@@ -17,6 +17,7 @@ export const userView = (u: User): UserView => ({
   name: u.name,
   roles: [...u.roles],
   active: u.active,
+  version: u.version,
 });
 
 export const organizationView = (o: Organization): OrganizationView => ({ id: o.id, name: o.name, slug: o.slug });

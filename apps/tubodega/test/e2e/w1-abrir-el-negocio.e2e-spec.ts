@@ -140,6 +140,9 @@ describe('WAVE 1 · abrir el negocio', () => {
     const ok = await t.http.patch('/v1/users/' + juanId, { roles: ['OPERATOR', 'ADMIN'] }, { token: diego.token, ifMatch: 1 });
     expect(ok.status).toBe(200);
     expect(ok.body.roles.sort()).toEqual(['ADMIN', 'OPERATOR']);
+    // La versión que vuelve es la que quedó guardada, así que sirve para el
+    // siguiente If-Match sin tener que releer al usuario.
+    expect(ok.body.version).toBe(2);
 
     const stale = await t.http.patch('/v1/users/' + juanId, { roles: ['VIEWER'] }, { token: diego.token, ifMatch: 1 });
     expectProblem(stale, { status: 409, type: 'stale-version' });
@@ -148,8 +151,18 @@ describe('WAVE 1 · abrir el negocio', () => {
     expectProblem(missing, { status: 400, type: 'missing-if-match' });
 
     // Y se deshace, para que Juan siga siendo solo OPERATOR en el resto del relato.
-    const back = await t.http.patch('/v1/users/' + juanId, { roles: ['OPERATOR'] }, { token: diego.token, ifMatch: 2 });
+    const back = await t.http.patch(
+      '/v1/users/' + juanId,
+      { roles: ['OPERATOR'] },
+      { token: diego.token, ifMatch: ok.body.version },
+    );
     expect(back.status).toBe(200);
+    expect(back.body.version).toBe(3);
+
+    // Y el cliente puede leer la versión sin adivinarla: es lo que hace usable
+    // el If-Match obligatorio de este endpoint.
+    const read = await t.http.get('/v1/users/' + juanId, { token: diego.token });
+    expect(read.body.version).toBe(3);
   });
 
   it('6 · nadie puede dejar la empresa sin dueño', async () => {

@@ -24,7 +24,15 @@ export interface UserRepository {
   countActiveOwners(orgId: OrgId): Promise<number>;
   /** Cursor paginated, never offset: the list grows while it is walked (spec 03 §6). */
   listPage(orgId: OrgId, filter: UserFilter, page: UserPage): Promise<Page<User>>;
-  /** Insert or update by id with optimistic locking. Throws EmailTakenError on T-1. */
-  save(user: User): Promise<void>;
+  /**
+   * Insert or update by id with optimistic locking. Throws EmailTakenError on T-1.
+   * The lock is an argument and not a field of the entity, like every other
+   * repository of the house: a caller that omits it writes blind, and that has
+   * to be visible at the call site.
+   *
+   * Returns the version the row ended up with: the caller has to be able to
+   * hand it back to the client, and only the repository knows it (D-31).
+   */
+  save(user: User, expectedVersion?: number): Promise<number>;
 }
 export const USER_REPOSITORY = Symbol('UserRepository');

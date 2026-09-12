@@ -191,8 +191,8 @@ la base de datos, y hace imposible razonar sobre el rendimiento.
 
 ## 9. Concurrencia
 
-Los recursos mutables —producto, nodo, definición de campo— llevan `version`
-entero. Las actualizaciones exigen `If-Match` con esa versión:
+Los recursos mutables —producto, nodo, definición de campo, usuario— llevan
+`version` entero. Las actualizaciones exigen `If-Match` con esa versión:
 
 ```http
 PATCH /v1/products/{id}

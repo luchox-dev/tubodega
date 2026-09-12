@@ -67,7 +67,7 @@ export class CreateOrganization {
     );
 
     await this.organizations.save(organization);
-    await this.users.save(owner);
+    const ownerVersion = await this.users.save(owner);
     await this.provisioner.provision(organization.id);
 
     await this.events.publish([
@@ -77,6 +77,6 @@ export class CreateOrganization {
         ownerId: owner.id,
       }),
     ]);
-    return { organization, owner };
+    return { organization, owner: owner.withVersion(ownerVersion) };
   }
 }

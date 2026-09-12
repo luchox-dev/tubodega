@@ -47,7 +47,7 @@ export class CreateUser {
         roles: input.roles,
       }),
     );
-    await this.users.save(user);
+    const version = await this.users.save(user);
     await this.events.publish([
       tenancyEvent(this.ids, 'user.created', ctx.orgId, ctx.traceId, this.clock.now(), {
         userId: user.id,
@@ -55,6 +55,6 @@ export class CreateUser {
         roles: [...user.roles],
       }),
     ]);
-    return user;
+    return user.withVersion(version);
   }
 }

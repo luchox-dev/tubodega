@@ -2879,6 +2879,11 @@
           "active": {
             "type": "boolean",
             "example": true
+          },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Se envía en If-Match para modificarlo"
           }
         },
         "required": [
@@ -2886,7 +2891,8 @@
           "email",
           "name",
           "roles",
-          "active"
+          "active",
+          "version"
         ]
       },
       "OrganizationCreatedView": {

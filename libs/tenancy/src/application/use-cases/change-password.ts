@@ -20,6 +20,7 @@ export class ChangePassword {
     const user = await this.users.findById(ctx.orgId, ctx.userId);
     if (!user) throw new InvalidCredentialsError();
     if (!(await this.hasher.verify(input.current, user.passwordHash))) throw new InvalidCredentialsError();
-    await this.users.save(user.withPasswordHash(await this.hasher.hash(input.next)));
+    // The lock, so two concurrent changes cannot silently overwrite each other.
+    await this.users.save(user.withPasswordHash(await this.hasher.hash(input.next)), user.version);
   }
 }
