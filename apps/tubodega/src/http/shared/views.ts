@@ -2,8 +2,10 @@ import type { Page } from '@app/common';
 import type {
   Batch, CustomFieldDefinition, Product, ProductCode, StoredMedia,
 } from '@app/catalog';
+import type { Node, NodeTree } from '@app/inventory';
 import type { Organization, User } from '@app/tenancy';
 import type { CustomFieldView } from '../custom-fields/custom-fields.dto.js';
+import type { NodeTreeView, NodeView } from '../nodes/nodes.dto.js';
 import type {
   BatchView, MediaView, ProductCodeView, ProductView,
 } from '../products/products.dto.js';
@@ -74,4 +76,24 @@ export const customFieldView = (d: CustomFieldDefinition): CustomFieldView => ({
   required: d.required,
   position: d.position,
   version: d.version,
+});
+
+// ── Locations (spec 12 §7). The entity never leaves: a view is the contract.
+
+export const nodeView = (n: Node): NodeView => ({
+  id: n.id,
+  kind: n.kind,
+  code: n.code,
+  name: n.name,
+  ...(n.parentId !== undefined ? { parentId: n.parentId } : {}),
+  path: n.path,
+  active: n.active,
+  customFields: n.customFields.toJSON(),
+  version: n.version,
+});
+
+/** Recursive, like the tree it renders (decision D-11). */
+export const nodeTreeView = (t: NodeTree): NodeTreeView => ({
+  node: nodeView(t.node),
+  children: t.children.map(nodeTreeView),
 });
