@@ -63,6 +63,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/inventory/tsconfig.lib.json"
       }
+    },
+    "process": {
+      "type": "library",
+      "root": "libs/process",
+      "entryFile": "index",
+      "sourceRoot": "libs/process/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/process/tsconfig.lib.json"
+      }
     }
   }
 }

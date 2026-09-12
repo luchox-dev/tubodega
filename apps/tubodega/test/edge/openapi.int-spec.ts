@@ -23,7 +23,7 @@ describe('OpenAPI document', () => {
   });
   afterAll(() => started.stop());
 
-  it('publishes every endpoint of spec 10 §7, 11 §7 and 12 §7', () => {
+  it('publishes every endpoint of spec 10 §7, 11 §7, 12 §7 and 13 §10', () => {
     const paths = Object.keys(document.paths);
     expect(paths).toEqual(
       expect.arrayContaining([
@@ -57,6 +57,8 @@ describe('OpenAPI document', () => {
         '/v1/movements/{id}/reverse',
         '/v1/stock',
         '/v1/stock/custodies',
+        '/v1/process-templates',
+        '/v1/process-templates/{code}',
       ]),
     );
   });

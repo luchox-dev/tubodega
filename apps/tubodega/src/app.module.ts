@@ -5,12 +5,14 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from '@app/common';
 import { CatalogModule } from '@app/catalog';
 import { InventoryModule } from '@app/inventory';
+import { ProcessModule } from '@app/process';
 import { TenancyModule } from '@app/tenancy';
 import { AdaptersModule } from './adapters/adapters.module.js';
 import { AuthController } from './http/auth/auth.controller.js';
 import { MeController } from './http/me/me.controller.js';
 import { MovementsController } from './http/movements/movements.controller.js';
 import { NodesController } from './http/nodes/nodes.controller.js';
+import { ProcessTemplatesController } from './http/process-templates/process-templates.controller.js';
 import { StockController } from './http/stock/stock.controller.js';
 import { OpenApiController, OpenApiDocument } from './http/openapi/openapi.controller.js';
 import { OrganizationsController } from './http/organizations/organizations.controller.js';
@@ -43,6 +45,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     TenancyModule,
     CatalogModule,
     InventoryModule,
+    ProcessModule,
   ],
   controllers: [
     OrganizationsController,
@@ -59,6 +62,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     NodesController,
     MovementsController,
     StockController,
+    ProcessTemplatesController,
     OpenApiController,
   ],
   providers: [

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "tubodega — API v1",
-    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 3 — la WAVE 1 completa (registro, sesiones, equipo, contraseña, idempotencia) y el catálogo entero: campos propios, productos, importación, códigos, escaneo, lotes y series, y fotos. Las treinta operaciones que publica `GET /v1/openapi.json` están aquí.\n\nFlujo sugerido: ejecuta la colección en orden. 1) Organizaciones → guarda `orgId`; 2) Autenticación → `accessToken` y `refreshToken`; 3) Perfil; 4) Equipo → crea a Juan y guarda `juanId`; 5) Catálogo → campos propios, productos y sus ids; 6) Fotos → la zona de espera y las dos formas de adjuntar (D-14); 7) los casos de error.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. El pre-request también genera una `Idempotency-Key` nueva en cada POST, salvo donde la petición fija una a mano para demostrar el replay.\n\nTodo POST exige `Idempotency-Key` salvo /v1/organizations, /v1/auth/login, /v1/auth/refresh y /v1/auth/logout. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.\n\nLas dos peticiones multipart suben `docs/postman/pixel.png`: con newman, `--working-dir docs/postman`.",
+    "description": "Contrato público de tubodega (MVP solo-API). Estado: Plan 7 — la WAVE 1 (registro, sesiones, equipo, contraseña, idempotencia), el catálogo entero, las ubicaciones, el ledger con sus existencias, y las plantillas de proceso que toda organización trae sembradas. Las 45 operaciones que publica `GET /v1/openapi.json` están aquí.\n\nFlujo sugerido: ejecuta la colección en orden. 1) Organizaciones → guarda `orgId`; 2) Autenticación → `accessToken` y `refreshToken`; 3) Perfil; 4) Equipo → crea a Juan y guarda `juanId`; 5) Catálogo → campos propios, productos y sus ids; 6) Fotos → la zona de espera y las dos formas de adjuntar (D-14); 7) Ubicaciones, Movimientos y Existencias; 8) Procesos → las seis plantillas, que nadie creó; 9) los casos de error.\n\nLas variables `slug`, `email` y `password` se generan solas si están vacías (pre-request de la colección) para que cada corrida cree una organización nueva. El pre-request también genera una `Idempotency-Key` nueva en cada POST, salvo donde la petición fija una a mano para demostrar el replay.\n\nTodo POST exige `Idempotency-Key` salvo /v1/organizations, /v1/auth/login, /v1/auth/refresh y /v1/auth/logout. Todo error llega como application/problem+json (RFC 9457) con `type`, `title`, `status`, `detail`, `instance`, `traceId` y `errors[]`.\n\nLas dos peticiones multipart suben `docs/postman/pixel.png`: con newman, `--working-dir docs/postman`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -3579,6 +3579,120 @@
       ]
     },
     {
+      "name": "Procesos",
+      "item": [
+        {
+          "name": "Las seis plantillas que la organización trae puestas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates"
+              ]
+            },
+            "description": "Nadie las crea: las siembra el provisioner dentro de la transacción que da de alta la organización, igual que los ocho nodos de frontera de [04 §6]. Solo salen las versiones activas, y sin cursor — son seis, y el día que se puedan editar por organización seguirán siendo pocas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('seis plantillas, sembradas al registrar', () => pm.expect(pm.response.json().data).to.have.lengthOf(6));",
+                  "pm.test('todas en versión 1 y activas', () => pm.response.json().data.forEach((t) => { pm.expect(t.version).to.eql(1); pm.expect(t.active).to.be.true; }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La recepción, paso a paso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/RECEPCION",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "RECEPCION"
+              ]
+            },
+            "description": "Se pide por código de negocio, que no es un uuid. La diferencia entre una recepción y un traslado es qué `allowedKinds` lleva un paso: aquí el origen admite SOURCE, y en TRASLADO admite INTERNAL. Cada paso lleva exactamente una transición (P-8), y la última cierra con `to: null`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('los siete pasos de [13 §6]', () => pm.expect(pm.response.json().steps.map((s) => s.id)).to.eql(['origen','item','lote','cantidad','foto','destino','confirmar']));",
+                  "pm.test('cierra con to: null', () => pm.expect(pm.response.json().steps.at(-1).transitions[0].to).to.be.null);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El ajuste positivo fija su origen por código de nodo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/AJUSTE_ENTRADA",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "AJUSTE_ENTRADA"
+              ]
+            },
+            "description": "Un `default` que nombrara un uuid sería una plantilla de fábrica que solo vale para una empresa: los ocho nodos de frontera los siembra `SeedBoundaryNodes` por `code`, y son distintos en cada organización."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('resuelve adjustment-in por código', () => pm.expect(pm.response.json().steps.find((s) => s.id === 'confirmar').config.defaults.fromNodeCode).to.eql('adjustment-in'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Contrato",
       "item": [
         {
@@ -5404,6 +5518,77 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Casos de error de los procesos",
+      "item": [
+        {
+          "name": "Una plantilla que no existe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/NOEXISTE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "NOEXISTE"
+              ]
+            },
+            "description": "Un código sin versión activa da lo mismo que uno inventado: la diferencia no es asunto del cliente. Y la de la organización de al lado tampoco está — I-6, nunca un 403."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('template-not-found', () => pm.expect(pm.response.json().type).to.include('template-not-found'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token no se leen",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates"
+              ]
+            },
+            "description": "La autorización no vive en el borde, pero la identidad sí: sin credenciales no hay organización sobre la que preguntar."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));",
+                  "pm.test('invalid-credentials', () => pm.expect(pm.response.json().type).to.include('invalid-credentials'));"
                 ]
               }
             }

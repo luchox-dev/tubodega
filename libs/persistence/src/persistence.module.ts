@@ -18,6 +18,7 @@ import { CustomFieldDefinitionDao } from './dao/custom-field-definition.dao.js';
 import { NodeDao } from './dao/node.dao.js';
 import { MovementDao } from './dao/movement.dao.js';
 import { StockBalanceDao } from './dao/stock-balance.dao.js';
+import { ProcessTemplateDao } from './dao/process-template.dao.js';
 
 import { KyselyOutboxEventPublisher } from './outbox/outbox-event-publisher.js';
 import { KyselyOrganizationRepository } from './repositories/organization.repository.js';
@@ -34,11 +35,12 @@ import {
   KyselyMediaUploadRepository,
   KyselyProductMediaRepository,
 } from './repositories/catalog/media.repository.js';
+import { KyselyProcessTemplateRepository } from './repositories/process/template.repository.js';
 
 const DAOS = [
   OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao, IdempotencyKeyDao,
   ProductDao, ProductCodeDao, ProductMediaDao, MediaUploadDao, BatchDao,
-  CustomFieldDefinitionDao, NodeDao, MovementDao, StockBalanceDao,
+  CustomFieldDefinitionDao, NodeDao, MovementDao, StockBalanceDao, ProcessTemplateDao,
 ];
 const ADAPTERS = [
   KyselyOrganizationRepository,
@@ -54,6 +56,7 @@ const ADAPTERS = [
   KyselyStockBalanceRepository,
   KyselyMediaUploadRepository,
   KyselyProductMediaRepository,
+  KyselyProcessTemplateRepository,
 ];
 
 /** Registered once by the root module; no domain library imports it (R-4). */

@@ -3,7 +3,7 @@
 > Rama `plan/07-el-motor-de-procesos` · documento en `docs/superpowers/plans/2026-09-12-07-el-motor-de-procesos.md`
 > Fases del maestro: **F4.1**, **F4.2** y la mitad de lectura de **F4.4** *(re-cortado, D-51)*
 
-## Estado: **pendiente**
+## Estado: **ejecutado** · 2026-09-12
 
 ---
 
@@ -161,9 +161,9 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 ### Task 0: Rama y documento del plan
 
-- [ ] **Step 1:** `git checkout -b plan/07-el-motor-de-procesos`
-- [ ] **Step 2:** Este documento.
-- [ ] **Step 3: Commit** `docs(plan): plan 7 — el motor de procesos`
+- [x] **Step 1:** `git checkout -b plan/07-el-motor-de-procesos`
+- [x] **Step 2:** Este documento.
+- [x] **Step 3: Commit** `docs(plan): plan 7 — el motor de procesos`
 
 ---
 
@@ -173,26 +173,26 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 `.dependency-cruiser.cjs`, `libs/process/tsconfig.lib.json`,
 `libs/process/src/{index.ts, domain/ids.ts, domain/step-types.ts, domain/errors.ts}`
 
-- [ ] **Step 1: los seis ficheros del andamiaje** (D-48). Copiar de `inventory` en cada uno.
+- [x] **Step 1: los seis ficheros del andamiaje** (D-48). Copiar de `inventory` en cada uno.
       `tsconfig.json` lleva **las dos cosas**: `paths['@app/process']` apuntando al
       `index.ts` —bajo `moduleResolution: nodenext` un directorio no resuelve por índice— y
       una entrada en `references`. Los alias de vitest están **duplicados a mano en dos
       ficheros**: el que se olvide falla solo en `pnpm test:e2e`, media hora después.
-- [ ] **Step 2: la regla R-2 que falta.** `.dependency-cruiser.cjs` nombra `process` y
+- [x] **Step 2: la regla R-2 que falta.** `.dependency-cruiser.cjs` nombra `process` y
       `alerts` en las reglas de tenancy, catalog e inventory, lo que hace *parecer* que
       están cubiertos. No hay ninguna que impida `process → alerts`. Probarla con un import
       prohibido temporal, ver `pnpm lint` en rojo, y retirarlo.
-- [ ] **Step 3:** `domain/ids.ts` con `StepId` y `TemplateCode`. **Aquí y no en
+- [x] **Step 3:** `domain/ids.ts` con `StepId` y `TemplateCode`. **Aquí y no en
       `@app/common`**: solo `ProcessInstanceId` vive allí, y su comentario explica por qué
       (lo referencia `inventory`). `TemplateCode.of` valida contra `varchar(64)`.
-- [ ] **Step 4:** `step-types.ts` y `errors.ts` — los dieciséis de
+- [x] **Step 4:** `step-types.ts` y `errors.ts` — los dieciséis de
       [13 §12](docs/specs/13-process.md), incluidos los tres que el refinamiento añadió:
       `process-instance-not-found` (404), `process-instance-id-taken` (409) e
       `invalid-template` (422). Los de instancia se declaran aunque el plan 8 sea quien los
       lance: el fichero de errores del módulo se escribe una vez.
-- [ ] **Step 5: Run** `pnpm lint && pnpm typecheck && pnpm test` → PASS con la librería
+- [x] **Step 5: Run** `pnpm lint && pnpm typecheck && pnpm test` → PASS con la librería
       vacía. Si `depcruise` no ve `libs/process`, es que falta el `paths`.
-- [ ] **Step 6: Commit** `feat(process): la librería de alta, y el vocabulario del motor`
+- [x] **Step 6: Commit** `feat(process): la librería de alta, y el vocabulario del motor`
 
 ---
 
@@ -201,24 +201,24 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 **Files:** `libs/process/src/domain/{template.ts, factory-templates.ts}` + specs;
 `libs/process/test/builders/a-template.ts`
 
-- [ ] **Step 1: spec primero.** El validador rechaza: dos transiciones en un paso
+- [x] **Step 1: spec primero.** El validador rechaza: dos transiciones en un paso
       (`branching-not-supported`, P-8); un `type` que no está en `StepType`
       (`unknown-step-type`); una transición a un `id` que no existe, un paso inalcanzable
       desde el primero, y una plantilla que no cierra con `to: null` (`invalid-template`).
       Y acepta: `firstStep()`, `step(id)`, `transitionsFrom(id)`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `invalid-template` es el que importa y el que el maestro no
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `invalid-template` es el que importa y el que el maestro no
       pedía: `unknown-step-type` cubre el tipo raro y `branching-not-supported` la rama, pero
       una plantilla cuyo `confirmar` transite a un paso mal escrito **pasa las dos y se
       siembra rota**, y el fallo aparece semanas después en la instancia de alguien, como un
       500.
-- [ ] **Step 4:** `FACTORY_TEMPLATES`, **copiadas literalmente** de
+- [x] **Step 4:** `FACTORY_TEMPLATES`, **copiadas literalmente** de
       [13 §6](docs/specs/13-process.md), que ya las trae en JSONC con `id`, `required`,
       `config` y `transitions`. No se inventa ninguna.
-- [ ] **Step 5:** la prueba que las cruza: **cada una de las seis pasa el validador**. Es
+- [x] **Step 5:** la prueba que las cruza: **cada una de las seis pasa el validador**. Es
       barata y es la única que impide sembrar una plantilla rota en cada organización nueva.
-- [ ] **Step 6: Run** → PASS.
-- [ ] **Step 7: Commit** `feat(process): la plantilla, su validador, y las seis de fábrica`
+- [x] **Step 6: Run** → PASS.
+- [x] **Step 7: Commit** `feat(process): la plantilla, su validador, y las seis de fábrica`
 
 ---
 
@@ -226,21 +226,21 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 **Files:** `libs/process/src/domain/{instance.ts, context.ts, drafts.ts, step-completion.ts, effects.ts}` + specs
 
-- [ ] **Step 1: spec primero.** `ProcessInstance.isOpen()`, `canComplete(stepId)`;
+- [x] **Step 1: spec primero.** `ProcessInstance.isOpen()`, `canComplete(stepId)`;
       `ProcessContext.with` acumula por paso; `withDraft` **funde** —no añade— y
       `withStorageKeys` acumula aparte.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** El borrador es **uno** (la corrección de
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** El borrador es **uno** (la corrección de
       [13 §2](docs/specs/13-process.md)), y **no lleva `occurredAt`**: la hora del asiento
       la pone el aplicador de efectos con el `Clock` en el plan 8, porque una instancia puede
       llevar abierta desde ayer.
       Las claves de foto van en su propio campo y no en el borrador: alimentan otro efecto,
       y sobre un producto, no sobre una posición.
-- [ ] **Step 4:** `effects.ts` con el `feeds` de la corrección: el índice del borrador al que
+- [x] **Step 4:** `effects.ts` con el `feeds` de la corrección: el índice del borrador al que
       alimenta el `CREATE_BATCH`. Hoy siempre `0`; sin él, el orden de los efectos no sirve
       de nada porque el `batchId` no tiene dónde aterrizar.
-- [ ] **Step 5: Run** → PASS.
-- [ ] **Step 6: Commit** `feat(process): la instancia, el contexto que acumula, y los efectos`
+- [x] **Step 5: Run** → PASS.
+- [x] **Step 6: Commit** `feat(process): la instancia, el contexto que acumula, y los efectos`
 
 ---
 
@@ -248,18 +248,18 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 
 **Files:** `libs/process/src/domain/{runner.ts, linear-runner.ts}` + spec
 
-- [ ] **Step 1: spec primero**, una prueba por invariante y nombrada por su número:
+- [x] **Step 1: spec primero**, una prueba por invariante y nombrada por su número:
       **P-2** paso que no es el actual → `wrong-step` con el actual en el `detail`;
       **P-4** instancia `COMPLETED` o `CANCELLED` → `instance-closed`;
       **P-5** `required: true` con payload `null` → `required-step-skipped`;
       omitir un `required: false` avanza **sin invocar al manejador**;
       `to: null` deja la instancia `COMPLETED`;
       y **efectos vacíos en todo paso que no sea `CONFIRM`** (P-6).
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `advance` devuelve `Result<AdvanceOutcome>`, no lanza: es
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `advance` devuelve `Result<AdvanceOutcome>`, no lanza: es
       dominio.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(process): el motor lineal, y las cinco invariantes que sostiene`
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(process): el motor lineal, y las cinco invariantes que sostiene`
 
 ---
 
@@ -271,31 +271,31 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 `HandlerDeps` es un objeto de **funciones**, no de puertos (D-46), y el doble es un objeto
 literal con mapas en memoria — no hay clase que escribir.
 
-- [ ] **Step 1: spec primero**, cada manejador con payload válido, inválido
+- [x] **Step 1: spec primero**, cada manejador con payload válido, inválido
       (`invalid-step-payload` con `pointer`) y `null`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: los cinco simples.** `SCAN_ITEM` (resuelve con `resolveCode`, que devuelve
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: los cinco simples.** `SCAN_ITEM` (resuelve con `resolveCode`, que devuelve
       `null` en vez de lanzar), `CAPTURE_QTY` (positiva; entera si la unidad es
       `UNIT`/`BOX`/`PACK`), `CAPTURE_REASON` (3-500), `SET_DUE_DATE` (futura contra el
       `clock`; el destino ya es `CUSTODY` porque el paso `tenedor` va antes en la plantilla),
       `CAPTURE_PHOTO` (1-5 claves; **acumula en el contexto, no produce efecto** — la
       corrección de [13 §5](docs/specs/13-process.md); una clave que no está en la zona de
       espera o ya fue reclamada es `upload-not-found`, no `invalid-step-payload`).
-- [ ] **Step 4: `SELECT_NODE`,** que es donde se ve que `validate` y `apply` necesitan el
+- [x] **Step 4: `SELECT_NODE`,** que es donde se ve que `validate` y `apply` necesitan el
       `config`: lee `allowedKinds` al validar y `role` al aplicar. Es **un** manejador
       parametrizado y no dos, y es lo que hace que seis plantillas se armen con ocho piezas.
-- [ ] **Step 5: `CAPTURE_BATCH`,** las **seis celdas** de la tabla de
+- [x] **Step 5: `CAPTURE_BATCH`,** las **seis celdas** de la tabla de
       [13 §5](docs/specs/13-process.md) más «`SCAN_ITEM` ya aportó lote». Decide `batchId`
       contra `newBatch` con `findBatchByLot` y `findBatchBySerial`, que es justo por lo que
       `HandlerDeps` creció.
-- [ ] **Step 6: `CONFIRM`.** Borrador completo y coherente; borrador incompleto →
+- [x] **Step 6: `CONFIRM`.** Borrador completo y coherente; borrador incompleto →
       `incomplete-draft` con la lista de lo que falta en el `detail`; los `defaults`
       resueltos con `findNodeByCode` —y no con una lista de uuids, que sería una plantilla
       de fábrica que solo vale para una empresa—; **lo que el borrador ya trae gana sobre el
       `default`**. Emite los tres efectos en orden.
-- [ ] **Step 7:** `registry.ts`. Un registro y no un `switch`: añadir un paso es una clase.
-- [ ] **Step 8: Run** `pnpm test libs/process` → PASS, cobertura de `domain/**` al 100 %.
-- [ ] **Step 9: Commit** `feat(process): los ocho manejadores, y el registro que los reúne`
+- [x] **Step 7:** `registry.ts`. Un registro y no un `switch`: añadir un paso es una clase.
+- [x] **Step 8: Run** `pnpm test libs/process` → PASS, cobertura de `domain/**` al 100 %.
+- [x] **Step 9: Commit** `feat(process): los ocho manejadores, y el registro que los reúne`
 
 ---
 
@@ -308,23 +308,23 @@ Es la prueba que [13 §13](docs/specs/13-process.md) exige y la que cierra el 10
 uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create` de
 `@app/inventory`.
 
-- [ ] **Step 1:** el mundo de papel en el doble de `HandlerDeps`: cuatro productos (uno por
+- [x] **Step 1:** el mundo de papel en el doble de `HandlerDeps`: cuatro productos (uno por
       modo más el de la serie), los nodos del reparto narrativo, y los ocho de frontera por
       `code` —`adjustment-in` y `adjustment-out` hacen falta de verdad, porque los `defaults`
       de las dos plantillas de ajuste los resuelven por código—.
-- [ ] **Step 2:** el recorrido. **18 combinaciones** (6 × 3), y las que no aplican se
+- [x] **Step 2:** el recorrido. **18 combinaciones** (6 × 3), y las que no aplican se
       afirman como el error que toca, no se saltan: `CAPTURE_BATCH` con `null` sobre un `LOT`
       sin lote del escaneo es `batch-step-required`, y con datos sobre un `QUANTITY` es
       `batch-step-not-allowed`.
-- [ ] **Step 3:** la aserción que cierra el círculo — el `MovementDraft` final se convierte
+- [x] **Step 3:** la aserción que cierra el círculo — el `MovementDraft` final se convierte
       en `RecordMovementInput` (con un `occurredAt` fijo, que aquí lo pone la prueba) y
       `Movement.create` lo acepta. **Es la única prueba que demuestra que el motor y el
       ledger hablan el mismo idioma**, y la que habría cazado que `MovementDraft` no tenía
       `occurredAt` si el refinamiento no lo hubiera visto antes.
       Ojo con las dos de ajuste: un extremo `adjustment-in`/`adjustment-out` exige `reason`
       en el dominio (D-36), y por eso su paso `motivo` es `required: true`.
-- [ ] **Step 4: Run** `pnpm test:cov libs/process` → PASS con `domain/**` al 100/100.
-- [ ] **Step 5: Commit** `test(process): las seis plantillas de punta a punta, y el asiento que producen`
+- [x] **Step 4: Run** `pnpm test:cov libs/process` → PASS con `domain/**` al 100/100.
+- [x] **Step 5: Commit** `test(process): las seis plantillas de punta a punta, y el asiento que producen`
 
 ---
 
@@ -339,7 +339,7 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
 `libs/persistence/test/repositories/process/template.repository.int-spec.ts`;
 `apps/tubodega/test/edge/org-seeding.int-spec.ts`
 
-- [ ] **Step 1:** los tres alias en `models/index.ts` —**un solo fichero**, no el
+- [x] **Step 1:** los tres alias en `models/index.ts` —**un solo fichero**, no el
       `src/models/*.ts` que dibuja el mapa del maestro— y `process-template.dao.ts` sobre
       `AbstractOrgDao`. `steps` es `jsonb`: el mapeo de ida y vuelta vive en `mapping.ts`,
       como en catalog e inventory.
@@ -348,29 +348,29 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
       `false` —como en `NodeDao` está en `true` porque allí sí lo es—, o el DAO tratará el
       número de versión de la plantilla como un contador de ediciones y `save` fallará con
       `VersionConflictError` la primera vez que alguien cree una `v2`.
-- [ ] **Step 2:** el puerto `ProcessTemplateRepository` con los cinco métodos de
+- [x] **Step 2:** el puerto `ProcessTemplateRepository` con los cinco métodos de
       [13 §8](docs/specs/13-process.md). `hasInstances` se declara aunque **no tenga ruta
       que lo produzca en el MVP**: es P-9, y el plan 8 lo usa.
-- [ ] **Step 3: spec primero** de `SeedFactoryTemplates`: siembra las seis en versión 1, y
+- [x] **Step 3: spec primero** de `SeedFactoryTemplates`: siembra las seis en versión 1, y
       **llamarlo dos veces no duplica**. Idempotente por `findVersion(code, 1)` antes de
       `save`, como `SeedBoundaryNodes` — y no con `ON CONFLICT`, porque un `23505` abortaría
       la transacción que crea la organización.
-- [ ] **Step 4: implementar** (D-26): `execute(orgId)`, **sin `RequestContext`, sin
+- [x] **Step 4: implementar** (D-26): `execute(orgId)`, **sin `RequestContext`, sin
       `requireAction`, sin eventos**. Cuando corre no hay organización ni token, y un ctx con
       roles inventados sería una autorización que no puede fallar. `organization.created` ya
       cuenta el hecho.
-- [ ] **Step 5:** el adaptador y el cableado. `factory-templates.seeder.ts` es el molde
+- [x] **Step 5:** el adaptador y el cableado. `factory-templates.seeder.ts` es el molde
       exacto de `boundary-nodes.seeder.ts`. En `adapters.module.ts`, `ORG_SEEDERS` gana una
       línea en `inject` y un parámetro en el `useFactory` —**`useFactory` y no `useValue`**,
       que es lo que ya dice su comentario—, y `AdaptersModule` importa `ProcessModule` como
       ya importa `InventoryModule`.
-- [ ] **Step 6: integración.** El repositorio contra Postgres con `withRollback`, y
+- [x] **Step 6: integración.** El repositorio contra Postgres con `withRollback`, y
       `org-seeding.int-spec.ts` —que ya existe para los ocho nodos— comprobando que tras
       `CreateOrganization` hay **seis plantillas activas en versión 1**, y que las seis pasan
       el validador al releerlas de la base. El `jsonb` de ida y vuelta es donde se rompen
       estas cosas.
-- [ ] **Step 7: Run** `pnpm test:e2e libs/persistence apps/tubodega/test/edge` → PASS.
-- [ ] **Step 8: Commit** `feat(process): las seis plantillas sembradas con la organización`
+- [x] **Step 7: Run** `pnpm test:e2e libs/persistence apps/tubodega/test/edge` → PASS.
+- [x] **Step 8: Commit** `feat(process): las seis plantillas sembradas con la organización`
 
 ---
 
@@ -382,33 +382,33 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
 `apps/tubodega/test/edge/openapi.int-spec.ts`; `scripts/blackbox/lib.sh`;
 `scripts/blackbox/35-procesos.sh`; `scripts/seed.sh`; `docs/postman/…`
 
-- [ ] **Step 1: spec primero** de los dos casos de uso: `requireAction(ctx, Action.READ)`
+- [x] **Step 1: spec primero** de los dos casos de uso: `requireAction(ctx, Action.READ)`
       como primera línea; `ListTemplates` devuelve solo las activas;
       `GetActiveTemplate` da `404 template-not-found` para un código que no existe **y** para
       uno sin versión activa.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar** los dos, y `process.module.ts` con ellos y el sembrador.
-- [ ] **Step 4: el controlador**, molde `nodes.controller.ts`: `@ApiTags('process')`,
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar** los dos, y `process.module.ts` con ellos y el sembrador.
+- [x] **Step 4: el controlador**, molde `nodes.controller.ts`: `@ApiTags('process')`,
       `@ApiBearerAuth()`, `@ApiOperation` en español, y **todo error declarado como
       `ProblemDetailsView` con los slugs separados por ` · `**. `GET /v1/process-templates`
       no pagina —son seis, y el día que sean por tenant seguirán siendo pocas—, así que **no
       lleva `parsePage`** y por tanto tampoco filtros: cualquier query sobra.
       El `{code}` de la ruta no es un uuid: `UuidParam` **no** se aplica, y un código que no
       existe es `404 template-not-found` por el caso de uso.
-- [ ] **Step 5:** el snapshot. La lista literal de paths de `openapi.int-spec.ts` gana los
+- [x] **Step 5:** el snapshot. La lista literal de paths de `openapi.int-spec.ts` gana los
       dos, `pnpm openapi:write`, y `git diff` del `openapi.json` enseña exactamente **dos
       operaciones nuevas: 44 → 46**.
-- [ ] **Step 6: la caja negra** (D-50). `plantilla()` en `lib.sh` aprende
+- [x] **Step 6: la caja negra** (D-50). `plantilla()` en `lib.sh` aprende
       `/process-templates/{code}` —**antes** de la regla que lo dejaría tal cual—, y
       `35-procesos.sh` recorre: las seis activas en versión 1, una con sus pasos y sus
       transiciones de un elemento, `404 template-not-found`, `401` sin token, y el `404`
       cross-org con una segunda organización (I-6, nunca `403`). Camino feliz **y** de error
       por cada una de las dos operaciones, que es lo que el cruce del runner exige.
-- [ ] **Step 7: Run** contra un proceso propio **en un puerto libre**, no el `:3000`.
-- [ ] **Step 8:** Postman —carpeta «Procesos», con el par feliz/error— y `scripts/seed.sh`,
+- [x] **Step 7: Run** contra un proceso propio **en un puerto libre**, no el `:3000`.
+- [x] **Step 8:** Postman —carpeta «Procesos», con el par feliz/error— y `scripts/seed.sh`,
       que gana un paso comprobando que el mundo sembrado trae las seis plantillas. El seed
       no las *crea*: las siembra el provisioner. Lo que hace es no mentir sobre lo que hay.
-- [ ] **Step 9: Commit** `feat(http): las plantillas de proceso, publicadas`
+- [x] **Step 9: Commit** `feat(http): las plantillas de proceso, publicadas`
 
 ---
 
@@ -416,14 +416,129 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
 
 **Files:** este documento; `README.md`
 
-- [ ] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba
+- [x] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba
       previsto, las desviaciones, y «lo que encontró cada capa de prueba».
-- [ ] **Step 2:** `README.md` — la tabla del seed («plantillas e instancias de proceso |
+- [x] **Step 2:** `README.md` — la tabla del seed («plantillas e instancias de proceso |
       plan 8» pasa a ser solo las instancias) y el estado de la WAVE 4.
-- [ ] **Step 3:** las decisiones nuevas, numeradas desde **D-52**, también en el maestro si
+- [x] **Step 3:** las decisiones nuevas, numeradas desde **D-52**, también en el maestro si
       cambian una fase pendiente.
-- [ ] **Step 4:** las seis puertas.
-- [ ] **Step 5: Commit** `docs(plan): la bitácora del plan 7`
+- [x] **Step 4:** las seis puertas.
+- [x] **Step 5: Commit** `docs(plan): la bitácora del plan 7`
+
+---
+
+## Bitácora
+
+Ejecutado el 2026-09-12 en `plan/07-el-motor-de-procesos`, nueve tareas y nueve
+commits. Al terminar, registrar una organización deja seis plantillas sembradas y
+visibles con `curl`, que es lo que el re-corte D-51 existía para conseguir.
+
+### Lo que se encontró y no estaba previsto
+
+**El conteo de OpenAPI estaba mal en este documento.** Decía «44 → 46». El snapshot
+partía de **43** operaciones en 30 paths, así que lo entregado es **45 en 32**. El
+diff son 229 líneas, todas añadidas, y cuatro schemas nuevos.
+
+**La regla R-2 sí hacía falta escribirla.** El fichero nombraba `process` como
+*destino* en las reglas de tenancy, catalog e inventory, lo que hacía parecer el par
+cubierto. Se probó en rojo con un `libs/alerts` temporal antes de retirarlo, y
+disparó: `R-2 dependency-order-process`.
+
+**`upload-not-found` no se podía declarar aquí.** Ya existe como `UploadNotFoundError`
+de `@app/catalog`, que es quien lo lanza al reclamar las claves, y [13 §12] pide
+literalmente ese mismo `type` para que el cliente no aprenda dos nombres para un
+problema. Los errores de este módulo son quince, no dieciséis, y el que se añadió en
+su lugar es `invalid-template-code`, que `TemplateCode.of` necesita para poder decir
+que no (y que el borde nunca enseña: un código imposible es un 404).
+
+**`CAPTURE_BATCH` no veía el `null` que tenía que rechazar.** El motor trata la
+omisión sin invocar al manejador, pero [13 §4.2] dice que este puede «exigir que se le
+omita o que no se le omita». De ahí sale `StepHandler.onOmit` (D-54): el único gancho
+de omisión, el único que lo implementa, y de donde sale `batch-step-required`.
+
+**`apply` es síncrona y `validate` es la única que puede preguntar.** Como `validate`
+devuelve el payload, es ahí donde tiene que viajar lo que resuelve: `SCAN_ITEM` el
+producto, `CAPTURE_BATCH` el `batchId` o el `newBatch`, `CONFIRM` los lados que fija su
+`config`. Varios payloads ganan campos «resueltos» (D-56), y acaban en el
+`step_completion`, que es donde interesa saber qué entendió el motor.
+
+**`HandlerDeps` necesitaba el `orgId`.** Las seis lecturas lo llevan en su firma —que
+es lo que permite enchufarlas directas a los repositorios sin adaptador (D-46)— y el
+manejador no tiene de dónde sacarlo: `ProcessContext` no lleva tenencia a propósito, y
+`validate` no recibe la instancia (D-53).
+
+**`CAPTURE_PHOTO` no puede comprobar la zona de espera con los deps que tiene.**
+Reclamar una clave es una escritura, su gemela de solo lectura no existe, y una
+comprobación aquí sería un TOCTOU: entre capturar y confirmar, otro puede reclamarla.
+Se deja donde ocurre el reclamo —`AttachMedia`, al aplicar el efecto— que ya lanza el
+`upload-not-found` que pide [13 §12] (D-58).
+
+**P-6 se pudo hacer estructura.** El motor pide los efectos en un solo sitio, y ese
+sitio es el instante en que la instancia llega a COMPLETED. Eso abrió un hueco —un
+`CONFIRM` en mitad de una plantilla perdería sus tres efectos en silencio— que el
+validador cierra con una regla que este documento no pedía: un `CONFIRM` que no cierre
+el proceso es `invalid-template` (D-55).
+
+**El listado no rechaza una query desconocida.** Sin `parsePage` no hay quién la mire,
+así que `?limit=2` se ignora y salen las seis. Es la única colección del contrato que
+no contesta `400 invalid-filter` a una clave que no existe (D-59).
+
+### Desviaciones
+
+| Qué dijo el plan | Qué se hizo, y por qué |
+|---|---|
+| «44 → 46 operaciones» | **43 → 45.** El snapshot partía de 43 |
+| `registry.ts` en la Task 5 | Escrito en la **Task 4**, junto con `handlers/handler.ts`: el motor no compila sin ellos, y la Task 4 va antes |
+| `org-seeding.int-spec.ts` en la Task 7 | Movido a la **Task 8**: comprueba por HTTP, y el endpoint aparece allí |
+| `advance(instance, template, stepId, payload)` síncrono | **`async`, y recibe los deps.** `validate` le pregunta al mundo; sin eso las seis plantillas no se recorren. Sigue devolviendo `Result` y sin lanzar (D-57) |
+| `start(template, actorId)` | Recibe además el `id`: el dominio no alcanza un `IdGenerator`, y `StartProcess` acepta un id del cliente de todas formas |
+| `class StepCompletion` | Una **interfaz**. No tiene comportamiento, y el plan 8 es quien escribe esas filas |
+| `ids.ts` con `StepId` y `TemplateCode` | Más `ProcessTemplateId` y `StepCompletionId`: las dos entidades necesitan el suyo |
+| `ProcessTemplate` con `rehydrate` | **Sin él.** Son seis filas de JSONB cuya forma va a cambiar, el validador es puro y barato, y leer es la última ocasión de notar que lo sembrado no se puede ejecutar |
+| `pnpm test:cov libs/process` como puerta | **No puede pasar tal cual**: filtrar deja sin correr las pruebas de los otros directorios y sus umbrales fallan. El listón real es `pnpm test:cov` entero; el filtrado sirve para leer el número de `process` |
+| «Test primero, y el ciclo rojo-verde se ve» | Cumplido en las Tasks 2, 3, 4, 7 y 8, con el fallo anotado cada vez. **En la Task 5 no**: los ocho manejadores se escribieron antes que sus specs. Para no dejarlo en una afirmación, la Task 6 comprueba que la suite muerde mutando `CONFIRM` — doce pruebas en rojo, seis de ellas recorridos completos |
+
+### Lo que encontró cada capa de prueba
+
+**El dominio** (177 pruebas, 100 % de `domain/**` en líneas y ramas) encontró lo que
+estaba mal en el diseño antes de que costara: que el motor no le daba a
+`CAPTURE_BATCH` forma de rechazar una omisión; que `apply` no tenía por dónde devolver
+lo resuelto; y, cerrando la cobertura, una rama del runner que `parseSteps` hacía
+inalcanzable, que se retiró en vez de inventarle una prueba.
+
+**El recorrido de las seis** (18 combinaciones) es la única prueba que demuestra que
+el motor y el ledger hablan el mismo idioma: el borrador final pasa `Movement.create`.
+Confirmó de paso que `MovementDraft` no necesita `occurredAt` —lo pone quien confirma—
+y que los `defaults` de las dos de ajuste resuelven de verdad contra nodos sembrados
+por código.
+
+**La integración** encontró lo que solo se ve contra Postgres: que el `config` y las
+transiciones sobreviven al viaje de ida y vuelta por `jsonb`, incluido el
+`{ defaults: { fromNodeCode: "adjustment-in" } }`, y que reescribir una plantilla tres
+veces no le toca el número de versión — que es la trampa del `versioned` del DAO.
+
+**La caja negra** cruzó el contrato entero: 455 aciertos, 0 fallos, y 46/46
+operaciones con camino feliz y de error. `plantilla()` tuvo que aprender
+`/process-templates/{code}`: sin esa regla el cruce habría dado las dos operaciones
+por no ejercitadas y el verde habría sido falso.
+
+**Las tres comprobaciones a mano** del final de este documento dieron exactamente lo
+prometido: seis, los siete pasos cerrando en `null`, y 404.
+
+### Decisiones nuevas
+
+Continúan la serie en **D-52** y están en el maestro.
+
+| # | Qué decide |
+|---|---|
+| **D-52** | `process` **no declara `upload-not-found`**: usa `UploadNotFoundError` de `@app/catalog`, que es quien lo lanza. Extiende D-46 a los errores |
+| **D-53** | `HandlerDeps` lleva un `orgId`, además de las seis lecturas que lo reciben por parámetro |
+| **D-54** | `StepHandler.onOmit`: el gancho con que un manejador exige que no se le omita. Solo `CAPTURE_BATCH` lo implementa |
+| **D-55** | Los efectos se piden **solo al completar**, y un `CONFIRM` que no cierre el proceso es `invalid-template`. P-6 deja de ser convención |
+| **D-56** | `validate` devuelve el payload **enriquecido** con lo que resolvió, y eso es lo que se guarda en `step_completion` |
+| **D-57** | `ProcessRunner.advance` es `async` y recibe los `HandlerDeps`; `start` recibe el `id` de la instancia |
+| **D-58** | `CAPTURE_PHOTO` no comprueba la zona de espera: lo hace `AttachMedia` al aplicar el efecto, que es donde ocurre el reclamo |
+| **D-59** | `GET /v1/process-templates` ignora cualquier query. Se revisa en el plan 8, cuando el recurso gane `POST …/{code}/versions` |
 
 ---
 

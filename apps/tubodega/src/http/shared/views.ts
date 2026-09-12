@@ -3,6 +3,7 @@ import type {
   Batch, CustomFieldDefinition, Product, ProductCode, StoredMedia,
 } from '@app/catalog';
 import type { Movement, Node, NodeTree, OpenCustody, StockPosition } from '@app/inventory';
+import type { ProcessTemplate } from '@app/process';
 import type { Organization, User } from '@app/tenancy';
 import type { CustomFieldView } from '../custom-fields/custom-fields.dto.js';
 import type { MovementView, StockPositionView } from '../movements/movements.dto.js';
@@ -11,6 +12,7 @@ import type { OpenCustodyView } from '../stock/stock.dto.js';
 import type {
   BatchView, MediaView, ProductCodeView, ProductView,
 } from '../products/products.dto.js';
+import type { ProcessTemplateView } from '../process-templates/process-templates.dto.js';
 import type { OrganizationView, UserView } from './shared.dto.js';
 
 export const userView = (u: User): UserView => ({
@@ -134,4 +136,18 @@ export const custodyView = (c: OpenCustody): OpenCustodyView => ({
   checkOut: movementView(c.checkOut),
   pending: c.pending.toString(),
   overdue: c.overdue,
+});
+
+export const processTemplateView = (t: ProcessTemplate): ProcessTemplateView => ({
+  id: t.id,
+  code: t.code,
+  version: t.version,
+  active: t.active,
+  steps: t.steps.map((s) => ({
+    id: s.id,
+    type: s.type,
+    required: s.required,
+    config: s.config,
+    transitions: s.transitions.map((tr) => ({ to: tr.to })),
+  })),
 });

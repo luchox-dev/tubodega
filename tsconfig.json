@@ -31,6 +31,9 @@
       "@app/inventory": [
         "./libs/inventory/src/index.ts"
       ],
+      "@app/process": [
+        "./libs/process/src/index.ts"
+      ],
       "@app/persistence": [
         "./libs/persistence/src/index.ts"
       ],
@@ -52,6 +55,9 @@
     },
     {
       "path": "./libs/inventory/tsconfig.lib.json"
+    },
+    {
+      "path": "./libs/process/tsconfig.lib.json"
     },
     {
       "path": "./libs/persistence/tsconfig.lib.json"

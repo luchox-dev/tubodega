@@ -8,14 +8,19 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 5 — el ledger
+## Estado: Plan 7 — el motor de procesos
 
-Las cuarenta y cuatro operaciones de abajo están vivas y probadas de tres formas: por
+Las cuarenta y cinco operaciones de abajo están vivas y probadas de tres formas: por
 dentro (`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de
-verdad (`pnpm blackbox`). El plan 5 trae **el núcleo del producto**: la partida doble
-entre dos nodos, el saldo que se materializa en la misma transacción y no baja de
-cero, la compensación como única forma de corregir, y el préstamo que se salda por
-préstamo. El índice completo está en el
+verdad (`pnpm blackbox`). El plan 7 abre la **WAVE 4**: `libs/process` existe, con el
+motor lineal, los ocho manejadores y las seis plantillas de fábrica que toda
+organización trae sembradas desde el instante en que se registra. Seis procesos, ocho
+manejadores, un motor: la diferencia entre una recepción y un traslado es qué
+`allowedKinds` lleva un paso.
+
+Lo que hoy se puede hacer con ellas es **leerlas**. Abrir una instancia y completar
+sus pasos —y que de ahí salgan movimientos de verdad— llega con el plan 8. El índice
+completo está en el
 [plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
 
 | Endpoint | Acción | Qué hace |
@@ -63,6 +68,8 @@ préstamo. El índice completo está en el
 | `POST /v1/movements/{id}/reverse` | `REVERSE_MOVEMENT` | Compensa. Un movimiento no se edita nunca (I-3), y compensar dos veces es `409` |
 | `GET /v1/stock` | `READ` | Qué hay y dónde; `custodialOnly`, `nonZeroOnly` y `under` para agregar un subárbol |
 | `GET /v1/stock/custodies` | `READ` | Qué está prestado y no ha vuelto, **por préstamo** y con su `dueAt` |
+| `GET /v1/process-templates` | `READ` | Los seis procesos que la organización sabe ejecutar, sembrados al registrarla |
+| `GET /v1/process-templates/{code}` | `READ` | Una plantilla por su código de negocio, con sus pasos y sus transiciones |
 | `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
@@ -183,7 +190,8 @@ libs/common/             tipos del núcleo: Branded, Result, DomainError, Page, 
 libs/persistence/        schema.prisma, migraciones, tipos generados, Kysely, DAOs, repositorios (@app/persistence)
 libs/tenancy/            organización, usuarios, roles, autenticación (@app/tenancy)
 libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app/catalog)
-libs/inventory/          el grafo de nodos: dónde puede haber mercancía (@app/inventory)
+libs/inventory/          el grafo de nodos y el ledger: dónde puede haber mercancía y qué se movió (@app/inventory)
+libs/process/            el motor de procesos: plantillas, pasos tipados y el runner lineal (@app/process)
 test/support/            harness de integración (withRollback) y cliente e2e
 scripts/blackbox.sh      caja negra: corre las suites de scripts/blackbox/ y cruza la cobertura
 docs/specs/              los specs; docs/superpowers/plans/ los planes; docs/postman/ la colección
@@ -259,7 +267,7 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 ### Caja negra
 
 [`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
-HTTP contra un servidor de verdad — 403 comprobaciones en cinco suites, 404
+HTTP contra un servidor de verdad — 455 comprobaciones en seis suites, 456
 si exportas `JWT_SECRET`:
 
 | Suite | Qué recorre |
@@ -268,11 +276,12 @@ si exportas `JWT_SECRET`:
 | [`20-catalogo.sh`](scripts/blackbox/20-catalogo.sh) | Diego migra la hoja de cálculo y Juan escanea en el pasillo: campos propios, importación, fotos, códigos, series y lotes |
 | [`25-ubicaciones.sh`](scripts/blackbox/25-ubicaciones.sh) | Diego dibuja el árbol de la bodega, lo reorganiza y retira un bin: la frontera que ya estaba, el subárbol que se mueve entero, los ciclos y las reglas del árbol |
 | [`30-movimientos.sh`](scripts/blackbox/30-movimientos.sh) | Juan recibe, ubica, traslada y despacha; presta el taladro y lo devuelve; se equivoca y Diego lo corrige. El saldo que no baja de cero, la serie que no está en dos sitios, y el préstamo que se salda por préstamo |
+| [`35-procesos.sh`](scripts/blackbox/35-procesos.sh) | Las seis plantillas que toda organización trae puestas, sin que nadie las cree: sus pasos, sus transiciones de un elemento (P-8), el lado que el ajuste fija por código de nodo, y la de la empresa de al lado, que no está |
 | [`40-transversal.sh`](scripts/blackbox/40-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger. Va la última porque hace falta que exista algo que mover |
 
 ```bash
 pnpm start:dev                       # en otra terminal
-pnpm blackbox                        # las cinco suites y el informe de cobertura
+pnpm blackbox                        # las seis suites y el informe de cobertura
 BASE=http://otra-maquina:3000 pnpm blackbox
 BASE=http://localhost:3001 DB=tubodega_docker pnpm blackbox   # contra la pila de compose
 ./scripts/blackbox.sh --only tenencia
@@ -285,10 +294,10 @@ alguna queda sin cubrir, la nombra y sale distinto de cero: «completo» deja de
 ser una palabra y pasa a ser algo que se comprueba solo.
 
 ```
-  operaciones del contrato: 37
-  ejercitadas:              37
-  con camino feliz:         37
-  con camino de error:      37  (1 sin error posible)
+  operaciones del contrato: 46
+  ejercitadas:              46
+  con camino feliz:         46
+  con camino de error:      46  (1 sin error posible)
 ```
 
 **No sustituye a `pnpm test:e2e`, lo complementa.** La suite corre en proceso con
@@ -347,8 +356,12 @@ que el contrato sabe crear; lo que aún no existe:
 
 | Todavía no siembra | Llega en |
 |---|---|
-| Plantillas e instancias de proceso | plan 8 |
+| Instancias de proceso | plan 8 |
 | Reglas de alerta | plan 9 |
+
+Las **plantillas** de proceso no están en esa lista y tampoco las crea el seed: las
+siembra el provisioner dentro de la transacción que da de alta la organización, igual
+que los ocho nodos de frontera. Lo que hace el seed es comprobar que estaban.
 
 ## Cómo está cableado SWC
 

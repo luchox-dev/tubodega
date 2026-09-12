@@ -65,6 +65,7 @@ plantilla() {
     s#^/movements/$u/reverse\$#/movements/{id}/reverse#;
     s#^/movements/$u\$#/movements/{id}#;
     s#^/stock/custodies\$#/stock/custodies#;
+    s#^/process-templates/[^/]+\$#/process-templates/{code}#;
   " <<<"$p")"
   printf '/v1%s' "$p"
 }

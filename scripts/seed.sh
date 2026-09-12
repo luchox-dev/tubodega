@@ -17,8 +17,7 @@
 # construir. Hoy siembra todo lo que el contrato sabe crear —tenencia, catálogo
 # y ubicaciones—; lo que todavía no existe, con el plan que lo traerá:
 #
-#   movimientos y existencias ................ plan 6
-#   plantillas e instancias de proceso ....... plan 8
+#   instancias de proceso .................... plan 8
 #   reglas de alerta ......................... plan 9
 # ─────────────────────────────────────────────────────────────────────────────
 #
@@ -179,7 +178,17 @@ req POST "/products/$P_LEC/batches" --token "$T_JUAN" \
 ok "el lote de leche, con su vencimiento" 201
 B_LEC="$(jqv '.id')"
 
-step "7 · el saldo inicial, por HTTP como todo lo demás"
+step "7 · los procesos que la organización sabe ejecutar"
+# Tampoco se crean aquí: las seis plantillas de [13 §6] las siembra el
+# provisioner al dar de alta la organización, como los ocho nodos de frontera.
+# Lo que hace el seed es no mentir sobre lo que hay.
+req GET /process-templates --token "$T_DIEGO"
+ok "las seis plantillas ya estaban" 200
+body "sembradas al registrar, en versión 1" '[.data[] | select(.version == 1)] | length' 6
+req GET /process-templates/RECEPCION --token "$T_DIEGO"
+body "y la recepción trae sus siete pasos" '.steps | length' 7
+
+step "8 · el saldo inicial, por HTTP como todo lo demás"
 # Sin existencias, la bodega sembrada es un plano de una bodega vacía: ni GET
 # /v1/stock ni un traslado ni un préstamo tienen nada que enseñar. Entra por
 # `opening-balance`, que es el nodo SOURCE que existe justo para esto, y en un
@@ -233,5 +242,6 @@ cat <<FIN
   bodega         BOD-A › MUELLE · BOD-A › Z1 › E3 › B2, B3 · BOD-B › Z2
   y además       juan (CUSTODY) y los ocho nodos de frontera
   existencias    B2: 500 TOR-M8 y el taladro · B3: 120 ARROZ-25 y 48 LECHE-1L
+  procesos       RECEPCION · TRASLADO · SALIDA · AJUSTE_ENTRADA · AJUSTE_SALIDA · CUSTODIA
 
 FIN
