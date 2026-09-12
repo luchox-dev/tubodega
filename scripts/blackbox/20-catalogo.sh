@@ -1,132 +1,20 @@
 #!/usr/bin/env bash
-# Caja negra del catálogo: la narrativa del plan 3 por HTTP, contra un servidor
-# de verdad. No sustituye a `pnpm test:e2e` —que corre en proceso con
-# fastify.inject()— sino que lo complementa: hay fallos que solo aparecen
-# cuando la petición atraviesa un socket. El 413 de una foto de 11 MB es uno:
-# @fastify/multipart corta el archivo mientras lo transmite y avisa lanzando un
-# FastifyError, y durante el plan 3 el filtro lo convertía en un 500.
+# Caja negra · WAVE 2 — «cargar el catálogo». Diego (ADMIN) migra la hoja de
+# cálculo, define campos propios y pone fotos; Juan (OPERATOR) escanea en el
+# pasillo y registra una remesa con lote. Los casos 1-11 y 16 de la tabla «E2E
+# WAVE 2» del plan maestro (los 12-15 son de nodos y llegan con el plan 4).
 #
-#   pnpm start:dev            # en otra terminal
-#   ./scripts/blackbox-catalogo.sh
-#   BASE=http://otra-maquina:3000 ./scripts/blackbox-catalogo.sh
-#
-# Recorre entero y cuenta: no se detiene en el primer fallo, porque saber
-# cuántas cosas se rompieron vale más que saber cuál se rompió primero.
+# Se invoca solo o a través de ./scripts/blackbox.sh.
 set -uo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-BASE="${BASE:-http://localhost:3000}"
-V="$BASE/v1"
-PASSWORD='correcthorse1!'
-SLUG="caja-negra-$(date +%s)-$RANDOM"
+SLUG="catalogo-$(date +%s)-$RANDOM"
 # Sku.of normaliza a mayúsculas: un SKU tecleado y uno pegado de una hoja son
 # el mismo. Lo que se afirma sobre un SKU se afirma en mayúsculas.
 SLUG_UP="${SLUG^^}"
 
-command -v curl >/dev/null || { echo "hace falta curl"; exit 2; }
-command -v jq   >/dev/null || { echo "hace falta jq"; exit 2; }
-
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
-BODY_F="$TMP/body"; HDR_F="$TMP/headers"
-
-OK=0; BAD=0
-ST=''
-
-uuid() { cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr 'A-Z' 'a-z'; }
-
-# ─────────────────────────────────────────────────────────────────────────────
-# req <método> <ruta> [--token T] [--body JSON] [--idem K|none] [--if-match N]
-#                     [--file RUTA:TIPO] [--request-id UUID]
-# Deja el estado en $ST, el cuerpo en $BODY_F y las cabeceras en $HDR_F.
-#
-# TRAMPA: `content-type: application/json` solo se envía cuando hay cuerpo. Con
-# esa cabecera y sin cuerpo, Fastify responde 400 «Body cannot be empty» y
-# parece un fallo de la API cuando es del guion.
-# ─────────────────────────────────────────────────────────────────────────────
-req() {
-  local method="$1" path="$2"; shift 2
-  local token='' body='' idem='' ifmatch='' file='' reqid=''
-  while (($#)); do
-    case "$1" in
-      --token)      token="$2"; shift 2 ;;
-      --body)       body="$2"; shift 2 ;;
-      --idem)       idem="$2"; shift 2 ;;
-      --if-match)   ifmatch="$2"; shift 2 ;;
-      --file)       file="$2"; shift 2 ;;
-      --request-id) reqid="$2"; shift 2 ;;
-      *) echo "req: opción desconocida $1" >&2; return 2 ;;
-    esac
-  done
-
-  local args=(-sS -o "$BODY_F" -D "$HDR_F" -w '%{http_code}' -X "$method" "$V$path")
-  [[ -n "$token"   ]] && args+=(-H "authorization: Bearer $token")
-  [[ -n "$ifmatch" ]] && args+=(-H "if-match: \"$ifmatch\"")
-  [[ -n "$reqid"   ]] && args+=(-H "x-request-id: $reqid")
-
-  # Todo POST autenticado exige Idempotency-Key; `--idem none` la omite a
-  # propósito, y los endpoints @Public() no la piden.
-  if [[ "$method" == POST && "$idem" != none ]]; then
-    args+=(-H "idempotency-key: ${idem:-$(uuid)}")
-  fi
-
-  if [[ -n "$file" ]]; then
-    # Multipart: el campo se llama `file` y lleva filename, como el cliente de
-    # las pruebas. curl pone el content-type con su boundary.
-    args+=(-F "file=@${file%%:*};type=${file##*:};filename=foto.bin")
-  elif [[ -n "$body" ]]; then
-    args+=(-H 'content-type: application/json' --data-raw "$body")
-  fi
-
-  ST="$(curl "${args[@]}")"
-}
-
-pass() { OK=$((OK + 1)); printf '  ok   %s\n' "$1"; }
-fail() { BAD=$((BAD + 1)); printf '  FALLA %s\n' "$1"; [[ -s "$BODY_F" ]] && sed 's/^/         /' <(head -c 400 "$BODY_F"; echo); }
-
-step() { printf '\n\033[1m%s\033[0m\n' "$1"; }
-
-# ok <descripción> <estado esperado>
-ok() {
-  if [[ "$ST" == "$2" ]]; then pass "$1"; else fail "$1 — esperaba $2, llegó $ST"; fi
-}
-
-# body <descripción> <filtro jq> <valor esperado>
-body() {
-  local got; got="$(jq -r "$2" < "$BODY_F" 2>/dev/null)"
-  if [[ "$got" == "$3" ]]; then pass "$1"; else fail "$1 — $2 dio «$got», esperaba «$3»"; fi
-}
-
-# problem <descripción> <estado> <tipo>
-# Comprueba el contrato entero de spec 03 §5, no solo el estado: el media type,
-# la URI del tipo, y que el traceId del cuerpo sea el X-Request-Id de la
-# respuesta. Un error que no se puede correlacionar con un log no sirve.
-problem() {
-  local desc="$1" want_status="$2" want_type="$3"
-  local ct type trace reqid
-  ct="$(grep -i '^content-type:' "$HDR_F" | tail -1 | tr -d '\r' | cut -d' ' -f2-)"
-  reqid="$(grep -i '^x-request-id:' "$HDR_F" | tail -1 | tr -d '\r' | cut -d' ' -f2-)"
-  type="$(jq -r '.type // ""' < "$BODY_F" 2>/dev/null)"
-  trace="$(jq -r '.traceId // ""' < "$BODY_F" 2>/dev/null)"
-
-  if [[ "$ST" != "$want_status" ]]; then fail "$desc — esperaba $want_status, llegó $ST"; return; fi
-  case "$ct" in application/problem+json*) ;; *) fail "$desc — content-type «$ct»"; return ;; esac
-  if [[ "$type" != "https://tubodega.app/errors/$want_type" ]]; then
-    fail "$desc — type «$type», esperaba …/$want_type"; return
-  fi
-  if [[ "$trace" != "$reqid" || -z "$trace" ]]; then
-    fail "$desc — traceId «$trace» ≠ X-Request-Id «$reqid»"; return
-  fi
-  pass "$desc"
-}
-
-jqv() { jq -r "$1" < "$BODY_F"; }
-
 # ═════════════════════════════════════════════════════════════════════════════
-step "0 · el servidor responde en $BASE"
-if ! curl -sS -o /dev/null --max-time 5 "$V/openapi.json"; then
-  echo "  No hay nadie en $BASE. Arranca con \`pnpm start:dev\`." >&2
-  exit 2
-fi
-pass "hay servidor"
+exigir_servidor
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "1 · la organización y el equipo"
@@ -141,19 +29,7 @@ req POST /auth/login --idem none --body "$(jq -nc --arg e "$MARTA" --arg p "$PAS
 ok "Marta inicia sesión" 200
 T_MARTA="$(jqv '.accessToken')"
 
-alta() { # alta <variable destino> <rol> <nombre>
-  # El token sale por referencia y no por stdout: por ahí va el informe, y una
-  # sustitución de comando se lo tragaría entero junto con el token.
-  local -n out="$1"
-  local role="$2" name="$3" mail="$3-$SLUG@esquina.co"
-  req POST /users --token "$T_MARTA" --body "$(jq -nc --arg e "$mail" --arg n "$name" --arg p "$PASSWORD" --arg r "$role" \
-    '{email:$e, name:$n, password:$p, roles:[$r]}')"
-  ok "da de alta a $name ($role)" 201
-  req POST /auth/login --idem none --body "$(jq -nc --arg e "$mail" --arg p "$PASSWORD" --arg s "$SLUG" \
-    '{email:$e, password:$p, slug:$s}')"
-  ok "$name inicia sesión" 200
-  out="$(jqv '.accessToken')"
-}
+T_OWNER="$T_MARTA"
 alta T_DIEGO ADMIN diego
 alta T_JUAN OPERATOR juan
 alta T_SOFIA VIEWER sofia
@@ -164,14 +40,21 @@ req POST /custom-fields --token "$T_DIEGO" \
   --body '{"entity":"PRODUCT","key":"proveedor","label":"Proveedor","type":"TEXT","position":0}'
 ok "define proveedor (TEXT)" 201
 CF_PROVEEDOR="$(jqv '.id')"
+header "y dice dónde quedó" location "/v1/custom-fields/$CF_PROVEEDOR"
 
 req POST /custom-fields --token "$T_DIEGO" \
   --body '{"entity":"PRODUCT","key":"familia","label":"Familia","type":"SELECT","options":["ferretería","aseo"],"position":1}'
 ok "define familia (SELECT)" 201
+CF_FAMILIA="$(jqv '.id')"
 
 req GET /custom-fields?entity=PRODUCT --token "$T_DIEGO"
 ok "los lista" 200
 body "en el orden que les dio" '[.data[].key] | join(",")' 'proveedor,familia'
+
+# La etiqueta cambia libremente; lo que no cambia es el tipo (eso, más abajo).
+req PATCH "/custom-fields/$CF_FAMILIA" --token "$T_DIEGO" --if-match 1 --body '{"label":"Familia de producto"}'
+ok "renombra la familia con If-Match" 200
+body "y la etiqueta es la nueva" '.label' 'Familia de producto'
 
 req POST /custom-fields --token "$T_DIEGO" \
   --body '{"entity":"PRODUCT","key":"marca","label":"Marca","type":"SELECT"}'
@@ -198,9 +81,24 @@ ok "importa" 200
 body "crea las veinticinco buenas" '.created' 25
 body "no actualiza ninguna" '.updated' 0
 body "y reporta dos filas malas" '.errors | length' 2
-body "la primera, por su línea" '.errors[0].line' 11
+body "la primera, por su línea y su tipo" '"\(.errors[0].line)/\(.errors[0].type)"' '11/validation-failed'
 body "la segunda, por su línea y su SKU" '"\(.errors[1].line)/\(.errors[1].sku)"' "26/MAL-$SLUG_UP"
 body "la segunda, por su tipo" '.errors[1].type' 'invalid-custom-field'
+
+# Importar no es de cualquiera, y una hoja no es infinita: pasadas mil filas
+# deja de ser una importación y empieza a ser un trabajo por lotes (D-11).
+req POST /products/import --token "$T_JUAN" --body '{"rows":[{"sku":"X-1"}]}'
+problem "un OPERATOR no importa el catálogo" 403 insufficient-role
+# Y una hoja no es infinita. OJO con lo que responde: el controlador declara
+# `422 import-too-large` y D-11 dice lo mismo, pero el @ArrayMaxSize(1000) del
+# DTO corta en el borde y devuelve `400 validation-failed` antes de que el caso
+# de uso llegue a mirar. El 422 declarado es, por HTTP, inalcanzable. Aquí se
+# afirma lo que el cliente recibe de verdad; corregir cuál de los dos sobra es
+# una decisión de contrato, no de esta prueba.
+req POST /products/import --token "$T_DIEGO" \
+  --body "$(jq -nc --arg s "$SLUG" '{rows: [range(0;1001) | {sku: "BULK-\($s)-\(.)"}]}')"
+problem "y mil una filas las corta el borde" 400 validation-failed
+pointer "señalando las filas" /rows
 
 step "4 · paginar por cursor sin repetir ni saltar"
 SEEN=''; CURSOR=''; PAGES=0
@@ -225,6 +123,24 @@ req POST /products --token "$T_DIEGO" \
   --body "$(jq -nc --arg s "$SLUG" '{sku:"IMP-\($s)-100", name:"Repetido", trackingMode:"QUANTITY", uom:"UNIT"}')"
 problem "un SKU ya importado no se crea otra vez (C-1)" 409 sku-taken
 
+step "4b · re-importar actualiza, no duplica"
+# La hoja se vuelve a subir con diez nombres cambiados: es lo que hace de
+# verdad quien migra un catálogo, y el upsert por SKU es lo que se prueba.
+REIMPORT="$(jq -nc --arg s "$SLUG" \
+  '{rows: [range(0;10) | {sku: "IMP-\($s)-\(100 + .)", name: "Artículo NUEVO \(.)"}]}')"
+req POST /products/import --token "$T_DIEGO" --body "$REIMPORT"
+ok "re-importa" 200
+body "no crea nada" '.created' 0
+body "actualiza los diez" '.updated' 10
+body "y sin un solo error" '.errors | length' 0
+
+req GET "/products?q=NUEVO&limit=200" --token "$T_DIEGO"
+ok "el filtro q los encuentra" 200
+body "los diez, ni uno más" '.data | length' 10
+
+req GET "/products?limit=200&sort=sku" --token "$T_DIEGO"
+body "y el total no creció: veinticinco siguen siendo veinticinco" '.data | length' 25
+
 # ─────────────────────────────────────────────────────────────────────────────
 step "5 · los productos de la narrativa"
 req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
@@ -234,7 +150,10 @@ req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
     customFields:{proveedor:"Ferretería Mundial", familia:"ferretería"}}')"
 ok "el tornillo" 201
 P_TOR="$(jqv '.id')"
+header "y dice dónde quedó" location "/v1/products/$P_TOR"
 body "nace activo y en la versión 1" '"\(.active)/\(.version)"' 'true/1'
+body "y los campos propios vuelven tal cual se mandaron" \
+  '.customFields | "\(.proveedor)/\(.familia)"' 'Ferretería Mundial/ferretería'
 
 req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
   '{sku:"TAL-\($s)", name:"Taladro Bosch", trackingMode:"SERIAL", uom:"UNIT"}')"
@@ -249,7 +168,12 @@ P_LEC="$(jqv '.id')"
 req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
   '{sku:"RARO-\($s)", name:"Raro", trackingMode:"QUANTITY", uom:"UNIT", customFields:{color:"azul"}}')"
 problem "un campo que nadie definió no se cuela (C-7)" 422 invalid-custom-field
-body "y el puntero señala cuál" '[.errors[].pointer] | index("/customFields/color") != null' 'true'
+pointer "y el puntero señala cuál" /customFields/color
+
+req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
+  '{sku:"RARO2-\($s)", name:"Raro", trackingMode:"QUANTITY", uom:"DOCENA"}')"
+problem "ni una unidad de medida inventada" 422 validation-failed
+pointer "señalando el campo" /uom
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "6 · fotos: la zona de espera y D-14"
@@ -270,6 +194,7 @@ MEDIA_ID="$(jqv '.[0].id')"
 
 req GET "/products/$P_TOR" --token "$T_DIEGO"
 body "la foto ya está en el producto" '.media | length' 1
+body "con el tipo que se subió" '.media[0].contentType' 'image/png'
 
 req POST "/products/$P_TOR/media" --token "$T_JUAN" --body "$(jq -nc --arg k "$KEY" '{storageKeys:[$k]}')"
 problem "reclamarla dos veces ya no se puede" 422 upload-not-found
@@ -279,9 +204,17 @@ problem "un OPERATOR no sube multipart directo (D-14)" 403 insufficient-role
 
 req POST "/products/$P_TOR/media" --token "$T_DIEGO" --file "$PNG:image/png"
 ok "Diego (ADMIN) sí" 201
+body "y la segunda foto va detrás de la primera" '.[0].position' 1
 
 req DELETE "/products/$P_TOR/media/$MEDIA_ID" --token "$T_DIEGO"
 ok "y quita una" 204
+
+req GET "/products/$P_TOR" --token "$T_DIEGO"
+body "queda la otra" '.media | length' 1
+body "y es la otra, no la borrada" ".media[0].id != \"$MEDIA_ID\"" 'true'
+
+req DELETE "/products/$P_TOR/media/$MEDIA_ID" --token "$T_DIEGO"
+problem "quitarla dos veces es un 404, no un 204 silencioso" 404 not-found
 
 step "7 · el tipo y el tamaño, que es donde fastify.inject no llega"
 TXT="$TMP/no-es-foto.txt"; printf 'hola' > "$TXT"
@@ -306,6 +239,10 @@ req POST "/products/$P_LEC/codes" --token "$T_DIEGO" \
 problem "el mismo código en otro producto (C-2)" 409 code-taken
 body "y el detalle nombra a quien lo tiene" ".detail | test(\"TAL-$SLUG_UP\")" 'true'
 
+req GET "/products/$P_TAL/codes" --token "$T_DIEGO"
+ok "los lista" 200
+body "el que se acaba de añadir" '. | length' 1
+
 req DELETE "/products/$P_TAL/codes/$CODE_ID" --token "$T_DIEGO"
 ok "lo quita" 204
 req DELETE "/products/$P_TAL/codes/$CODE_ID" --token "$T_DIEGO"
@@ -315,6 +252,7 @@ step "9 · el escaneo en el pasillo"
 req GET "/codes/7501-$SLUG/resolve" --token "$T_JUAN"
 ok "por código de barras" 200
 body "devuelve el tornillo" '.product.sku' "TOR-$SLUG_UP"
+body "y ningún lote: un código de producto no identifica una remesa" '.batch == null' 'true'
 
 req GET "/codes/TOR-$SLUG/resolve" --token "$T_JUAN"
 body "por SKU tecleado" '.product.id' "$P_TOR"
@@ -346,6 +284,16 @@ req POST "/products/$P_TOR/batches" --token "$T_JUAN" --body '{"lotCode":"L-1"}'
 problem "un producto por cantidad no tiene lotes (C-4)" 422 batch-not-allowed
 req POST "/products/$P_LEC/batches" --token "$T_JUAN" --body '{}'
 problem "y uno por lote no sabe qué remesa es sin lotCode (C-3)" 422 batch-required
+pointer "que es el campo que señala" /lotCode
+
+req GET "/products/$P_LEC/batches" --token "$T_JUAN"
+ok "los lotes se listan" 200
+body "y está el que se creó" '. | length' 1
+
+# Un código de lote no se resuelve: sin saber de qué producto es, «L-2026-09»
+# puede ser la remesa de cualquiera.
+req GET /codes/L-2026-09/resolve --token "$T_JUAN"
+problem "un código de lote no resuelve: sin producto es ambiguo" 404 code-not-found
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "11 · quién puede tocar el catálogo"
@@ -367,6 +315,28 @@ req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 1 --body '{"name":"Ot
 problem "con uno viejo" 409 stale-version
 req PATCH "/products/$P_TOR" --token "$T_DIEGO" --body '{"name":"Otro"}'
 problem "y sin ninguno" 400 missing-if-match
+
+# C-8 · sin movimientos todavía, el modo de seguimiento sí se puede cambiar.
+# (Con movimientos se bloquea, pero el ledger llega en la WAVE 3.)
+req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 2 --body '{"trackingMode":"LOT"}'
+ok "sin movimientos, el modo de seguimiento cambia (C-8)" 200
+body "y es el nuevo" '.trackingMode' 'LOT'
+req PATCH "/products/$P_TOR" --token "$T_DIEGO" --if-match 3 --body '{"trackingMode":"QUANTITY"}'
+ok "y se deshace, que el resto del relato lo ve por cantidad" 200
+
+step "12b · C-9 · sin existencias, el producto se retira del catálogo"
+req POST /products --token "$T_DIEGO" --body "$(jq -nc --arg s "$SLUG" \
+  '{sku:"RETIRO-\($s)", name:"Para retirar", trackingMode:"QUANTITY", uom:"UNIT"}')"
+ok "un producto de sobra" 201
+P_RETIRO="$(jqv '.id')"
+
+req DELETE "/products/$P_RETIRO" --token "$T_DIEGO"
+ok "se retira" 204
+req GET "/products/$P_RETIRO" --token "$T_DIEGO"
+body "y queda inactivo, no borrado: el histórico lo sigue nombrando" '.active' 'false'
+req GET "/products?active=false&limit=200" --token "$T_DIEGO"
+body "y aparece entre los retirados" \
+  "[.data[].sku] | index(\"RETIRO-$SLUG_UP\") != null" 'true'
 
 step "13 · las dos reglas retroactivas de los campos propios"
 req POST /custom-fields --token "$T_DIEGO" \
@@ -407,6 +377,17 @@ problem "un valor inventado" 400 invalid-filter
 req GET "/custom-fields?entity=PLANETA" --token "$T_DIEGO"
 problem "una entidad inventada" 400 invalid-filter
 
+# Y lo declarado tiene que funcionar: un filtro que rechaza lo inválido pero no
+# filtra lo válido no sirve de nada.
+req GET "/products?trackingMode=SERIAL&limit=200" --token "$T_DIEGO"
+ok "el filtro por modo de seguimiento" 200
+body "devuelve solo SERIAL" '[.data[].trackingMode] | unique | join(",")' 'SERIAL'
+body "y devuelve alguno" '.data | length > 0' 'true'
+
+req GET "/products?sort=-sku&limit=3" --token "$T_DIEGO"
+body "y el orden descendente lo es de verdad" \
+  '[.data[].sku] as $d | ($d == ($d | sort | reverse))' 'true'
+
 # ─────────────────────────────────────────────────────────────────────────────
 step "16 · otra empresa no ve nada: 404 y nunca 403 (I-6)"
 OTRO_SLUG="otra-$SLUG"; OTRO_MAIL="ana-$OTRO_SLUG@ferreteria.co"
@@ -415,6 +396,9 @@ req POST /organizations --idem none --body "$(jq -nc --arg s "$OTRO_SLUG" --arg 
 ok "se registra una segunda organización" 201
 req POST /auth/login --idem none --body "$(jq -nc --arg e "$OTRO_MAIL" --arg p "$PASSWORD" --arg s "$OTRO_SLUG" \
   '{email:$e, password:$p, slug:$s}')"
+# Sin este `ok`, un login fallido dejaría T_ANA vacío y los siete 404 de abajo
+# pasarían por la razón equivocada.
+ok "Ana inicia sesión" 200
 T_ANA="$(jqv '.accessToken')"
 
 req GET "/products/$P_TOR" --token "$T_ANA";                 problem "el producto ajeno" 404 not-found
@@ -440,32 +424,6 @@ req GET "/products?foo=1" --token "$T_DIEGO" --request-id "$MY_ID"
 problem "el error sigue el contrato" 400 invalid-filter
 body "y honra el X-Request-Id que le mandaron" '.traceId' "$MY_ID"
 
-step "18 · el contrato publicado"
-req GET /openapi.json
-ok "se sirve" 200
-body "con los caminos del catálogo" \
-  '[.paths | keys[]] | (index("/v1/products") != null and index("/v1/codes/{value}/resolve") != null and index("/v1/uploads") != null)' \
-  'true'
-
-# ─────────────────────────────────────────────────────────────────────────────
-step "19 · el ledger es inmutable desde la base (I-3)"
-# TRAMPA: hay que fijar app.current_org antes del UPDATE. Sin él, RLS falla
-# primero —current_setting() no encuentra el parámetro— y la respuesta no dice
-# nada sobre el REVOKE, que es lo que se quiere comprobar.
-if docker compose version >/dev/null 2>&1; then
-  SQLOUT="$(docker compose exec -T db psql -U tubodega_app -d tubodega -v ON_ERROR_STOP=0 \
-    -c "SET app.current_org = '$ORG_ID'; UPDATE movement SET quantity = 1;" 2>&1)"
-  if grep -q '42501\|permission denied' <<<"$SQLOUT"; then
-    pass "UPDATE movement lo niega el permiso, no la aplicación"
-  else
-    fail "esperaba 42501; psql dijo: $(tr '\n' ' ' <<<"$SQLOUT" | head -c 200)"
-  fi
-else
-  printf '  (salto) sin docker compose no se puede hablar con la base\n'
-fi
-
 # ═════════════════════════════════════════════════════════════════════════════
-printf '\n\033[1m%s\033[0m\n' "───────────────────────────────"
-printf '  aciertos: %d\n  fallos:   %d\n' "$OK" "$BAD"
-printf '  organización de esta corrida: %s\n' "$SLUG"
-[[ "$BAD" -eq 0 ]] || exit 1
+printf '\n  organización de esta corrida: %s\n' "$SLUG"
+resumen catalogo
