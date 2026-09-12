@@ -710,6 +710,1489 @@
           "tenancy"
         ]
       }
+    },
+    "/v1/products": {
+      "get": {
+        "description": "Filtros: active, trackingMode, q (sobre sku y name). Orden: name, sku, createdAt.",
+        "operationId": "ProductsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter · invalid-cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials · token-expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lista el catálogo",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Puede traer sus códigos de una vez.",
+        "operationId": "ProductsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "sku-taken · code-taken · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid-custom-field · validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Define un producto",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/import": {
+      "post": {
+        "description": "Coincidencia por SKU, upsert fila a fila. Una fila con error no aborta el lote: se acumula en errors con su número de línea.",
+        "operationId": "ProductsController_import",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportProductsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResultView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "import-too-large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Importa una hoja de cálculo",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}": {
+      "get": {
+        "description": "Incluye sus fotos.",
+        "operationId": "ProductsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found · también para otra organización (I-6)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un producto por id",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "patch": {
+        "description": "Exige If-Match con la versión.",
+        "operationId": "ProductsController_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "missing-if-match · validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "stale-version · sku-taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "tracking-mode-locked · invalid-custom-field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Modifica un producto",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "delete": {
+        "description": "No borra: los movimientos lo referencian. Falla si todavía hay existencias (C-9).",
+        "operationId": "ProductsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "product-has-stock",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Retira un producto del catálogo",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}/codes": {
+      "get": {
+        "operationId": "ProductCodesController_listCodes",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductCodeView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los códigos con que se escanea un producto",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Único por organización: un escaneo nunca puede ser ambiguo (C-2).",
+        "operationId": "ProductCodesController_addCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCodeInputDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductCodeView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "code-taken · el detalle nombra el producto que ya lo usa",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Añade un código",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}/codes/{codeId}": {
+      "delete": {
+        "operationId": "ProductCodesController_removeCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "codeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found · code-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Quita un código",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}/media": {
+      "post": {
+        "description": "Dos formas: reclamar claves de la zona de espera con { storageKeys } — basta RECORD_MOVEMENT — o subir multipart directo, que sí es un cambio de catálogo (D-14).",
+        "operationId": "ProductMediaController_attachMedia",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachMediaDto"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachMediaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MediaView"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "media-too-large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported-media-type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "upload-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Adjunta fotos a un producto",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}/media/{mediaId}": {
+      "delete": {
+        "description": "Borra la fila y después el archivo.",
+        "operationId": "ProductMediaController_removeMedia",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Quita una foto",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/products/{id}/batches": {
+      "get": {
+        "operationId": "BatchesController_listBatches",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BatchView"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los lotes o series de un producto",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "La única escritura de catálogo abierta a OPERATOR: un lote nuevo llega con la mercancía, y exigir un administrador detendría cada recepción en el muelle.",
+        "operationId": "BatchesController_createBatch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "serial-taken · lot-code-taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "batch-not-allowed · batch-required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Identifica una remesa",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/codes/{value}/resolve": {
+      "get": {
+        "description": "Busca en los códigos del producto, luego en los números de serie y por último en el SKU. El código de lote no se resuelve aquí: es único por producto, no por organización, y sin producto es ambiguo.",
+        "operationId": "CodesController_resolveCode",
+        "parameters": [
+          {
+            "name": "value",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolvedCodeView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "code-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resuelve un escaneo",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/custom-fields": {
+      "get": {
+        "description": "Filtro: entity (por defecto PRODUCT). Ordenados por position.",
+        "operationId": "CustomFieldsController_listFields",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomFieldListView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los campos propios de la organización",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Un campo nace opcional y se vuelve obligatorio cuando todas las entidades lo tienen (C-10).",
+        "operationId": "CustomFieldsController_defineField",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefineCustomFieldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomFieldView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "required-field-would-invalidate · invalid-custom-field · validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Define un campo propio",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/custom-fields/{id}": {
+      "patch": {
+        "description": "Exige If-Match. El tipo solo cambia mientras ninguna entidad tenga valor (D-10).",
+        "operationId": "CustomFieldsController_patchField",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomFieldDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomFieldView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "missing-if-match · validation-failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "stale-version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "custom-field-type-locked · required-field-would-invalidate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Modifica una definición",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/v1/uploads": {
+      "post": {
+        "description": "Sin reclamar, se purga a las 24 horas.",
+        "operationId": "UploadsController_upload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "description": "Una imagen jpeg, png o webp, máximo 10 MB",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "media-too-large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported-media-type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sube una foto a la zona de espera",
+        "tags": [
+          "catalog"
+        ]
+      }
     }
   },
   "info": {
@@ -1116,6 +2599,714 @@
         "required": [
           "current",
           "next"
+        ]
+      },
+      "MediaView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f8"
+          },
+          "storageKey": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6/9f2c-ab12.png"
+          },
+          "contentType": {
+            "type": "string",
+            "example": "image/png"
+          },
+          "byteSize": {
+            "type": "number",
+            "example": 20480
+          },
+          "position": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "id",
+          "storageKey",
+          "contentType",
+          "byteSize",
+          "position"
+        ]
+      },
+      "ProductView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "sku": {
+            "type": "string",
+            "example": "TOR-M8"
+          },
+          "name": {
+            "type": "string",
+            "example": "Tornillo M8 galvanizado"
+          },
+          "description": {
+            "type": "string",
+            "example": "Rosca fina, caja de 100"
+          },
+          "trackingMode": {
+            "type": "string",
+            "example": "QUANTITY",
+            "enum": [
+              "QUANTITY",
+              "LOT",
+              "SERIAL"
+            ]
+          },
+          "uom": {
+            "type": "string",
+            "example": "UNIT",
+            "enum": [
+              "UNIT",
+              "KG",
+              "G",
+              "L",
+              "ML",
+              "M",
+              "CM",
+              "BOX",
+              "PACK"
+            ]
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "proveedor": "Ferretería Mundial"
+            }
+          },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Se envía en If-Match para modificarlo"
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaView"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "trackingMode",
+          "uom",
+          "active",
+          "customFields",
+          "version"
+        ]
+      },
+      "ProductPageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
+        ]
+      },
+      "ProductCodeInputDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "example": "7501234567890"
+          },
+          "kind": {
+            "type": "string",
+            "example": "EAN",
+            "enum": [
+              "EAN",
+              "UPC",
+              "INTERNAL_QR",
+              "SUPPLIER_REF",
+              "OTHER"
+            ]
+          }
+        },
+        "required": [
+          "value",
+          "kind"
+        ]
+      },
+      "CreateProductDto": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "example": "TOR-M8",
+            "description": "Único por organización (C-1); se normaliza a mayúsculas"
+          },
+          "name": {
+            "type": "string",
+            "example": "Tornillo M8 galvanizado"
+          },
+          "description": {
+            "type": "string",
+            "example": "Rosca fina, caja de 100"
+          },
+          "trackingMode": {
+            "type": "string",
+            "example": "QUANTITY",
+            "enum": [
+              "QUANTITY",
+              "LOT",
+              "SERIAL"
+            ],
+            "description": "No cambia si el producto ya tiene movimientos (C-8)"
+          },
+          "uom": {
+            "type": "string",
+            "example": "UNIT",
+            "enum": [
+              "UNIT",
+              "KG",
+              "G",
+              "L",
+              "ML",
+              "M",
+              "CM",
+              "BOX",
+              "PACK"
+            ]
+          },
+          "codes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductCodeInputDto"
+            }
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "proveedor": "Ferretería Mundial"
+            }
+          }
+        },
+        "required": [
+          "sku",
+          "name",
+          "trackingMode",
+          "uom"
+        ]
+      },
+      "ProductRowDto": {
+        "type": "object",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "example": "TOR-M8"
+          },
+          "name": {
+            "type": "string",
+            "example": "Tornillo M8"
+          },
+          "description": {
+            "type": "string",
+            "example": "Rosca fina"
+          },
+          "trackingMode": {
+            "type": "string",
+            "example": "QUANTITY",
+            "enum": [
+              "QUANTITY",
+              "LOT",
+              "SERIAL"
+            ]
+          },
+          "uom": {
+            "type": "string",
+            "example": "UNIT",
+            "enum": [
+              "UNIT",
+              "KG",
+              "G",
+              "L",
+              "ML",
+              "M",
+              "CM",
+              "BOX",
+              "PACK"
+            ]
+          },
+          "codes": {
+            "example": [
+              "7501234567890"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "proveedor": "Ferretería Mundial"
+            }
+          }
+        },
+        "required": [
+          "sku"
+        ]
+      },
+      "ImportProductsDto": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "description": "Máximo 1000 filas (D-11)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductRowDto"
+            }
+          }
+        },
+        "required": [
+          "rows"
+        ]
+      },
+      "RowErrorView": {
+        "type": "object",
+        "properties": {
+          "line": {
+            "type": "number",
+            "example": 347,
+            "description": "1-indexado, como lo ve el usuario en la hoja"
+          },
+          "sku": {
+            "type": "string",
+            "example": "TOR-M8"
+          },
+          "type": {
+            "type": "string",
+            "example": "invalid-custom-field"
+          },
+          "detail": {
+            "type": "string",
+            "example": "El campo familia no es válido"
+          }
+        },
+        "required": [
+          "line",
+          "type",
+          "detail"
+        ]
+      },
+      "ImportResultView": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "number",
+            "example": 498
+          },
+          "updated": {
+            "type": "number",
+            "example": 0
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RowErrorView"
+            }
+          }
+        },
+        "required": [
+          "created",
+          "updated",
+          "errors"
+        ]
+      },
+      "UpdateProductDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Tornillo M8 inoxidable"
+          },
+          "description": {
+            "type": "object",
+            "example": "Rosca fina",
+            "nullable": true
+          },
+          "trackingMode": {
+            "type": "string",
+            "example": "LOT",
+            "enum": [
+              "QUANTITY",
+              "LOT",
+              "SERIAL"
+            ]
+          },
+          "uom": {
+            "type": "string",
+            "example": "KG",
+            "enum": [
+              "UNIT",
+              "KG",
+              "G",
+              "L",
+              "ML",
+              "M",
+              "CM",
+              "BOX",
+              "PACK"
+            ]
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "proveedor": "Ferretería Mundial"
+            }
+          }
+        }
+      },
+      "ProductCodeView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f7"
+          },
+          "productId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "value": {
+            "type": "string",
+            "example": "7501234567890"
+          },
+          "kind": {
+            "type": "string",
+            "example": "EAN",
+            "enum": [
+              "EAN",
+              "UPC",
+              "INTERNAL_QR",
+              "SUPPLIER_REF",
+              "OTHER"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "value",
+          "kind"
+        ]
+      },
+      "AttachMediaDto": {
+        "type": "object",
+        "properties": {
+          "storageKeys": {
+            "example": [
+              "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6/9f2c-ab12.png"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "storageKeys"
+        ]
+      },
+      "BatchView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f9"
+          },
+          "productId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "lotCode": {
+            "type": "string",
+            "example": "L-2026-09"
+          },
+          "serial": {
+            "type": "string",
+            "example": "BSH-001"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-10-01T00:00:00.000Z"
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "temperatura": 4
+            }
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "customFields"
+        ]
+      },
+      "CreateBatchDto": {
+        "type": "object",
+        "properties": {
+          "lotCode": {
+            "type": "string",
+            "example": "L-2026-09",
+            "description": "Obligatorio si el producto se lleva por lote (C-3)"
+          },
+          "serial": {
+            "type": "string",
+            "example": "BSH-001",
+            "description": "Obligatorio si se lleva por número de serie (C-3)"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-10-01T00:00:00.000Z"
+          },
+          "customFields": {
+            "type": "object",
+            "example": {
+              "temperatura": 4
+            }
+          }
+        }
+      },
+      "ResolvedCodeView": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/ProductView"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/BatchView"
+          }
+        },
+        "required": [
+          "product"
+        ]
+      },
+      "CustomFieldView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5fa"
+          },
+          "entity": {
+            "type": "string",
+            "example": "PRODUCT",
+            "enum": [
+              "PRODUCT",
+              "NODE",
+              "BATCH"
+            ]
+          },
+          "key": {
+            "type": "string",
+            "example": "proveedor"
+          },
+          "label": {
+            "type": "string",
+            "example": "Proveedor"
+          },
+          "type": {
+            "type": "string",
+            "example": "TEXT",
+            "enum": [
+              "TEXT",
+              "NUMBER",
+              "DATE",
+              "BOOLEAN",
+              "SELECT"
+            ]
+          },
+          "options": {
+            "example": [
+              "ferretería",
+              "aseo"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required": {
+            "type": "boolean",
+            "example": false
+          },
+          "position": {
+            "type": "number",
+            "example": 0
+          },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Se envía en If-Match para modificarla"
+          }
+        },
+        "required": [
+          "id",
+          "entity",
+          "key",
+          "label",
+          "type",
+          "required",
+          "position",
+          "version"
+        ]
+      },
+      "CustomFieldListView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomFieldView"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DefineCustomFieldDto": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string",
+            "example": "PRODUCT",
+            "enum": [
+              "PRODUCT",
+              "NODE",
+              "BATCH"
+            ]
+          },
+          "key": {
+            "type": "string",
+            "example": "proveedor",
+            "description": "snake_case; inmutable una vez creada"
+          },
+          "label": {
+            "type": "string",
+            "example": "Proveedor"
+          },
+          "type": {
+            "type": "string",
+            "example": "TEXT",
+            "enum": [
+              "TEXT",
+              "NUMBER",
+              "DATE",
+              "BOOLEAN",
+              "SELECT"
+            ]
+          },
+          "options": {
+            "example": [
+              "ferretería",
+              "aseo"
+            ],
+            "description": "Obligatorio para SELECT",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required": {
+            "type": "boolean",
+            "example": false,
+            "description": "Solo si ninguna entidad queda sin valor (C-10)"
+          },
+          "position": {
+            "type": "number",
+            "example": 0
+          }
+        },
+        "required": [
+          "entity",
+          "key",
+          "label",
+          "type"
+        ]
+      },
+      "UpdateCustomFieldDto": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "example": "Proveedor principal"
+          },
+          "type": {
+            "type": "string",
+            "example": "NUMBER",
+            "enum": [
+              "TEXT",
+              "NUMBER",
+              "DATE",
+              "BOOLEAN",
+              "SELECT"
+            ],
+            "description": "Solo si ninguna entidad tiene valor (D-10)"
+          },
+          "options": {
+            "example": [
+              "ferretería",
+              "aseo",
+              "lácteos"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "required": {
+            "type": "boolean",
+            "example": true
+          },
+          "position": {
+            "type": "number",
+            "example": 2
+          }
+        }
+      },
+      "UploadView": {
+        "type": "object",
+        "properties": {
+          "storageKey": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6/9f2c-ab12.png"
+          },
+          "expiresAt": {
+            "type": "string",
+            "example": "2026-09-13T12:00:00.000Z",
+            "description": "Sin reclamar, se purga entonces"
+          }
+        },
+        "required": [
+          "storageKey",
+          "expiresAt"
         ]
       }
     }

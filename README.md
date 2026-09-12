@@ -8,7 +8,7 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 2 — la WAVE 1 completa
+## Estado: Plan 3 — el catálogo completo
 
 | Endpoint | Acción | Qué hace |
 |---|---|---|
@@ -23,6 +23,24 @@ NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 | `GET /v1/users/{id}` | `MANAGE_USERS` | Uno por id |
 | `PATCH /v1/users/{id}` | `MANAGE_USERS` | Cambia roles; exige `If-Match` |
 | `DELETE /v1/users/{id}` | `MANAGE_USERS` | Desactiva; no borra |
+| `GET /v1/products` | `READ` | Filtros `active`, `trackingMode`, `q`; orden `name`/`sku`/`createdAt`; cursor |
+| `POST /v1/products` | `MANAGE_CATALOG` | Define un producto, con sus códigos si vienen |
+| `GET /v1/products/{id}` | `READ` | Uno por id, con sus fotos |
+| `PATCH /v1/products/{id}` | `MANAGE_CATALOG` | Modifica; exige `If-Match` |
+| `DELETE /v1/products/{id}` | `MANAGE_CATALOG` | Retira del catálogo; falla si hay existencias (C-9) |
+| `POST /v1/products/import` | `MANAGE_CATALOG` | La hoja de cálculo: upsert por SKU, hasta 1000 filas |
+| `GET /v1/products/{id}/codes` | `READ` | Los códigos con que se escanea |
+| `POST /v1/products/{id}/codes` | `MANAGE_CATALOG` | Añade uno; único por organización (C-2) |
+| `DELETE /v1/products/{id}/codes/{codeId}` | `MANAGE_CATALOG` | Lo quita |
+| `GET /v1/codes/{value}/resolve` | `READ` | El escaneo: código, serie o SKU |
+| `GET /v1/products/{id}/batches` | `READ` | Lotes y series |
+| `POST /v1/products/{id}/batches` | `CREATE_BATCH` | Identifica una remesa; abierto a `OPERATOR` |
+| `POST /v1/uploads` | `RECORD_MOVEMENT` | Zona de espera de fotos; multipart, 10 MB |
+| `POST /v1/products/{id}/media` | `RECORD_MOVEMENT` / `MANAGE_CATALOG` | Reclama claves, o sube multipart directo |
+| `DELETE /v1/products/{id}/media/{mediaId}` | `MANAGE_CATALOG` | Quita una foto |
+| `GET /v1/custom-fields` | `READ` | Los campos propios; filtro `entity` |
+| `POST /v1/custom-fields` | `MANAGE_CATALOG` | Define uno; `required` solo si nadie queda inválido (C-10) |
+| `PATCH /v1/custom-fields/{id}` | `MANAGE_CATALOG` | Modifica; exige `If-Match` |
 | `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
@@ -36,7 +54,10 @@ que corren antes de que exista una organización con la que indexar la tabla
 clave con el mismo cuerpo devuelve la respuesta guardada con
 `Idempotency-Replayed: true`; con otro cuerpo, `409 idempotency-key-reuse`.
 
-El catálogo, las ubicaciones y el ledger llegan a partir del plan 3.
+Las veinte tablas del esquema ya existen, con sus `CHECK`, RLS en las
+diecinueve que llevan `org_id`, y `UPDATE`/`DELETE` revocados sobre `movement`
+desde el primer día. Las ubicaciones llegan en el plan 4 y el ledger en la
+WAVE 3.
 
 ## Arranque local
 
@@ -121,8 +142,10 @@ apps/tubodega/           la aplicación HTTP: composición, borde, controllers, 
 libs/common/             tipos del núcleo: Branded, Result, DomainError, Page, puertos (@app/common)
 libs/persistence/        schema.prisma, migraciones, tipos generados, Kysely, DAOs, repositorios (@app/persistence)
 libs/tenancy/            organización, usuarios, roles, autenticación (@app/tenancy)
+libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app/catalog)
 test/support/            harness de integración (withRollback) y cliente e2e
 db/init/01-roles.sql     roles tubodega_migrator / _app / _system y bases dev, test y shadow
+.media/                  donde DiskMediaStorage escribe las fotos (MEDIA_ROOT)
 ```
 
 Reglas de arquitectura ([01 §5](docs/specs/01-arquitectura.md)) comprobadas por

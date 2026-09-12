@@ -3,12 +3,20 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from '@app/common';
+import { CatalogModule } from '@app/catalog';
 import { TenancyModule } from '@app/tenancy';
 import { AdaptersModule } from './adapters/adapters.module.js';
 import { AuthController } from './http/auth/auth.controller.js';
 import { MeController } from './http/me/me.controller.js';
 import { OpenApiController, OpenApiDocument } from './http/openapi/openapi.controller.js';
 import { OrganizationsController } from './http/organizations/organizations.controller.js';
+import { BatchesController } from './http/products/batches.controller.js';
+import { CodesController } from './http/codes/codes.controller.js';
+import { CustomFieldsController } from './http/custom-fields/custom-fields.controller.js';
+import { ProductCodesController } from './http/products/product-codes.controller.js';
+import { ProductMediaController } from './http/products/product-media.controller.js';
+import { ProductsController } from './http/products/products.controller.js';
+import { UploadsController } from './http/uploads/uploads.controller.js';
 import { UsersController } from './http/users/users.controller.js';
 import { OutboxDispatcherJob } from './jobs/outbox-dispatcher.job.js';
 import { AuthGuard } from './http/pipeline/auth.guard.js';
@@ -29,8 +37,22 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     ScheduleModule.forRoot(),
     AdaptersModule,
     TenancyModule,
+    CatalogModule,
   ],
-  controllers: [OrganizationsController, AuthController, UsersController, MeController, OpenApiController],
+  controllers: [
+    OrganizationsController,
+    AuthController,
+    UsersController,
+    MeController,
+    ProductsController,
+    ProductCodesController,
+    ProductMediaController,
+    BatchesController,
+    CodesController,
+    CustomFieldsController,
+    UploadsController,
+    OpenApiController,
+  ],
   providers: [
     OpenApiDocument,
     IdempotencyStore,
