@@ -29,12 +29,14 @@ diseñado para acogerla — ver §11.
 ```ts
 type AlertId = Branded<string, 'AlertId'>;
 
-enum AlertKind {
-  BATCH_EXPIRING,    // vence dentro del umbral
-  BATCH_EXPIRED,     // ya venció
-  CUSTODY_DUE,       // el retorno vence dentro del umbral
-  CUSTODY_OVERDUE,   // el retorno ya venció
-}
+// Unión de cadenas y no `enum` numérico: la columna es `alert_kind_enum`, de
+// texto, y un `Record<AlertKind, number>` con enum numérico daría claves 0..3
+// en el JSON de `GET /v1/alerts/summary`.
+type AlertKind =
+  | 'BATCH_EXPIRING'    // vence dentro del umbral, y todavía no venció
+  | 'BATCH_EXPIRED'     // ya venció
+  | 'CUSTODY_DUE'       // el retorno vence dentro del umbral, y todavía no venció
+  | 'CUSTODY_OVERDUE';  // el retorno ya venció
 
 class Alert {
   readonly id: AlertId;
@@ -55,7 +57,7 @@ interface AlertSubject {
   readonly id: string;
 }
 
-enum Severity { INFO, WARNING, CRITICAL }
+type Severity = 'INFO' | 'WARNING' | 'CRITICAL';
 
 /** Alerta enriquecida para presentar sin consultas adicionales — ver §5. */
 interface AlertView {
@@ -65,7 +67,7 @@ interface AlertView {
   readonly productName: string;
   readonly productSku: string;
   readonly lotCode?: string;
-  readonly nodeName: string;              // ubicación, o tenedor si es CUSTODY
+  readonly nodeName: string;              // ver «Qué enseña una alerta de lote», abajo
   readonly quantity: string;
 }
 
@@ -95,6 +97,27 @@ class AlertRule {
 Una alerta guardada con `severity: WARNING` sería incorrecta al día siguiente y
 exigiría un proceso que reevaluara todas las alertas cada noche. Calcularla al leer
 es exacto siempre y no cuesta nada.
+
+### La regla de severidad
+
+```
+BATCH_EXPIRED, CUSTODY_OVERDUE   →  CRITICAL siempre
+BATCH_EXPIRING, CUSTODY_DUE      →  WARNING  si daysUntilDue(at) <= umbral / 2
+                                    INFO     en el resto
+```
+
+El umbral es el de **su propia regla** (`AlertRule.thresholdDays`), no un número
+fijo, porque un lote a tres días con un umbral de 30 y un préstamo a tres días con
+un umbral de 3 no son la misma urgencia: al primero le queda el 10 % de su ventana y
+al segundo se le acabó. La división entera reparte la ventana en dos mitades, y con
+el umbral por defecto de 30 días eso pone el salto a `WARNING` en los últimos 15.
+
+Lo vencido es `CRITICAL` y no depende de cuánto haga que venció: una vez pasada la
+fecha ya no hay ventana que graduar, y una escala que siguiera bajando convertiría lo
+más viejo en lo más grave, que es al revés de como se vacía una bandeja.
+
+Con `at` como único argumento, **la misma alerta cambia de severidad con los días sin
+que nadie la toque** — que es exactamente lo que A-5 exige demostrar.
 
 ### Umbrales por defecto
 
@@ -201,6 +224,37 @@ Ambas se apoyan en índices ya definidos en [04](04-persistencia.md): el parcial
 y el parcial sobre `movement (org_id, settles_id)`. El `EXISTS` de la primera y el
 `HAVING` de la segunda son los que implementan A-4.
 
+### Son dos consultas, no cuatro: una por sujeto, partida por `at`
+
+Cada consulta se ejecuta **una sola vez**, con `$2` = el **mayor** de los umbrales de
+sus dos reglas **habilitadas**, y el evaluador parte el resultado en memoria:
+
+```
+expires_at <= at   →  BATCH_EXPIRED      (umbral 0)
+expires_at >  at   →  BATCH_EXPIRING     (umbral de su regla)
+due_at     <= at   →  CUSTODY_OVERDUE
+due_at     >  at   →  CUSTODY_DUE
+```
+
+Dos vueltas a la misma tabla con dos horizontes darían exactamente las mismas filas,
+porque el horizonte menor está contenido en el mayor. Y el umbral sale de las reglas
+**habilitadas** porque `AlertRule.enabled` puede apagar una de las dos: con
+`BATCH_EXPIRING` desactivada, el horizonte que queda es el 0 de `BATCH_EXPIRED`, y
+seguir barriendo 30 días sería traer lote por gusto.
+
+### `EXPIRING` y `OVERDUE` se excluyen
+
+Las dos reglas de cada par son **mutuamente excluyentes**, y por eso el corte de
+arriba es `<=` / `>` y no dos condiciones independientes. La unique de A-1 lleva el
+`kind` dentro, así que sin esta regla un lote ya vencido —que satisface también
+`expires_at <= at + 30 días`— tendría **las dos alertas abiertas a la vez** sobre el
+mismo sujeto, y la bandeja contaría doble el mismo problema.
+
+Con la exclusión, el día que un lote vence el evaluador hace en una sola pasada lo
+que tiene que hacer: `BATCH_EXPIRING` deja de estar entre las deseadas y se resuelve
+por A-3, y `BATCH_EXPIRED` se levanta. Es un relevo, no una acumulación — y es lo
+que ya espera el caso 2 de la suite e2e de la WAVE 5.
+
 La consulta de custodia no mira `stock_balance`. Con el saldo del nodo, un
 préstamo devuelto seguiría alertando mientras el tenedor tuviera *cualquier*
 unidad del mismo producto — el check-out del año pasado reaparecería como
@@ -210,8 +264,19 @@ eliminar.
 ## 5. Casos de uso
 
 ```ts
-interface EvaluateAlerts {                   // sistema, o MANAGE_ORG bajo demanda
+/** Contexto de sistema: lo invoca el job, sin token. No comprueba permisos. */
+interface EvaluateAlerts {
   execute(orgId: OrgId, at: Date): Promise<{ raised: Alert[]; resolved: Alert[] }>;
+}
+
+/** La misma evaluación, pedida por una persona. Aquí sí hay token y hay permiso. */
+interface RequestAlertEvaluation {           // MANAGE_ORG
+  execute(ctx, input: { at?: Date }): Promise<{ raised: Alert[]; resolved: Alert[] }>;
+}
+
+/** Contexto de sistema, como el sembrador de nodos de frontera. */
+interface SeedAlertRules {
+  execute(orgId: OrgId): Promise<void>;      // los cuatro umbrales por defecto de §2
 }
 
 interface ListAlerts {                       // READ
@@ -239,9 +304,23 @@ tendría que hacer N peticiones para pintar una lista de N alertas.
 `GetAlertSummary` existe para el contador de la bandeja: pedir la lista completa solo
 para saber cuántas hay es desperdicio, y es la consulta que más se repite.
 
-`EvaluateAlerts` lo invoca el job cada cinco minutos, y también
-`POST /v1/alerts/evaluate` para la organización del token. El endpoint existe por
-dos razones: el administrador que acaba de cambiar un umbral quiere ver el
+### Por qué son dos casos de uso y no uno
+
+`EvaluateAlerts` corre **sin `RequestContext`**, como `SeedBoundaryNodes`
+([04 §6](04-persistencia.md)): cuando el job lo llama no hay token, ni usuario, ni
+roles que comprobar, y un contexto con roles inventados sería una autorización que no
+puede fallar. `RequestAlertEvaluation` es la puerta de la persona: hace
+`requireAction(ctx, MANAGE_ORG)`, rechaza el `at` fuera de `NODE_ENV=test`, toma el
+`orgId` del propio contexto y delega.
+
+Con una sola firma sin `ctx`, la autorización del endpoint habría tenido que vivir en
+el controlador — y en esta arquitectura **la autorización es la primera línea de cada
+`execute`**, nunca del borde ([10 §10](10-tenancy.md)). La firma es la salvaguarda: un
+caso de uso que empieza por `OrgId` no se ata a un controlador por descuido.
+
+`EvaluateAlerts` lo invoca el job cada cinco minutos, y `RequestAlertEvaluation`
+responde a `POST /v1/alerts/evaluate` para la organización del token. El endpoint
+existe por dos razones: el administrador que acaba de cambiar un umbral quiere ver el
 efecto ahora, y el criterio de éxito 5 de [00](00-vision-y-alcance.md) —*el
 sistema la marca como vencida al pasar la fecha*— tiene que poder demostrarse
 desde la API pública sin esperar al job ni tocar la base
@@ -262,6 +341,7 @@ interface AlertRepository {
   countByKind(orgId): Promise<Record<AlertKind, number>>;
   raiseMany(alerts: Alert[]): Promise<Alert[]>;      // ON CONFLICT DO NOTHING
   resolveMany(ids: AlertId[], at: Date): Promise<Alert[]>;
+  purgeResolvedBefore(date: Date): Promise<number>;  // §7, retención de 90 días
 }
 
 interface AlertRuleRepository {
@@ -289,6 +369,18 @@ declara qué necesita saber; `catalog` e `inventory` lo responden. Es el mismo p
 que en [10](10-tenancy.md) y [11](11-catalog.md), y lo que mantiene el grafo de
 dependencias acíclico.
 
+**Estos tres puertos sí hacen falta, y `process` no tiene ninguno** ([13 §8](13-process.md)):
+la diferencia es que las consultas de §4 **cruzan catálogo e inventario en la misma
+sentencia** —lote y saldo, movimiento y saldo—, y ninguna librería puede hacer eso.
+`catalog` no ve `inventory` ([01 §5](01-arquitectura.md)), así que un método de
+`BatchRepository` no tiene forma de escribir el `EXISTS` sobre `stock_balance` que
+implementa A-4; y el enriquecimiento de `AlertView` necesita producto, lote, nodo y
+saldo a la vez. Los implementa la aplicación, que es la única capa que ve a los tres,
+igual que `StockChecker` y `MovementCounter` de [11 §5](11-catalog.md).
+
+`OrgIterator` corre en contexto de sistema: recorre `organization` —la única tabla sin
+`org_id` y por tanto sin RLS— filtrando por `active`.
+
 ## 7. Persistencia
 
 Tablas `alert` y `alert_rule`, en [04 §3.7](04-persistencia.md). Las reglas viven
@@ -300,7 +392,27 @@ organización, junto con los nodos de frontera y las plantillas de proceso
 ([10 §4](10-tenancy.md)).
 
 Las alertas resueltas se conservan **90 días** y luego se purgan. Son una señal
-operativa, no un registro histórico: el histórico es el ledger.
+operativa, no un registro histórico: el histórico es el ledger. La purga es un job
+([07 §6](07-composicion-y-contexto-de-ejecucion.md)) y se apoya en
+`AlertRepository.purgeResolvedBefore` (§6).
+
+**`alert` y `alert_rule` no tienen clave foránea a `organization`**: lo único que las
+aísla es la política de RLS por `org_id`, como a las demás. Es deliberado —el sujeto
+de una alerta es un `batch` o un `movement` y ese sí queda colgado del ledger— pero
+conviene saberlo antes de escribir una prueba que espere un `23503` que no va a
+llegar.
+
+### Qué enseña una alerta de lote
+
+`AlertView.nodeName` y `quantity` son directos para las de custodia: el nodo es el
+tenedor y la cantidad es el pendiente del préstamo. Para las de lote no, porque un
+lote puede tener saldo en varios sitios a la vez. Se fija así:
+
+- `quantity` — la **suma** del saldo del lote en nodos custodiables. Es el número que
+  responde a la pregunta que hace quien mira la bandeja: cuánto se va a perder.
+- `nodeName` — el `path` del nodo con **más** saldo de ese lote; con empate, el
+  primero por `path`. Es por dónde empezar a buscar, no un inventario de dónde está;
+  el desglose completo ya lo da `GET /v1/stock?batchId=…`.
 
 ## 8. Endpoints
 
@@ -330,11 +442,21 @@ Estos dos eventos son el punto de enganche de todo canal de notificación futuro
 
 | `type` | Estado | Cuándo |
 |---|---|---|
+| `evaluate-at-not-allowed` | 400 | `POST /v1/alerts/evaluate` con `at` fuera de `NODE_ENV=test` |
 | `invalid-threshold` | 422 | Umbral negativo o mayor que 365 |
 | `unknown-alert-kind` | 422 | Tipo no reconocido en `PUT /v1/alert-rules` |
 
 La superficie de error es mínima porque el módulo casi no acepta escrituras: su
 trabajo es leer fechas y saldos, y decidir.
+
+`evaluate-at-not-allowed` es `400` y no `422`: `at` es una entrada que en producción
+**no existe**, no una que se entienda y se rechace por una regla de negocio.
+
+**El `CHECK` de la base solo cubre la mitad de `invalid-threshold`.**
+`alert_rule_threshold_non_negative` garantiza el suelo (`>= 0`); el tope de 365 es de
+aplicación y la base aceptaría 10 000 sin quejarse. Quien escriba una prueba de
+integración esperando un `23514` por pasarse de largo la verá fallar: ese caso lo
+tiene que parar `UpdateAlertRules`.
 
 ## 11. Pruebas
 
@@ -346,7 +468,9 @@ validación de reglas.
 **Aplicación** — el evaluador con puertos dobles y `FixedClock`: levanta lo que falta,
 resuelve lo que sobra, y **no hace nada en la segunda pasada sobre el mismo estado**
 (A-2); una custodia devuelta que resuelve su alerta sola (A-3); un lote vencido sin
-saldo que no genera nada (A-4).
+saldo que no genera nada (A-4); y el **relevo** de §4 —el lote que cruza su fecha
+resuelve `BATCH_EXPIRING` y levanta `BATCH_EXPIRED` en la misma pasada, y nunca
+quedan las dos abiertas—.
 
 **Integración** — A-1 bajo concurrencia: dos evaluadores simultáneos sobre la misma
 organización producen una sola alerta; una alerta resuelta y vuelta a cumplir se

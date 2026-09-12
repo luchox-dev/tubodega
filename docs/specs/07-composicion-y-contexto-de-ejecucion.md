@@ -229,17 +229,29 @@ cinco minutos ni tocar la base.
 
 Los puertos que un módulo declara y **otro módulo** satisface
 —`OrgProvisioner` ([10](10-tenancy.md)), `MovementCounter` y `StockChecker`
-([11](11-catalog.md)), `ResolveCodePort`, `FindNodePort`, `MovementRecorder`,
-`BatchCreator` ([13](13-process.md)), `ExpiringBatchQuery`, `OverdueCustodyQuery`,
-`AlertEnricher` ([14](14-alerts.md))— se implementan en:
+([11](11-catalog.md)), `ExpiringBatchQuery`, `OverdueCustodyQuery`, `AlertEnricher`
+y `OrgIterator` ([14](14-alerts.md))— se implementan en:
 
 ```
 apps/tubodega/src/adapters/<módulo-que-declara-el-puerto>/
-  tenancy/org-provisioner.adapter.ts      → llama a inventory, process y alerts
+  tenancy/org-provisioner.adapter.ts      → compone los sembradores de cada módulo
+  inventory/boundary-nodes.seeder.ts      → un sembrador
   catalog/stock-checker.adapter.ts        → llama a inventory
-  process/movement-recorder.adapter.ts    → llama a inventory
+  alerts/expiring-batch-query.adapter.ts  → cruza catalog e inventory
   ...
 ```
+
+**Un puerto cruzado solo se declara cuando el módulo que lo necesita no puede
+llegar por sí mismo.** Si el grafo de [01 §5](01-arquitectura.md) ya le permite
+importar al otro, y el método que busca existe con la firma que necesita, inyecta el
+repositorio o el caso de uso directamente: un puerto que reexporta lo que ya está es
+un fichero que envejece aparte del que copia. Por eso `RecordMovement` usa
+`PRODUCT_REPOSITORY` de catálogo tal cual, y por eso `process` **no declara ninguno**
+([13 §8](13-process.md)) pese a llamar a los tres módulos de abajo.
+
+Los de `alerts` son el caso contrario y por eso sobreviven: sus consultas cruzan
+`batch` con `stock_balance` y `movement` con `stock_balance` **en la misma sentencia**,
+y ninguna de las dos librerías ve a la otra. Solo la aplicación las ve a ambas.
 
 La regla es simple: **un adaptador cruzado conoce a dos módulos, y el único
 sitio donde está permitido conocer a más de uno es la aplicación.**

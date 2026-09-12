@@ -105,6 +105,12 @@ Decisiones que los specs dejan abiertas o que afectan al orden. Cada una es revi
 | D-38 | **No hay puertos `ProductLookup` ni `BatchLookup`**: `RecordMovement` inyecta `PRODUCT_REPOSITORY` y `BATCH_REPOSITORY` de `@app/catalog` directamente. | R-2 permite `inventory → catalog`, y `CreateNode` ya inyecta `CUSTOM_FIELD_REPOSITORY` de catálogo tal cual. F3.3 pidió dos puertos puente y dos adaptadores antes de que existiera ese precedente; hoy serían cuatro ficheros y dos líneas de cableado para reexportar dos métodos que ya tienen la firma exacta que hace falta (`findById(orgId, id)`). |
 | D-39 | **`RecordMovementBatch` no llama a `RecordMovement` N veces**: acumula los deltas de los N movimientos y hace un solo `applyDelta`. | N llamadas serían N savepoints y N upserts por posición, y dos movimientos sobre el mismo bin se bloquearían entre sí dentro de la misma transacción. Un solo `applyDelta` ordenado por clave natural es además lo único que hace cierta la promesa de «todo o nada» con el orden total que evita el interbloqueo. |
 | D-40 | **`POST /v1/movements/{id}/reverse` responde 201** con el movimiento compensador y `Location`. | Sí crea un recurso nuevo: la compensación es un asiento más del ledger, con su propio id y su propia fila en el histórico. Es lo contrario de `/nodes/{id}/move`, que devuelve 200 porque no crea nada —el nodo ya estaba—. |
+| D-46 | **`process` no declara ni un puerto puente.** Los seis de [13 §8](docs/specs/13-process.md) se retiran del spec: la `application/` del motor construye el `HandlerDeps` desde `NODE_REPOSITORY`, `PRODUCT_REPOSITORY` y `BATCH_REPOSITORY`, y el `EffectApplier` inyecta `CreateBatch`, `RecordMovementBatch` y `AttachMedia` por clase. **F4.2 y F4.4 pierden `HandlerDeps` como unión de puertos y los seis adaptadores.** | Extiende D-38. R-2 ya permite `process → tenancy, catalog, inventory`, y los métodos existen con la firma exacta: `NodeRepository.findById`/`.findByCode`, `ProductRepository.findById`, `BatchRepository.findByLotCode`/`.findBySerial`. Serían doce ficheros para reexportar lo que ya está, y `RecordMovementBatch` se escribió **para esto** — su cabecera dice literalmente que es la puerta que usará el `CONFIRM` de la spec 13. |
+| D-47 | **Los tres puertos de `alerts` sí sobreviven** (`ExpiringBatchQuery`, `OverdueCustodyQuery`, `AlertEnricher`), más `OrgIterator`, como adaptadores en `apps/tubodega/src/adapters/alerts/`. | No es incoherente con D-46: las consultas de [14 §4](docs/specs/14-alerts.md) cruzan `batch` con `stock_balance` y `movement` con `stock_balance` **en la misma sentencia**, y `catalog` no ve `inventory` (R-2). `BatchRepository.listExpiringBefore` existe y lleva el comentario «used by the alert sweep of wave 5», pero **no puede implementar A-4**: el `EXISTS` sobre el saldo le está prohibido por el grafo. Solo la aplicación ve a los dos módulos. Molde: `StockChecker`/`MovementCounter`. |
+| D-48 | **Dar de alta una librería son seis ficheros**, y ninguna fase los nombraba: `nest-cli.json` (`projects`), `tsconfig.json` (**`paths` → el `index.ts` y `references` → su `tsconfig.lib.json`**, las dos cosas), el `libs/<lib>/tsconfig.lib.json` nuevo, **`vitest.config.ts` y `vitest.config.e2e.ts`** (dos listas de alias mantenidas a mano, más los umbrales de D-15 en la primera), y `.dependency-cruiser.cjs`. Se añade además la regla R-2 que falta: hoy nada impide `process → alerts` ni `alerts → process`. | El alias duplicado es justo lo que se olvida en uno de los dos ficheros y falla solo en `pnpm test:e2e`, media hora después. Y `.dependency-cruiser.cjs` ya nombra `process` y `alerts` en las reglas de tenancy, catalog e inventory, lo que hace parecer que está cubierto: la fila que falta es la de esos dos entre sí. |
+| D-49 | **`REVOKE UPDATE, DELETE ON step_completion`** entra en migración propia con el plan 8. | El append-only de esa tabla está prometido tres veces en prosa —[13 §2, §8](docs/specs/13-process.md) y el comentario de `abstract-append.dao.ts`, «the REVOKE is the second»— y no existe en SQL; `full_schema` solo revoca sobre `movement`. Como el `text_pattern_ops` de D-1, `prisma migrate diff` no introspecciona privilegios, así que `pnpm db:check` sigue saliendo 0 sin tocar `schema.prisma`. |
+| D-50 | Las suites de caja negra nuevas son **`35-procesos.sh`** (plan 7-8) y **`37-alertas.sh`** (plan 9). | El runner descubre por el glob `[0-9]*.sh` y corre en orden alfabético. `40-transversal.sh` tiene que quedar el último —ya se renumeró una vez por esto en el plan 5— y `30-movimientos.sh` tiene 395 líneas. |
+| D-51 | **Re-corte de los planes 7 y 8:** el 7 se lleva F4.1, F4.2 y la mitad de lectura de F4.4 (DAO y repositorio de `process_template`, `SeedFactoryTemplates` en `ORG_SEEDERS`, y los dos `GET` de `/v1/process-templates`); el 8 se queda con F4.3, el resto de F4.4 y la e2e W4. | La Parte A le daba al plan 7 «sin endpoints nuevos», lo que choca con su propia regla —cada plan cierra con algo probable por HTTP— y es exactamente por lo que el plan 5 ya se re-cortó (D-19 fue lo mismo para el plan 3). **Ningún caso e2e cambia de sitio:** el caso 1 de la tabla W4 solo se comprueba antes, con `curl`. |
 | D-11 | **`GET /v1/nodes/{id}/tree`** devuelve `{ node, children: [...] }` anidado. **`POST /v1/products/import`** recibe `{ rows: ProductRow[] }` con máximo 1000 filas por petición (`422 import-too-large`). El tope lo comprueba el caso de uso y **no** un `@ArrayMaxSize` en el DTO: con el validador en el borde la respuesta era `400 validation-failed`, y mil una filas se entienden perfectamente — lo que las rechaza es una regla de negocio ([03 §5](docs/specs/03-contrato-api.md)). | Forma no fijada por [12 §7](docs/specs/12-inventory.md) ni [11 §4](docs/specs/11-catalog.md). |
 | D-12 | **Rate limit en memoria** (ventana deslizante por organización, una instancia). | [03 §11](docs/specs/03-contrato-api.md) solo exige la infraestructura con un límite generoso; un almacén compartido es una extensión. |
 
@@ -136,10 +142,12 @@ apps/tubodega/
                                          movements/, stock/, process-templates/, process-instances/,
                                          alerts/, alert-rules/
     adapters/
-      tenancy/org-provisioner.adapter.ts
+      adapters.module.ts                 la raíz de composición: puerto ↔ adaptador
+      tenancy/org-provisioner.adapter.ts compone los OrgSeeder de cada módulo
+      inventory/boundary-nodes.seeder.ts
+      process/factory-templates.seeder.ts   el único de process (D-46)
+      alerts/alert-rules.seeder.ts
       catalog/movement-counter.adapter.ts, stock-checker.adapter.ts
-      process/resolve-code.adapter.ts, find-node.adapter.ts, find-product.adapter.ts,
-              batch-creator.adapter.ts, movement-recorder.adapter.ts, media-attacher.adapter.ts
       alerts/expiring-batch-query.adapter.ts, overdue-custody-query.adapter.ts,
              alert-enricher.adapter.ts, org-iterator.adapter.ts
     jobs/outbox-dispatcher.job.ts (W1), alerts-evaluator.job.ts (W5), purge.job.ts (W6)
@@ -154,18 +162,19 @@ libs/
   persistence/
     prisma/schema.prisma, prisma/migrations/0001_initial/migration.sql
     src/generated/db.ts (gitignored)
-    src/models/*.ts
+    src/models/index.ts                  un fichero, tres alias por tabla (Model/New/Patch)
     src/kysely/{kysely.factory.ts, transaction.context.ts, kysely.unit-of-work.ts}
     src/dao/base/{interfaces.ts, abstract-read.dao.ts, abstract-append.dao.ts, abstract-base.dao.ts,
                   org/*.ts, where.ts, keyset.ts, errors.ts}
     src/dao/*.dao.ts                     una concreción por tabla
-    src/repositories/*.repository.ts
+    src/repositories/<módulo>/*.repository.ts + mapping.ts   agrupados por lib consumidora
     src/outbox/outbox-event-publisher.ts
     src/persistence.module.ts, src/index.ts
     test/**/*.int-spec.ts
 test/
-  support/{env.ts, global-setup.ts, db.ts (withRollback), e2e/{app.ts, http.ts, tenant.ts, problem.ts}}
-  invariants/*.prop-spec.ts
+  support/{env.ts, global-setup.ts, db.ts (createPersistenceHarness, withRollback),
+           e2e/{app.ts, http.ts, tenant.ts, problem.ts}}
+  invariants/{harness.ts, arbitraries.ts, checks.ts, *.prop-spec.ts}
 db/init/01-roles.sql                     roles y bases (dev, test, shadow); montado en compose
 .dependency-cruiser.cjs
 .github/workflows/ci.yml
@@ -173,44 +182,61 @@ db/init/01-roles.sql                     roles y bases (dev, test, shadow); mont
 
 ## 5. Infraestructura de pruebas compartida
 
-Se construye en W1 y la usan todas las waves. Firmas fijadas aquí porque ninguna fase posterior debe reinventarlas.
+Se construye en W1 y la usan todas las waves. **Estas son las firmas que existen, no las
+que esta sección fijó en su día**: se corrigieron al ejecutar los planes 1-6, y las suites
+de las WAVE 4, 5 y 6 se escriben contra ellas.
 
 ```ts
 // test/support/db.ts — integración: cada prueba dentro de una transacción que se revierte
+export async function createPersistenceHarness(): Promise<PersistenceHarness>;  // Nest + los tres pools
 export async function withRollback<T>(
+  uow: KyselyUnitOfWork,
+  scope: TxScope,                 // { pool: 'tenant'; orgId } | { pool: 'system'; orgId? }
   fn: () => Promise<T>,
-  opts?: { readonly pool?: 'tenant' | 'system'; readonly orgId?: OrgId },
-): Promise<T>;   // abre vía KyselyUnitOfWork, ejecuta fn, lanza RollbackSentinel, lo traga
+): Promise<T>;   // abre vía runAs, ejecuta fn, lanza RollbackSentinel, lo traga
 
 // test/support/e2e/app.ts
-export async function startTestApp(): Promise<{ app: NestFastifyApplication; http: TestHttp; stop(): Promise<void> }>;
+export interface TestApp { readonly app: NestFastifyApplication; readonly http: TestHttp; stop(): Promise<void> }
+export async function startTestApp(
+  customize?: (b: TestingModuleBuilder) => TestingModuleBuilder,   // lo usa apps/tubodega/test/edge/probe.module.ts
+): Promise<TestApp>;
 
 // test/support/e2e/http.ts — envuelve fastify.inject(); nunca toca la base
 export interface TestHttp {
   get(url: string, o?: Req): Promise<Res>;
-  post(url: string, body: unknown, o?: Req): Promise<Res>;     // Idempotency-Key v7 automática salvo idem: false
-  patch(url: string, body: unknown, o?: Req & { ifMatch: number }): Promise<Res>;
+  post(url: string, body: unknown, o?: Req & { ifMatch?: number }): Promise<Res>;  // Idempotency-Key v7 salvo idem: false
+  patch(url: string, body: unknown, o: Req & { ifMatch: number }): Promise<Res>;   // `o` obligatorio
   put(url: string, body: unknown, o?: Req & { ifMatch?: number }): Promise<Res>;
   del(url: string, o?: Req): Promise<Res>;
+  upload(url: string, files: UploadFile | readonly UploadFile[], o?: Req): Promise<Res>;
 }
-export interface Req { token?: string; idem?: string | false; headers?: Record<string, string>; multipart?: { field: string; filename: string; contentType: string; bytes: Buffer } }
+export interface Req { token?: string; idem?: string | false; headers?: Record<string, string> }
+export interface UploadFile { readonly bytes: Buffer; readonly contentType: string; readonly filename?: string }
 // `registerOrg`, `login`, `refresh` y `logout` del helper llaman con `idem: false`: así cada suite demuestra
 // de paso que los cuatro exentos de [07 §5] funcionan sin cabecera.
 export interface Res { status: number; body: any; headers: Record<string, string> }
 
 // test/support/e2e/tenant.ts — un negocio ficticio por suite
-export async function registerOrg(http: TestHttp, o?: { slug?: string }): Promise<Tenant>;
+export const PASSWORD = 'correcthorse1!';
+export async function registerOrg(http: TestHttp, o?: { slug?: string; ownerEmail?: string; name?: string }): Promise<Tenant>;
+export async function login(http: TestHttp, email: string, password: string, slug?: string): Promise<Session>;
+export function makeTenant(http: TestHttp, slug: string, orgId: string, owner: Session): Tenant;
 export interface Tenant {
   readonly slug: string;
+  readonly orgId: string;
   readonly owner: Session;                       // OWNER
   user(role: 'ADMIN' | 'OPERATOR' | 'VIEWER', name?: string): Promise<Session>;  // crea vía POST /v1/users y hace login
 }
-export interface Session { readonly token: string; readonly refreshToken: string; readonly userId: string; readonly email: string }
-export function expiredToken(s: Session): string;   // firma con el JWT_SECRET de .env.test y exp en el pasado; no toca la base
+export interface Session { readonly token: string; readonly refreshToken: string; readonly userId: string; readonly email: string; readonly password: string }
+export async function expiredToken(s: Session, orgId: string): Promise<string>;   // firma con el JWT_SECRET de .env.test y exp en el pasado
 
-// test/support/e2e/problem.ts
+// test/support/e2e/problem.ts — comprueba además que traceId === headers['x-request-id']
 export function expectProblem(res: Res, expected: { status: number; type: string; pointer?: string }): void;
 ```
+
+**La que más duele es `upload`.** Esta sección prometió un `Req.multipart`, y lo que hay
+es un método aparte. Lo usan el caso 4 de la WAVE 2, el caso 4 de la WAVE 4 y los 500
+productos con foto de F6.1: una fase que lo escriba de memoria no compila.
 
 Reparto narrativo usado por todas las suites e2e (para que se lean como un caso real):
 
@@ -692,33 +718,97 @@ Narrativa: primer día de operación. Diego carga el saldo inicial desde la hoja
 
 **Entrega:** tipos de [13 §2](docs/specs/13-process.md); `ProcessTemplate` con validador (P-8 `branching-not-supported`, `unknown-step-type` contra un conjunto de tipos conocido, transición a paso inexistente); `ProcessInstance`, `ProcessContext`, `MovementDraft`, `BatchDraft`, `StepCompletion`; `LinearRunner` (P-2, P-4, P-5, omisión con `null`, `to: null` → `COMPLETED`, efectos solo al completar); **las seis plantillas de fábrica como constantes** (`FACTORY_TEMPLATES`).
 
+**Alta de la librería (D-48), antes de la primera línea de dominio:** `nest-cli.json`
+(`projects.process`), `tsconfig.json` (`@app/process` → `libs/process/src/index.ts`; bajo
+`moduleResolution: nodenext` un directorio no resuelve por índice), **`vitest.config.ts` y
+`vitest.config.e2e.ts`** (las dos listas de alias), `vitest.config.ts` → `coverage.thresholds`
+con `libs/process/src/domain/**` al 100/100 y `application/**` al 90 (D-15), y
+`.dependency-cruiser.cjs` con la regla `from ^libs/process/ → to ^libs/alerts/`, que hoy no
+existe. `libs/process/tsconfig.lib.json` copiando el de `inventory`.
+
+**`StepId` y `TemplateCode` viven aquí**, en `domain/ids.ts`, no en `@app/common`: solo
+`ProcessInstanceId` está allí, y su comentario explica por qué (lo referencia `inventory`
+en `Movement.processInstanceId`).
+
+**`FACTORY_TEMPLATES` se copia, no se inventa:** [13 §6](docs/specs/13-process.md) ya trae
+las seis en JSONC completo, con `id` de paso, `required`, `config` y `transitions`.
+
+El validador da además `invalid-template` (422) para la transición a un paso inexistente, el
+paso inalcanzable y la plantilla que no cierra con `to: null` — sin él, una plantilla rota se
+siembra y el fallo aparece semanas después, en la instancia de alguien, como un 500.
+
 **Archivos:** `libs/process/src/domain/{ids.ts, step-types.ts, template.ts, instance.ts, context.ts, drafts.ts, step-completion.ts, runner.ts, linear-runner.ts, factory-templates.ts, effects.ts, errors.ts}` + specs; `libs/process/src/index.ts`; builders.
 
 **Pruebas (dominio, 100 %):** P-1..P-9 nombradas (P-1, P-3, P-7 se cubren en integración; aquí sus contrapartes de dominio); `LinearRunner` recorre cada plantilla de fábrica de principio a fin **tres veces** (`QUANTITY`, `LOT`, `SERIAL`) y el borrador final pasa `Movement.create` (importa `@app/inventory`); `ProcessContext` acumula; omitir `required:true` → `required-step-skipped`; una plantilla con dos transiciones → `branching-not-supported`.
 
 ### F4.2 — Process: los ocho manejadores y el registro
 
-**Entrega:** `StepHandler` + `StepHandlerRegistry` + `HandlerDeps`; `SCAN_ITEM`, `CAPTURE_BATCH` (tabla de 6 celdas), `CAPTURE_QTY` (entera si `UNIT/BOX/PACK`), `CAPTURE_PHOTO` (1-5), `SELECT_NODE` (`config.role`, `allowedKinds`), `SET_DUE_DATE` (futura con `Clock`; destino `CUSTODY`), `CAPTURE_REASON` (3-500), `CONFIRM` (borrador completo y coherente; `defaults.fromNodeCode/toNodeCode` resueltos por `FindNodeByCodePort`; efectos en orden `CREATE_BATCH`, `EMIT_MOVEMENTS`, `ATTACH_MEDIA`).
+**Entrega:** `StepHandler` + `StepHandlerRegistry` + `HandlerDeps`; `SCAN_ITEM`, `CAPTURE_BATCH` (tabla de 6 celdas), `CAPTURE_QTY` (entera si `UNIT/BOX/PACK`), `CAPTURE_PHOTO` (1-5, acumula `storageKeys` en el contexto), `SELECT_NODE` (`config.role`, `allowedKinds`), `SET_DUE_DATE` (futura con `Clock`; destino `CUSTODY`), `CAPTURE_REASON` (3-500), `CONFIRM` (borrador completo y coherente; `defaults.fromNodeCode/toNodeCode` resueltos con `findNodeByCode`; emite los efectos en orden `CREATE_BATCH`, `EMIT_MOVEMENTS`, `ATTACH_MEDIA`).
+
+**`validate` y `apply` reciben el `config` del paso**, no solo `parse`: `SELECT_NODE` lee
+`allowedKinds` al validar y `role` al aplicar, y `CONFIRM` resuelve sus `defaults` al validar.
+Ya corregido en [13 §4.2](docs/specs/13-process.md).
+
+**Ningún manejador produce efectos, tampoco `CAPTURE_PHOTO`**, que en la tabla de
+[13 §5](docs/specs/13-process.md) parecía producir `ATTACH_MEDIA`: `apply` devuelve un
+`ProcessContext` y P-6 dice que los efectos salen solo al completar. Las claves se acumulan
+en `ProcessContext.storageKeys` y `CONFIRM` emite los tres.
 
 **Archivos:** `libs/process/src/domain/handlers/*.ts` + specs; `libs/process/src/domain/handlers/registry.ts`.
 
-**Interfaces:** `HandlerDeps { resolveCode; findNode; findNodeByCode; findProduct; findBatchByLot; findBatchBySerial; clock }` (amplía [13 §4.2](docs/specs/13-process.md) con lo que `CAPTURE_BATCH` y `CONFIRM` necesitan para decidir `batchId` vs `newBatch` y los `defaults`). Los manejadores siguen siendo de solo lectura.
+**Interfaces:** `HandlerDeps { resolveCode; findNode; findNodeByCode; findProduct; findBatchByLot; findBatchBySerial; clock }`, y **son funciones, no puertos** (D-46): la `application/` lo construye desde `ResolveCode`, `NODE_REPOSITORY`, `PRODUCT_REPOSITORY` y `BATCH_REPOSITORY`, que ya tienen la firma exacta. Los manejadores siguen siendo de solo lectura por tipo, que es lo que importaba.
 
 **Pruebas (dominio, 100 %):** cada manejador con payload válido, inválido (`invalid-step-payload` con `pointer`) y `null`; `CAPTURE_BATCH` en sus seis celdas más «`SCAN_ITEM` ya aportó lote»; `CONFIRM` con borrador incompleto lista lo que falta; `CONFIRM` con `defaults` cuando el borrador ya trae ese lado → prioridad del borrador.
 
 ### F4.3 — Process: casos de uso y aplicador de efectos
 
-**Entrega:** `StartProcess`, `CompleteStep` (12 pasos de [13 §7](docs/specs/13-process.md)), `CancelProcess`, `GetProcessInstance` (con completados), `ListProcessInstances`, `ListTemplates`, `GetActiveTemplate` (`404 template-not-found`), `CreateTemplateVersion` (P-9, valida P-8), `SeedFactoryTemplates`; `EffectApplier`; puertos de [13 §8](docs/specs/13-process.md) incluido `hasInstances`; eventos `process.started`, `process.step_completed`, `process.completed`, `process.cancelled` ([13 §11](docs/specs/13-process.md)); dobles.
+> `ListTemplates`, `GetActiveTemplate`, `SeedFactoryTemplates` y el repositorio de
+> plantillas se adelantan al **plan 7** (D-51), que cierra con los dos `GET` por HTTP.
+> Lo que sigue es lo del plan 8: todo lo que toca instancias.
 
-**Archivos:** `libs/process/src/application/{ports/*.ts, use-cases/*.ts, effect-applier.ts}` + specs; dobles `RecordingMovementRecorder`, `RecordingBatchCreator`, `RecordingMediaAttacher`, repositorios en memoria.
+**Entrega:** `StartProcess`, `CompleteStep` (12 pasos de [13 §7](docs/specs/13-process.md)), `CancelProcess`, `GetProcessInstance` (con completados), `ListProcessInstances`, `CreateTemplateVersion` (P-9, valida P-8 e `invalid-template`); `EffectApplier`; los tres puertos **propios** de [13 §8](docs/specs/13-process.md) —`ProcessTemplateRepository` (incluido `hasInstances`), `ProcessInstanceRepository`, `StepCompletionRepository`— y **ninguno más** (D-46); eventos `process.started`, `process.step_completed`, `process.completed`, `process.cancelled` ([13 §11](docs/specs/13-process.md)); dobles.
+
+**Ninguna acción nueva.** Los ocho endpoints se reparten entre `RECORD_MOVEMENT`,
+`MANAGE_CATALOG` y `READ`, que ya existen en `libs/tenancy/src/domain/role.ts`: **la matriz
+de permisos y sus 32 casos no se tocan**. El `OPERATOR` tiene `RECORD_MOVEMENT` y
+`CREATE_BATCH` y no tiene `MANAGE_CATALOG`, que es exactamente el reparto que piden los
+casos 12 y 14 de la e2e.
+
+**`occurredAt` lo pone el `EffectApplier` con el `Clock`**, no el borrador: una instancia
+puede llevar abierta desde ayer, y la hora del asiento es el instante en que se confirma.
+El `processInstanceId` también se rellena ahí — la columna existe desde `full_schema` y
+`RecordMovementInput` ya lo acepta.
+
+**Archivos:** `libs/process/src/application/{ports/*.ts, use-cases/*.ts, effect-applier.ts}` + specs; dobles: repositorios en memoria, y **espías sobre los casos de uso reales** (`CreateBatch`, `RecordMovementBatch`, `AttachMedia`) en vez de `Recording*Port`, que ya no existen.
 
 **Pruebas (aplicación):** paso equivocado → `wrong-step` con el actual en `detail`; repetido → `step-already-completed`; cerrada → `instance-closed`; **P-6**: ningún recorder recibe llamadas hasta `CONFIRM`; orden de efectos; `CancelProcess` no invoca nada; `CreateTemplateVersion` crea `v2` y desactiva `v1`; instancia abierta en `v1` sigue resolviendo `v1`.
 
 Nota: `template-has-instances` (409, [13 §12](docs/specs/13-process.md)) no tiene ruta que lo produzca en el MVP porque no existe edición de plantillas; se declara el error de dominio y `ProcessTemplateRepository.hasInstances` (P-9) queda disponible para cuando la haya.
 
-### F4.4 — Process: persistencia, adaptadores cruzados y HTTP
+### F4.4 — Process: persistencia, el único adaptador, y HTTP
 
-**Entrega:** DAOs `process_template`, `process_instance`, `step_completion` (append-only); repositorios; adaptadores `apps/tubodega/src/adapters/process/*` (`ResolveCodePort` → `ResolveCode` de catalog; `FindNodePort`/`FindNodeByCode` → `NodeRepository`; `FindProductPort`; `BatchCreator` → `CreateBatch`; `MovementRecorder` → `RecordMovementBatch`; `MediaAttacher` → `AttachMedia`); provisioner siembra plantillas (D-2); 8 endpoints de [13 §10](docs/specs/13-process.md) en `http/process-templates/` y `http/process-instances/`.
+**Entrega:** DAOs `process_template.dao.ts` (`AbstractOrgDao`), `process_instance.dao.ts`,
+`step_completion.dao.ts` (**`AbstractOrgAppendDao`**: sin `update`, sin `upsert`, sin
+`delete`); los tres alias por tabla en `libs/persistence/src/models/index.ts` —**un solo
+fichero**, no el `src/models/*.ts` que dibuja el mapa de la §4—; repositorios en
+`libs/persistence/src/repositories/process/` con su `mapping.ts`, como catalog e inventory;
+**migración con el `REVOKE` de `step_completion`** (D-49); 8 endpoints de
+[13 §10](docs/specs/13-process.md) en `http/process-templates/` y `http/process-instances/`.
+
+**Adaptadores: uno.** `apps/tubodega/src/adapters/process/factory-templates.seeder.ts`,
+molde exacto de `boundary-nodes.seeder.ts` (`implements OrgSeeder`, envuelve el caso de uso,
+método `seed`), más su entrada en el `useFactory` de `ORG_SEEDERS` de `adapters.module.ts`
+—una línea en `inject` y un parámetro—, cuyo comentario ya dice «Plans 8 and 9 extend this».
+`AdaptersModule` tendrá que importar `ProcessModule`, como ya importa `InventoryModule`.
+Los otros seis que esta fase pedía no se escriben (D-46).
+
+**Lo que todo plan con endpoints toca, y esta fase no nombraba:** la lista literal de paths
+de `apps/tubodega/test/edge/openapi.int-spec.ts`, el snapshot con `pnpm openapi:write`, las
+cinco plantillas nuevas de `plantilla()` en `scripts/blackbox/lib.sh`
+(`/process-templates/{code}`, `…/{code}/versions`, `/process-instances/{id}`,
+`…/{id}/cancel`, `…/{id}/steps/{stepId}/complete`), la suite `35-procesos.sh` (D-50) con
+camino feliz **y** de error por operación, las carpetas de Postman, y `scripts/seed.sh`,
+cuya cabecera ya reserva la fila «plantillas e instancias de proceso ... plan 8».
 
 **Pruebas (integración):** type-spec: `StepCompletionDao` no tiene `update`/`upsert`/`delete` ([08 §8](docs/specs/08-acceso-a-datos.md)); P-1 (instancia con versión inexistente → `23503`); P-3 bajo concurrencia (dos `complete` al mismo paso, uno `201` y otro `409 step-already-completed`, no dos `step_completion`); **P-7**: un `CONFIRM` cuyo movimiento falla por I-4 deja la instancia `OPEN` en el paso `confirmar`, sin `step_completion` de `confirmar`, sin lote nuevo y sin `product_media`.
 
@@ -753,19 +843,62 @@ Narrativa: Juan opera con el teléfono siguiendo lo que el servidor le indica; n
 
 ### F5.1 — Alerts: dominio
 
-**Entrega:** [14 §2](docs/specs/14-alerts.md): `Alert`, `AlertKind`, `AlertSubject`, `Severity`, `severity(at)`, `daysUntilDue(at)`, `AlertRule` con validación (`invalid-threshold` 0-365, `unknown-alert-kind`), `DEFAULT_RULES`; función pura `reconcile(desired, open): { toRaise, toResolve }`.
+**Alta de la librería:** los seis sitios de D-48, igual que `process`.
 
-**Pruebas (dominio):** severidad en cada frontera; A-5 (misma alerta, dos instantes, severidades distintas); `daysUntilDue` cruzando cero; `reconcile` con conjuntos vacíos, iguales, disjuntos.
+**Entrega:** [14 §2](docs/specs/14-alerts.md): `Alert`, `AlertKind` y `Severity` **como
+uniones de cadenas** (la columna es `alert_kind_enum`, de texto, y un `Record<AlertKind, number>`
+con enum numérico daría claves `0..3` en el JSON de `/summary`), `AlertSubject`,
+`severity(at)`, `daysUntilDue(at)`, `AlertRule` con validación (`invalid-threshold` 0-365
+—el `CHECK` de base solo cubre el suelo—, `unknown-alert-kind`), `DEFAULT_RULES`; función
+pura `reconcile(desired, open): { toRaise, toResolve }`.
+
+**La regla de severidad la fija ahora [14 §2](docs/specs/14-alerts.md)**: lo vencido es
+`CRITICAL` siempre; lo que aún no venció es `WARNING` dentro de la mitad del umbral de su
+propia regla e `INFO` por encima. No estaba en ningún sitio, y §11 exige probarla «en cada
+umbral y en sus fronteras exactas».
+
+**Pruebas (dominio):** severidad en cada frontera, con el umbral de la regla como parámetro; A-5 (misma alerta, dos instantes, severidades distintas); `daysUntilDue` cruzando cero; `reconcile` con conjuntos vacíos, iguales, disjuntos; y que `BATCH_EXPIRING`/`BATCH_EXPIRED` **nunca** coexisten sobre el mismo lote.
 
 ### F5.2 — Alerts: casos de uso con dobles
 
-**Entrega:** `EvaluateAlerts(orgId, at)`, `ListAlerts` (con `AlertEnricher`), `GetAlertSummary`, `UpdateAlertRules`, `SeedAlertRules`; puertos de [14 §6](docs/specs/14-alerts.md); dobles.
+**Entrega:** `EvaluateAlerts(orgId, at)` —**contexto de sistema, sin `ctx` y sin
+`requireAction`**, molde de `SeedBoundaryNodes`/D-26—, `RequestAlertEvaluation(ctx, { at? })`
+—que comprueba `MANAGE_ORG`, rechaza `at` fuera de `NODE_ENV=test` con
+`400 evaluate-at-not-allowed` y delega—, `ListAlerts` (con `AlertEnricher`),
+`GetAlertSummary`, `UpdateAlertRules`, `SeedAlertRules(orgId)`; puertos de
+[14 §6](docs/specs/14-alerts.md) incluido `purgeResolvedBefore`, que F6.2 necesita; dobles.
+
+Son **dos** casos de uso y no uno porque la firma de una sola —sin `ctx`, como la tenía el
+spec— habría empujado la autorización al controlador, y en esta casa la autorización es la
+primera línea de cada `execute`.
+
+**El evaluador llama a cada consulta una vez**, con el horizonte mayor de sus dos reglas
+**habilitadas**, y parte el resultado por `at` ([14 §4](docs/specs/14-alerts.md)).
 
 **Pruebas (aplicación, `FixedClock`):** levanta lo que falta y resuelve lo que sobra; A-2 segunda pasada sin cambios ni eventos; A-3 custodia devuelta (el doble de `OverdueCustodyQuery` ya no la devuelve) → resuelta; A-4 lote vencido sin saldo no genera nada; regla `enabled:false` no evalúa; `UpdateAlertRules` reemplaza el conjunto y valida.
 
 ### F5.3 — Alerts: persistencia, adaptadores, job y HTTP
 
-**Entrega:** `AlertDao` (`raiseMany` con `ON CONFLICT DO NOTHING` sobre el índice parcial), `KyselyAlertRepository`, `KyselyAlertRuleRepository`; adaptadores `ExpiringBatchQuery` (consulta de [14 §4](docs/specs/14-alerts.md) en `BatchDao`), `OverdueCustodyQuery` (en `MovementDao`), `AlertEnricher` (join ligero producto/lote/nodo/saldo), `OrgIterator` (`OrganizationDao.listActive`, sistema); `AlertsEvaluatorJob` (contexto de **sistema**, [07 §2](docs/specs/07-composicion-y-contexto-de-ejecucion.md): por organización `runAs({pool:'system', orgId})`, que fija `SET LOCAL app.current_org` aunque el rol salte RLS, + `pg_try_advisory_xact_lock(hashtext(orgId))`; los repositorios filtran por `orgId` como siempre); `POST /v1/alerts/evaluate` (`at` solo con `NODE_ENV=test`, si no `400 evaluate-at-not-allowed`); `GET /v1/alerts`, `/summary`, `GET/PUT /v1/alert-rules` (en `http/alerts/` y `http/alert-rules/`); provisioner siembra reglas (D-2); purga de alertas a 90 días en `purge.job.ts`.
+**Entrega:** `alert.dao.ts` (`raiseMany` con `ON CONFLICT DO NOTHING` sobre el índice
+parcial) y **`alert-rule.dao.ts`, que no existe** pese a que F1.4 lo daba por construido —el
+DAO genérico acabó probándose contra `app_user` y `user_role` (D-1)—; los alias de las dos
+tablas en `models/index.ts`; `KyselyAlertRepository`, `KyselyAlertRuleRepository` en
+`repositories/alerts/`; los cuatro adaptadores de D-47 en `apps/tubodega/src/adapters/alerts/`:
+`ExpiringBatchQuery` (la consulta de [14 §4](docs/specs/14-alerts.md) sobre `BatchDao` +
+`StockBalanceDao` — **`BatchRepository.listExpiringBefore` no sirve**: el `EXISTS` sobre el
+saldo que implementa A-4 le está prohibido por R-2), `OverdueCustodyQuery` (en `MovementDao`),
+`AlertEnricher` (join ligero producto/lote/nodo/saldo), `OrgIterator` (**que necesita un
+`OrganizationDao.listActive()` nuevo**, sistema); `AlertsEvaluatorJob` (contexto de **sistema**, [07 §2](docs/specs/07-composicion-y-contexto-de-ejecucion.md): por organización `runAs({pool:'system', orgId})`, que fija `SET LOCAL app.current_org` aunque el rol salte RLS, + `pg_try_advisory_xact_lock(hashtext(orgId))`; los repositorios filtran por `orgId` como siempre); `POST /v1/alerts/evaluate` (`at` solo con `NODE_ENV=test`, si no `400 evaluate-at-not-allowed`); `GET /v1/alerts`, `/summary`, `GET/PUT /v1/alert-rules` (en `http/alerts/` y `http/alert-rules/`); provisioner siembra reglas con un `AlertRulesSeeder` (D-2, molde de `boundary-nodes.seeder.ts`); purga de alertas a 90 días en `purge.job.ts`.
+
+**`ALERTS_INTERVAL_MS` no está declarada en ningún sitio** y esta fase la necesita:
+`libs/common/src/config/env.validation.ts` (con su prueba de valor por defecto y valor
+inválido), `.env.example`, `.env.docker`, `.env.test` y el bloque `env` del job `blackbox`
+de `.github/workflows/ci.yml`.
+
+**El job copia `apps/tubodega/src/jobs/outbox-dispatcher.job.ts` entero**: `OnModuleInit`,
+`return` inmediato si `NODE_ENV === test`, `SchedulerRegistry.addInterval`, y un `tick()`
+que devuelve lo que hizo para que la prueba lo conduzca. Esa regla la fijó F1.11 «para todos
+los jobs desde aquí» y hoy solo tiene un ejemplo.
 
 **Pruebas (integración):** A-1 con dos evaluadores concurrentes → una alerta; resuelta y re-cumplida → se re-levanta; `EXPLAIN` de ambas consultas usa los índices parciales; dos préstamos del mismo `QUANTITY` al mismo tenedor, el primero devuelto → solo el segundo alerta; una organización con fallo no impide evaluar la siguiente.
 
@@ -795,13 +928,17 @@ Narrativa: Marta revisa la bandeja cada mañana; el sistema le dice qué se venc
 
 ### F6.1 — Suite de aceptación: los 10 criterios
 
-**Entrega:** `apps/tubodega/test/e2e/mvp-acceptance.e2e-spec.ts` que, sobre una organización recién creada y solo por API, ejecuta los 10 criterios de [00 §7](docs/specs/00-vision-y-alcance.md) **en orden y en una sola narrativa** (reutiliza helpers, no copia las suites de wave). Cada `it` se titula `Criterio N · …`. El criterio 1 se ejecuta **literal**: 500 productos, cada uno con al menos un código, una foto (500 `POST /v1/uploads` + 500 `POST …/media` en proceso, con `inject`) y un campo custom; si el presupuesto de 120 s se rompe, la suite se mueve a un job de CI aparte antes que recortar el criterio.
+**Entrega:** `apps/tubodega/test/e2e/mvp-acceptance.e2e-spec.ts` que, sobre una organización recién creada y solo por API, ejecuta los 10 criterios de [00 §7](docs/specs/00-vision-y-alcance.md) **en orden y en una sola narrativa** (reutiliza helpers, no copia las suites de wave). Cada `it` se titula `Criterio N · …`. El criterio 1 se ejecuta **literal**: 500 productos, cada uno con al menos un código, una foto (500 `POST /v1/uploads` + 500 `POST …/media` en proceso, con `http.upload()` — **no existe `Req.multipart`**, ver §5) y un campo custom; si el presupuesto de 120 s se rompe, la suite se mueve a un job de CI aparte antes que recortar el criterio.
 
 **Hecho cuando:** verde; es el `README` vivo del contrato.
 
 ### F6.2 — Purgas y programación de jobs
 
-**Entrega:** `purge.job.ts` (idempotency 7 d, outbox publicados 30 d, alertas resueltas 90 d, media sin reclamar 24 h + borrado de archivo vía `MediaStorage.delete`), contexto de sistema, intervalos por `Clock` y env; `@nestjs/schedule` cableado para todos los jobs (la regla «no arrancan en test» viene de F1.11).
+**Entrega:** `purge.job.ts` (idempotency 7 d, outbox publicados 30 d, alertas resueltas 90 d vía `AlertRepository.purgeResolvedBefore`, media sin reclamar 24 h con `MediaUploadRepository.listUnclaimedBefore` —que ya existe— + borrado de archivo vía `MediaStorage.delete`), contexto de sistema, intervalos por `Clock` y env; `@nestjs/schedule` cableado para todos los jobs.
+
+**Mismo molde que `OutboxDispatcherJob`** (F1.11): `OnModuleInit`, sin arrancar bajo
+`NODE_ENV=test`, `SchedulerRegistry.addInterval`, y un `tick()` que devuelve lo que borró.
+Los métodos de purga de `idempotency_key` y `outbox_event` hay que añadirlos a sus DAOs.
 
 **Pruebas (integración):** cada purga borra lo caducado y respeta lo vigente; ejecutar dos veces es inocuo.
 
@@ -809,11 +946,16 @@ Narrativa: Marta revisa la bandeja cada mañana; el sistema le dice qué se venc
 
 **Entrega:** `http/pipeline/rate-limit.interceptor.ts`, ventana deslizante por organización (D-12), cabeceras `RateLimit-*` en toda respuesta, `429 rate-limited` con `Retry-After`.
 
+**`RATE_LIMIT_PER_MINUTE` tampoco está declarada** (F1.0 la prometió y no llegó): los mismos
+cinco sitios que `ALERTS_INTERVAL_MS` en F5.3. Y el interceptor entra en `app.module.ts`
+**antes** de `TransactionInterceptor`: limitar después de abrir una transacción gasta una
+conexión del pool en cada petición que se va a rechazar.
+
 **Pruebas:** integración del borde con `RATE_LIMIT_PER_MINUTE=5`.
 
 ### F6.4 — Cobertura y puertas finales
 
-**Entrega:** `vitest.config.ts` con `coverage.thresholds` por directorio (100/100/95/90/85) y `perFile: false`; `dependency-cruiser` con las 6 librerías; `pnpm typecheck` cubre `test/`; CI verde con las cinco puertas + snapshot OpenAPI; el checklist «todo endpoint del snapshot tiene un caso feliz y uno de error» ([06 §6](docs/specs/06-pruebas-y-calidad.md)) **ya no es manual y ya está entregado**: el runner de `pnpm blackbox` lo cruza en cada corrida contra los paths del contrato publicado y falla nombrando lo que falte (tanda 3c).
+**Entrega:** `vitest.config.ts` con `coverage.thresholds` por directorio (100/100/95/90/85) y `perFile: false` — **hoy hay seis entradas por directorio y ningún umbral global ni para `apps/tubodega/src/**`**, que sí se mide; `dependency-cruiser` con las 6 librerías, incluida la regla R-2 entre `process` y `alerts` que D-48 añade; `pnpm typecheck` ya cubre `test/`; CI verde con las cinco puertas + snapshot OpenAPI; el checklist «todo endpoint del snapshot tiene un caso feliz y uno de error» ([06 §6](docs/specs/06-pruebas-y-calidad.md)) **ya no es manual y ya está entregado**: el runner de `pnpm blackbox` lo cruza en cada corrida contra los paths del contrato publicado y falla nombrando lo que falte (tanda 3c).
 
 ### F6.5 — Rendimiento nocturno
 
@@ -906,10 +1048,16 @@ Cada plan es un documento propio (`docs/superpowers/plans/2026-MM-DD-NN-<nombre>
 | 4 | **hecho** | Ubicaciones y cierre de la WAVE 2 | F2.5, resto de F2.6 + e2e W2 | Los 7 endpoints de `/v1/nodes` con `tree` y `move`, `libs/inventory` (nodos), el sembrador de los ocho de frontera en `ORG_SEEDERS`, y la suite `w2-cargar-catalogo-y-ubicaciones` con los 21 casos. |
 | **5** | **hecho** | **El ledger, de punta a punta** | F3.1-F3.5 *(re-cortado: la Parte A le daba solo F3.1-F3.4)* | Los 7 endpoints de [12 §7](docs/specs/12-inventory.md): `/v1/movements`, `/batch`, `/{id}`, `/{id}/reverse`, `/v1/stock`, `/v1/stock/custodies`. `Quantity`, `Movement`, los siete casos de uso, el `applyDelta` con savepoint y la suite de caja negra `30-movimientos`. Sin e2e W3 todavía. |
 | **6** | **hecho** | **Cierre de la WAVE 3: las propiedades y la narrativa** | F3.6 + e2e W3 | `test/invariants/` con `fast-check` —I-5, conservación, I-9, I-18— y `w3-mover-mercancia.e2e-spec.ts` con 16 casos; criterios 3-4-6-7-8-9. Y **D-41**: la generación encontró que I-9 no valía al compensar un despacho. |
-| 7 | pendiente | Motor de procesos: dominio y manejadores | F4.1-F4.2 | Sin endpoints nuevos; `LinearRunner` recorriendo las seis plantillas de fábrica en pruebas. |
-| 8 | pendiente | Operar con procesos y cierre de la WAVE 4 | F4.3-F4.4 + e2e W4 | `/v1/process-templates`, `/v1/process-instances`, recepción guiada paso a paso con lote nuevo y foto; cancelación limpia. |
-| 9 | pendiente | Alertas y cierre de la WAVE 5 | F5.1-F5.3 + e2e W5 | `/v1/alerts`, `/summary`, `/evaluate`, `/v1/alert-rules`; criterio 5 completo. |
-| 10 | pendiente | Cierre del MVP | F6.1-F6.5 (F6.6 entregada en el plan 3e) | Suite `mvp-acceptance` con los 10 criterios, purgas, rate limit, cobertura, benchmark nocturno. |
+| 7 | pendiente | Motor de procesos: el dominio, y las plantillas publicadas | F4.1-F4.2 + la mitad de lectura de F4.4 *(re-cortado, D-51)* | `GET /v1/process-templates` y `GET /v1/process-templates/{code}`: las seis plantillas de fábrica sembradas al registrar una organización y visibles por `curl`. Dentro: `libs/process` de alta, el `LinearRunner` recorriendo las seis de punta a punta ×3 modos de seguimiento, los ocho manejadores, y la suite `35-procesos.sh`. |
+| 8 | pendiente | Operar con procesos y cierre de la WAVE 4 | F4.3 + resto de F4.4 + e2e W4 | Los seis endpoints de escritura de `/v1/process-instances`: recepción guiada paso a paso con lote nuevo y foto, cancelación limpia, versionado de plantillas. Suite `w4-operar-con-procesos` con sus 14 casos; criterio 3 en su forma definitiva. |
+| 9 | pendiente | Alertas y cierre de la WAVE 5 | F5.1-F5.3 + e2e W5 | `/v1/alerts`, `/summary`, `/evaluate`, `/v1/alert-rules`; el evaluador como job y bajo demanda; criterio 5 completo. Suite `37-alertas.sh`. |
+| 10 | pendiente | Cierre del MVP | F6.1-F6.5 (F6.6 entregada en el plan 3e) | Suite `mvp-acceptance` con los 10 criterios, purgas, rate limit, cobertura global, benchmark nocturno. |
+
+> **Los planes 7-10 se refinaron el 2026-09-12** contra lo que los planes 1-6 dejaron
+> construido, sin añadir un solo escenario a las tablas e2e. De ahí salen D-46..D-51, la
+> corrección de la §5 y la reescritura de los specs [13](docs/specs/13-process.md) y
+> [14](docs/specs/14-alerts.md), que tenían 26 huecos entre los dos. El resumen de lo que
+> cambió está en la bitácora del [plan 7](2026-09-12-07-el-motor-de-procesos.md).
 
 Reglas de la división:
 
