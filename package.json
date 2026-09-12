@@ -21,6 +21,7 @@
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "blackbox": "bash scripts/blackbox.sh",
+  "seed": "bash scripts/seed.sh",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
