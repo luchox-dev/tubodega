@@ -135,9 +135,16 @@ req GET /me --token "$T_JUAN"; JUAN_ID="$(jqv '.user.id')"
 req GET "/users/$JUAN_ID" --token "$T_DIEGO"
 ok "Diego mira la ficha de Juan" 200
 
+req GET "/users/$JUAN_ID" --token "$T_DIEGO"
+body "la ficha trae la versión, que es lo que se manda en If-Match" '.version' '1'
+
 req PATCH "/users/$JUAN_ID" --token "$T_DIEGO" --if-match 1 --body '{"roles":["OPERATOR","ADMIN"]}'
 ok "le añade ADMIN con el If-Match que toca" 200
 body "y quedan los dos roles" '[.roles] | flatten | sort | join(",")' 'ADMIN,OPERATOR'
+# D-31 · la versión que vuelve es la que quedó en la fila, así que encadena
+# la siguiente edición sin releer al usuario.
+body "y devuelve la versión ya incrementada" '.version' '2'
+V_JUAN="$(jqv '.version')"
 
 req PATCH "/users/$JUAN_ID" --token "$T_DIEGO" --if-match 1 --body '{"roles":["VIEWER"]}'
 problem "con la versión vieja, no" 409 stale-version
@@ -145,7 +152,7 @@ req PATCH "/users/$JUAN_ID" --token "$T_DIEGO" --body '{"roles":["VIEWER"]}'
 problem "y sin la cabecera, tampoco" 400 missing-if-match
 
 # El contrato acepta la forma débil del ETag, y conviene que se note.
-req PATCH "/users/$JUAN_ID" --token "$T_DIEGO" --if-match-raw 'W/"2"' --body '{"roles":["OPERATOR"]}'
+req PATCH "/users/$JUAN_ID" --token "$T_DIEGO" --if-match-raw "W/\"$V_JUAN\"" --body '{"roles":["OPERATOR"]}'
 ok "un ETag débil vale igual que uno fuerte" 200
 
 # ─────────────────────────────────────────────────────────────────────────────

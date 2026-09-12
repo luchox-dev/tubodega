@@ -77,6 +77,19 @@ describe('WAVE 2 · cargar el catálogo y las ubicaciones', () => {
     );
     expect(renamed.status).toBe(200);
     expect(renamed.body.label).toBe('Familia de producto');
+    // La versión que vuelve es la que quedó guardada, así que sirve para el
+    // siguiente If-Match sin tener que releer la definición.
+    expect(renamed.body.version).toBe(2);
+    const again = await t.http.patch(
+      `/v1/custom-fields/${id.familia}`,
+      { label: 'Familia' },
+      { ...asDiego(), ifMatch: renamed.body.version },
+    );
+    expect(again.status).toBe(200);
+    expectProblem(
+      await t.http.patch(`/v1/custom-fields/${id.familia}`, { label: 'Otra' }, { ...asDiego(), ifMatch: 1 }),
+      { status: 409, type: 'stale-version' },
+    );
 
     // …y un SELECT sin opciones no es una definición.
     expectProblem(
@@ -423,6 +436,9 @@ describe('WAVE 2 · cargar el catálogo y las ubicaciones', () => {
     );
     expect(ok.status).toBe(200);
     expect(ok.body.name).toBe('Tornillo M8 inoxidable');
+    // La versión que vuelve es la que quedó guardada, así que sirve para el
+    // siguiente If-Match sin tener que releer el producto.
+    expect(ok.body.version).toBe(2);
 
     expectProblem(
       await t.http.patch(`/v1/products/${id.tor}`, { name: 'Otro' }, { ...asDiego(), ifMatch: 1 }),
@@ -437,14 +453,20 @@ describe('WAVE 2 · cargar el catálogo y las ubicaciones', () => {
     const mode = await t.http.patch(
       `/v1/products/${id.tor}`,
       { trackingMode: 'LOT' },
-      { ...asDiego(), ifMatch: 2 },
+      { ...asDiego(), ifMatch: ok.body.version },
     );
     expect(mode.status).toBe(200);
     expect(mode.body.trackingMode).toBe('LOT');
+    expect(mode.body.version).toBe(ok.body.version + 1);
     // Y se deshace, para que el resto del relato lo siga viendo por cantidad.
     expect(
-      (await t.http.patch(`/v1/products/${id.tor}`, { trackingMode: 'QUANTITY' }, { ...asDiego(), ifMatch: 3 }))
-        .status,
+      (
+        await t.http.patch(
+          `/v1/products/${id.tor}`,
+          { trackingMode: 'QUANTITY' },
+          { ...asDiego(), ifMatch: mode.body.version },
+        )
+      ).status,
     ).toBe(200);
   });
 
