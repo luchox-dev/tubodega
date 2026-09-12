@@ -12,6 +12,7 @@ import { AuthController } from './http/auth/auth.controller.js';
 import { MeController } from './http/me/me.controller.js';
 import { MovementsController } from './http/movements/movements.controller.js';
 import { NodesController } from './http/nodes/nodes.controller.js';
+import { ProcessTemplatesController } from './http/process-templates/process-templates.controller.js';
 import { StockController } from './http/stock/stock.controller.js';
 import { OpenApiController, OpenApiDocument } from './http/openapi/openapi.controller.js';
 import { OrganizationsController } from './http/organizations/organizations.controller.js';
@@ -61,6 +62,7 @@ import { TransactionInterceptor } from './http/pipeline/transaction.interceptor.
     NodesController,
     MovementsController,
     StockController,
+    ProcessTemplatesController,
     OpenApiController,
   ],
   providers: [

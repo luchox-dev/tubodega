@@ -3301,6 +3301,121 @@
           "inventory"
         ]
       }
+    },
+    "/v1/process-templates": {
+      "get": {
+        "description": "Solo las versiones activas. Sin cursor y sin filtros: son seis, y el día que se puedan editar por organización seguirán siendo pocas.",
+        "operationId": "ProcessTemplatesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessTemplateListView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los procesos que esta organización sabe ejecutar",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-templates/{code}": {
+      "get": {
+        "description": "Por código de negocio —RECEPCION, TRASLADO…—, que no es un uuid. Un código sin versión activa no está, igual que uno que no existe.",
+        "operationId": "ProcessTemplatesController_one",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessTemplateView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "template-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "La versión activa de una plantilla",
+        "tags": [
+          "process"
+        ]
+      }
     }
   },
   "info": {
@@ -4913,6 +5028,120 @@
         "required": [
           "data",
           "page"
+        ]
+      },
+      "TransitionView": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "object",
+            "example": "cantidad",
+            "nullable": true,
+            "description": "El paso siguiente; null cierra el proceso"
+          }
+        }
+      },
+      "StepView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cantidad",
+            "description": "Único dentro de la plantilla; es como se completa el paso"
+          },
+          "type": {
+            "type": "string",
+            "example": "CAPTURE_QTY",
+            "enum": [
+              "SCAN_ITEM",
+              "CAPTURE_BATCH",
+              "CAPTURE_QTY",
+              "CAPTURE_PHOTO",
+              "SELECT_NODE",
+              "SET_DUE_DATE",
+              "CAPTURE_REASON",
+              "CONFIRM"
+            ]
+          },
+          "required": {
+            "type": "boolean",
+            "example": true,
+            "description": "Un paso opcional se omite completándolo con payload null"
+          },
+          "config": {
+            "type": "object",
+            "example": {
+              "role": "TO",
+              "allowedKinds": [
+                "INTERNAL"
+              ]
+            },
+            "description": "Lo interpreta el manejador del paso, y nadie más"
+          },
+          "transitions": {
+            "description": "Hoy exactamente una: los flujos con ramas están previstos y todavía no existen (P-8)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TransitionView"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "required",
+          "config",
+          "transitions"
+        ]
+      },
+      "ProcessTemplateView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "code": {
+            "type": "string",
+            "example": "RECEPCION",
+            "description": "El nombre de negocio del proceso"
+          },
+          "version": {
+            "type": "number",
+            "example": 1,
+            "description": "Una instancia guarda la versión con la que empezó"
+          },
+          "active": {
+            "type": "boolean",
+            "example": true
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepView"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "version",
+          "active",
+          "steps"
+        ]
+      },
+      "ProcessTemplateListView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcessTemplateView"
+            }
+          }
+        },
+        "required": [
+          "data"
         ]
       }
     }

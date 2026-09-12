@@ -382,33 +382,33 @@ uno `LOT` y uno `SERIAL`— y el borrador final tiene que pasar `Movement.create
 `apps/tubodega/test/edge/openapi.int-spec.ts`; `scripts/blackbox/lib.sh`;
 `scripts/blackbox/35-procesos.sh`; `scripts/seed.sh`; `docs/postman/…`
 
-- [ ] **Step 1: spec primero** de los dos casos de uso: `requireAction(ctx, Action.READ)`
+- [x] **Step 1: spec primero** de los dos casos de uso: `requireAction(ctx, Action.READ)`
       como primera línea; `ListTemplates` devuelve solo las activas;
       `GetActiveTemplate` da `404 template-not-found` para un código que no existe **y** para
       uno sin versión activa.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar** los dos, y `process.module.ts` con ellos y el sembrador.
-- [ ] **Step 4: el controlador**, molde `nodes.controller.ts`: `@ApiTags('process')`,
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar** los dos, y `process.module.ts` con ellos y el sembrador.
+- [x] **Step 4: el controlador**, molde `nodes.controller.ts`: `@ApiTags('process')`,
       `@ApiBearerAuth()`, `@ApiOperation` en español, y **todo error declarado como
       `ProblemDetailsView` con los slugs separados por ` · `**. `GET /v1/process-templates`
       no pagina —son seis, y el día que sean por tenant seguirán siendo pocas—, así que **no
       lleva `parsePage`** y por tanto tampoco filtros: cualquier query sobra.
       El `{code}` de la ruta no es un uuid: `UuidParam` **no** se aplica, y un código que no
       existe es `404 template-not-found` por el caso de uso.
-- [ ] **Step 5:** el snapshot. La lista literal de paths de `openapi.int-spec.ts` gana los
+- [x] **Step 5:** el snapshot. La lista literal de paths de `openapi.int-spec.ts` gana los
       dos, `pnpm openapi:write`, y `git diff` del `openapi.json` enseña exactamente **dos
       operaciones nuevas: 44 → 46**.
-- [ ] **Step 6: la caja negra** (D-50). `plantilla()` en `lib.sh` aprende
+- [x] **Step 6: la caja negra** (D-50). `plantilla()` en `lib.sh` aprende
       `/process-templates/{code}` —**antes** de la regla que lo dejaría tal cual—, y
       `35-procesos.sh` recorre: las seis activas en versión 1, una con sus pasos y sus
       transiciones de un elemento, `404 template-not-found`, `401` sin token, y el `404`
       cross-org con una segunda organización (I-6, nunca `403`). Camino feliz **y** de error
       por cada una de las dos operaciones, que es lo que el cruce del runner exige.
-- [ ] **Step 7: Run** contra un proceso propio **en un puerto libre**, no el `:3000`.
-- [ ] **Step 8:** Postman —carpeta «Procesos», con el par feliz/error— y `scripts/seed.sh`,
+- [x] **Step 7: Run** contra un proceso propio **en un puerto libre**, no el `:3000`.
+- [x] **Step 8:** Postman —carpeta «Procesos», con el par feliz/error— y `scripts/seed.sh`,
       que gana un paso comprobando que el mundo sembrado trae las seis plantillas. El seed
       no las *crea*: las siembra el provisioner. Lo que hace es no mentir sobre lo que hay.
-- [ ] **Step 9: Commit** `feat(http): las plantillas de proceso, publicadas`
+- [x] **Step 9: Commit** `feat(http): las plantillas de proceso, publicadas`
 
 ---
 
