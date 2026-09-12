@@ -89,16 +89,15 @@ body "la segunda, por su tipo" '.errors[1].type' 'invalid-custom-field'
 # deja de ser una importación y empieza a ser un trabajo por lotes (D-11).
 req POST /products/import --token "$T_JUAN" --body '{"rows":[{"sku":"X-1"}]}'
 problem "un OPERATOR no importa el catálogo" 403 insufficient-role
-# Y una hoja no es infinita. OJO con lo que responde: el controlador declara
-# `422 import-too-large` y D-11 dice lo mismo, pero el @ArrayMaxSize(1000) del
-# DTO corta en el borde y devuelve `400 validation-failed` antes de que el caso
-# de uso llegue a mirar. El 422 declarado es, por HTTP, inalcanzable. Aquí se
-# afirma lo que el cliente recibe de verdad; corregir cuál de los dos sobra es
-# una decisión de contrato, no de esta prueba.
+# Y una hoja no es infinita: pasadas mil filas deja de ser una importación y
+# empieza a ser un trabajo por lotes (D-11). Es 422 y no 400 porque la petición
+# se entiende perfectamente —la rechaza una regla de negocio, no la sintaxis—,
+# que es la frontera que fija spec 03 §5.
 req POST /products/import --token "$T_DIEGO" \
   --body "$(jq -nc --arg s "$SLUG" '{rows: [range(0;1001) | {sku: "BULK-\($s)-\(.)"}]}')"
-problem "y mil una filas las corta el borde" 400 validation-failed
-pointer "señalando las filas" /rows
+problem "y mil una filas es demasiada hoja" 422 import-too-large
+body "y el error dice cuántas trae y cuál es el máximo" \
+  '.detail | test("1001") and test("1000")' 'true'
 
 step "4 · paginar por cursor sin repetir ni saltar"
 SEEN=''; CURSOR=''; PAGES=0

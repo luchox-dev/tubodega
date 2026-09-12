@@ -8,16 +8,22 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 3 — el catálogo completo
+## Estado: Plan 3 — el catálogo completo, con su deuda saldada
+
+Las treinta operaciones de abajo están vivas y probadas de tres formas: por dentro
+(`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de verdad
+(`pnpm blackbox`). Lo que vino después del plan 3 —la deuda del ciclo rojo-verde
+saldada por mutación, la caja negra completa y la colección de Postman al día— está
+en el índice de planes del [plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
 
 | Endpoint | Acción | Qué hace |
 |---|---|---|
 | `POST /v1/organizations` | — | Registra una organización con su primer `OWNER` |
 | `POST /v1/auth/login` | — | Devuelve `accessToken` (JWT, 15 min) y `refreshToken` |
 | `POST /v1/auth/refresh` | — | Rota el par; el token usado queda revocado |
-| `POST /v1/auth/logout` | `READ` | Revoca el token de refresco propio |
-| `GET /v1/me` | `READ` | Usuario y organización del token |
-| `POST /v1/me/password` | `READ` | Cambia la propia contraseña, con la actual |
+| `POST /v1/auth/logout` | — | Revoca el token de refresco propio; basta un token válido |
+| `GET /v1/me` | — | Usuario y organización del token |
+| `POST /v1/me/password` | — | Cambia la propia contraseña, con la actual |
 | `GET /v1/users` | `MANAGE_USERS` | Filtros `active` y `role`; orden `name`/`email`; cursor |
 | `POST /v1/users` | `MANAGE_USERS` | Da de alta a alguien del equipo |
 | `GET /v1/users/{id}` | `MANAGE_USERS` | Uno por id |
@@ -117,8 +123,8 @@ Si el correo existe en más de una organización, `login` responde
 ### Postman
 
 [`docs/postman/tubodega.postman_collection.json`](docs/postman/tubodega.postman_collection.json)
-trae **las treinta operaciones** del contrato, repartidas en carpetas por área, más
-dos de casos de error para ver `problem+json` de cerca; y
+trae **las treinta operaciones** del contrato: 70 peticiones en nueve carpetas, de
+las cuales 25 son casos de error para ver `problem+json` de cerca; y
 [`tubodega.local.postman_environment.json`](docs/postman/tubodega.local.postman_environment.json)
 el entorno local. Importa ambos y ejecuta la colección **en orden**: cada petición
 guarda lo que la siguiente necesita —`orgId`, `accessToken`, los ids de los
@@ -150,13 +156,19 @@ apps/tubodega/           la aplicación HTTP: composición, borde, controllers, 
   src/http/shared/       vistas y DTOs compartidos entre recursos
   src/http/openapi/      el documento generado y su controller
   src/adapters/          puertos declarados por un módulo y satisfechos por otro
-  test/edge, test/e2e    pruebas del borde y del contrato
+  src/jobs/              lo que corre por su cuenta: el despachador del outbox
+  openapi.json           el contrato publicado, versionado; lo regenera `pnpm openapi:write`
+  test/e2e, edge, jobs   el contrato, el borde y los trabajos de fondo
 libs/common/             tipos del núcleo: Branded, Result, DomainError, Page, puertos (@app/common)
 libs/persistence/        schema.prisma, migraciones, tipos generados, Kysely, DAOs, repositorios (@app/persistence)
 libs/tenancy/            organización, usuarios, roles, autenticación (@app/tenancy)
 libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app/catalog)
 test/support/            harness de integración (withRollback) y cliente e2e
+scripts/blackbox.sh      caja negra: corre las suites de scripts/blackbox/ y cruza la cobertura
+docs/specs/              los specs; docs/superpowers/plans/ los planes; docs/postman/ la colección
 db/init/01-roles.sql     roles tubodega_migrator / _app / _system y bases dev, test y shadow
+compose.yaml             Postgres 16 para desarrollo, y la imagen de la aplicación
+.github/workflows/ci.yml los dos jobs: las cinco puertas y la caja negra
 .media/                  donde DiskMediaStorage escribe las fotos (MEDIA_ROOT)
 ```
 
@@ -177,9 +189,10 @@ hacia abajo, solo se importan barriles, nadie importa `persistence`.
 | `pnpm db:generate` | regenera `libs/persistence/src/generated/db.ts` |
 | `pnpm db:check` | el historial de migraciones reproduce `schema.prisma` |
 | `pnpm test` | dominio + aplicación, sin infraestructura |
-| `pnpm test:e2e` | integración + e2e (+ invariantes) contra Postgres; migra `tubodega_test` sola |
+| `pnpm test:e2e` | integración + e2e contra Postgres; migra `tubodega_test` sola |
 | `pnpm test:cov` | cobertura |
 | `pnpm blackbox` | caja negra con `curl` contra un servidor levantado |
+| `pnpm openapi:write` | regenera `apps/tubodega/openapi.json` desde el código |
 
 ## Base de datos
 
@@ -257,6 +270,11 @@ corrida usa un slug nuevo. Con `JWT_SECRET` exportado corre además la
 comprobación del `401 token-expired`, la única que necesita saber algo del
 interior del servidor.
 
+En CI corre sola, en un job hermano de las cinco puertas
+([`ci.yml`](.github/workflows/ci.yml)): compila, levanta `start:prod`, espera al
+contrato y ejecuta las tres suites. Va al lado y no dentro porque arrancar la
+aplicación es lento y no tiene por qué alargar la ruta crítica.
+
 ## Cómo está cableado SWC
 
 Rspack (`builder: "rspack"` en `nest-cli.json`) compila con `builtin:swc-loader`
@@ -267,11 +285,24 @@ los detecta. El alias `@app/<lib>` apunta al archivo `index.ts` (bajo
 
 ## Docker
 
+La imagen se construye y corre, pero **el servicio `tubodega` de `compose.yaml`
+todavía no trae su entorno**: `env.validation.ts` exige las tres cadenas de
+conexión y un `JWT_SECRET` de al menos 32 caracteres, ninguno con valor por
+defecto, así que un `docker compose up --build` a secas aborta al validar. Hay
+que pasárselo, y apuntando a `db:5432` —que es como se llama Postgres dentro de
+la red de compose— y no a `localhost`:
+
 ```bash
-docker compose up --build
+docker compose up --build -d db
+docker compose run --rm --service-ports \
+  -e DATABASE_URL=postgresql://tubodega_app:app@db:5432/tubodega \
+  -e DATABASE_URL_SYSTEM=postgresql://tubodega_system:system@db:5432/tubodega \
+  -e DATABASE_URL_MIGRATOR=postgresql://tubodega_migrator:migrator@db:5432/tubodega \
+  -e JWT_SECRET=change-me-change-me-change-me-change-me \
+  tubodega
 curl http://127.0.0.1:3000/v1/openapi.json
 ```
 
 El healthcheck usa `127.0.0.1` y la app escucha en `0.0.0.0` para ser
-alcanzable desde fuera del contenedor. El entrypoint con `migrate deploy`
-llega en el plan 10.
+alcanzable desde fuera del contenedor. El entrypoint con `migrate deploy` —y el
+`env_file` que ahorraría todo lo anterior— llegan en el plan 10.

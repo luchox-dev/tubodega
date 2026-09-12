@@ -1,5 +1,6 @@
-# The five gates of docs/specs/06 §8. Every one of them also runs locally with
-# the same command, so a green CI is never a surprise.
+# Las puertas de docs/specs/06 §11: `gates` corre las cinco en proceso, y
+# `blackbox` recorre el contrato por HTTP contra la aplicación levantada. Las dos
+# se ejecutan localmente con el mismo comando, así que un CI verde no sorprende.
 name: CI
 
 on:
