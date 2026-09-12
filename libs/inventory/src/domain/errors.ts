@@ -128,3 +128,229 @@ export class UnknownFilterNodeError extends DomainError {
     });
   }
 }
+
+// ── The ledger (spec 12 §9). Wave 3.
+
+/**
+ * I-2. A negative is not a small amount, it is a direction — and the direction
+ * of a movement lives in its pair of nodes, never in its number (decision D-32).
+ */
+export class NonPositiveQuantityError extends DomainError {
+  readonly type = 'non-positive-quantity';
+  readonly status = 422;
+  constructor(raw: string) {
+    super(`La cantidad de un movimiento se escribe en positivo, y "${raw}" no lo es`, {
+      errors: [{ pointer: '/quantity', code: 'non-positive-quantity' }],
+    });
+  }
+}
+
+/**
+ * Not in the table of spec 12 §9: the edge already refuses a malformed decimal
+ * with 400 validation-failed, so this covers the amount that reaches the domain
+ * by another door. Declared as a deviation in the plan-5 document.
+ */
+export class InvalidQuantityError extends DomainError {
+  readonly type = 'invalid-quantity';
+  readonly status = 422;
+  constructor(raw: string) {
+    super(`"${raw}" no es una cantidad: hasta 15 enteros y 3 decimales, con punto`, {
+      errors: [{ pointer: '/quantity', code: 'invalid-quantity' }],
+    });
+  }
+}
+
+/** I-1. A movement is a double entry, and both ends being the same place is not one. */
+export class SameNodeError extends DomainError {
+  readonly type = 'same-node';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Un movimiento va de un sitio a otro, y "${path}" es los dos`, {
+      errors: [{ pointer: '/toNodeId', code: 'same-node' }],
+    });
+  }
+}
+
+/** I-8, the half where the product tracks batches and none came. */
+export class BatchRequiredError extends DomainError {
+  readonly type = 'batch-required';
+  readonly status = 422;
+  constructor(sku: string, mode: string) {
+    super(`"${sku}" se rastrea por ${mode === 'SERIAL' ? 'número de serie' : 'lote'}: hay que decir cuál se mueve`, {
+      errors: [{ pointer: '/batchId', code: 'batch-required' }],
+    });
+  }
+}
+
+/** I-8, the other half: a QUANTITY product has no batches to speak of. */
+export class BatchNotAllowedError extends DomainError {
+  readonly type = 'batch-not-allowed';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`"${sku}" se lleva por cantidad, así que no tiene lotes ni series`, {
+      errors: [{ pointer: '/batchId', code: 'batch-not-allowed' }],
+    });
+  }
+}
+
+export class BatchProductMismatchError extends DomainError {
+  readonly type = 'batch-product-mismatch';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`Ese lote no es de "${sku}"`, {
+      errors: [{ pointer: '/batchId', code: 'batch-product-mismatch' }],
+    });
+  }
+}
+
+/** I-11. A due date on stock that is not on loan has nobody to come back from. */
+export class DueDateNotAllowedError extends DomainError {
+  readonly type = 'due-date-not-allowed';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Solo un préstamo tiene fecha de devolución, y "${path}" no es una custodia`, {
+      errors: [{ pointer: '/dueAt', code: 'due-date-not-allowed' }],
+    });
+  }
+}
+
+/**
+ * I-14. The five minutes of tolerance are for the device with a drifting clock,
+ * which is the whole reason occurredAt and recordedAt are two columns.
+ */
+export class FutureOccurrenceError extends DomainError {
+  readonly type = 'future-occurrence';
+  readonly status = 422;
+  constructor(toleranceMinutes: number) {
+    super(`El movimiento dice haber ocurrido en el futuro: se admiten hasta ${toleranceMinutes} minutos de desfase`, {
+      errors: [{ pointer: '/occurredAt', code: 'future-occurrence' }],
+    });
+  }
+}
+
+/** I-17. Stock leaving a custody is either a return or the undoing of a loan. */
+export class SettlesRequiredError extends DomainError {
+  readonly type = 'settles-required';
+  readonly status = 422;
+  constructor(path: string) {
+    super(`Lo que sale de la custodia "${path}" salda un préstamo: falta decir cuál`, {
+      errors: [{ pointer: '/settlesId', code: 'settles-required' }],
+    });
+  }
+}
+
+export class SettlesMismatchError extends DomainError {
+  readonly type = 'settles-mismatch';
+  readonly status = 422;
+  constructor(detail: string) {
+    super(`El préstamo que se dice saldar no cuadra: ${detail}`, {
+      errors: [{ pointer: '/settlesId', code: 'settles-mismatch' }],
+    });
+  }
+}
+
+/** I-18. The pending amount is an aggregate, so no CHECK can hold it. */
+export class SettlesExceededError extends DomainError {
+  readonly type = 'settles-exceeded';
+  readonly status = 422;
+  constructor(pending: string, requested: string) {
+    super(`De ese préstamo quedan ${pending} por devolver, y se intentan devolver ${requested}`, {
+      errors: [{ pointer: '/quantity', code: 'settles-exceeded', pending, requested }],
+    });
+  }
+}
+
+/**
+ * Decision D-10 and D-36. Spec 02 §10 demands an explanation for adjustments
+ * and shrinkage; spec 12 §9 gives it no `type`, so it is fixed here. Consumption
+ * is deliberately not on the list: it is a physical fact, not a correction.
+ */
+export class ReasonRequiredError extends DomainError {
+  readonly type = 'reason-required';
+  readonly status = 422;
+  constructor(code: string) {
+    super(`Un movimiento contra "${code}" tiene que explicar por qué`, {
+      errors: [{ pointer: '/reason', code: 'reason-required' }],
+    });
+  }
+}
+
+/** I-13, from the partial UNIQUE (org_id, reverses_id). */
+export class AlreadyReversedError extends DomainError {
+  readonly type = 'already-reversed';
+  readonly status = 409;
+  constructor(id: string) {
+    super(`El movimiento "${id}" ya fue compensado: un error se corrige una vez`);
+  }
+}
+
+/**
+ * Decision D-10. The client's UUIDv7 is the primary key, so a retry that slips
+ * past the idempotency table still hits it — which is I-7's last line.
+ */
+export class MovementIdTakenError extends DomainError {
+  readonly type = 'movement-id-taken';
+  readonly status = 409;
+  constructor(id: string) {
+    super(`Ya existe un movimiento con el id "${id}"`);
+  }
+}
+
+export class MovementNotFoundError extends DomainError {
+  readonly type = 'not-found';
+  readonly status = 404;
+  constructor() {
+    super('No se encontró el movimiento');
+  }
+}
+
+/**
+ * I-9 and decision D-10. A serial is one physical unit: it cannot be on two
+ * shelves at once. Only entering from a boundary trips this — moving it between
+ * two custodial nodes is the same unit leaving and entering in one entry.
+ */
+export class SerialAlreadyPlacedError extends DomainError {
+  readonly type = 'serial-already-placed';
+  readonly status = 422;
+  constructor(serial: string) {
+    super(`La unidad "${serial}" ya está en el inventario: una serie es una sola cosa`, {
+      errors: [{ pointer: '/batchId', code: 'serial-already-placed' }],
+    });
+  }
+}
+
+export class BatchTooLargeError extends DomainError {
+  readonly type = 'batch-too-large';
+  readonly status = 422;
+  constructor(count: number, max: number) {
+    super(`Un lote admite hasta ${max} movimientos y llegaron ${count}`, {
+      errors: [{ pointer: '/movements', code: 'batch-too-large' }],
+    });
+  }
+}
+
+/** A product that no longer exists for the business does not move either. */
+export class ProductInactiveError extends DomainError {
+  readonly type = 'product-inactive';
+  readonly status = 422;
+  constructor(sku: string) {
+    super(`"${sku}" está retirado del catálogo y no admite movimientos`, {
+      errors: [{ pointer: '/productId', code: 'product-inactive' }],
+    });
+  }
+}
+
+/**
+ * I-4, the most frequent error of the daily operation. Its detail names the node
+ * by its readable path — not by its uuid — and carries available and requested,
+ * because that is where the message the operator reads comes from.
+ */
+export class InsufficientStockError extends DomainError {
+  readonly type = 'insufficient-stock';
+  readonly status = 422;
+  constructor(path: string, available: string, requested: string) {
+    super(`En "${path}" hay ${available} y se intentan mover ${requested}`, {
+      errors: [{ pointer: '/quantity', code: 'insufficient-stock', available, requested }],
+    });
+  }
+}

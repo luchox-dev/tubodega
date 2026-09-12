@@ -5,10 +5,16 @@
 import { decodeCursor, encodeCursor, type OrgId, type Page } from '@app/common';
 import type { CustomEntity, CustomFieldDefinition, CustomFieldDefinitionRepository } from '@app/catalog';
 import {
-  Node, NodeCodeTakenError, NodePath,
-  type NodeCode, type NodeFilter, type NodeId, type NodePage, type NodeRepository,
-  type StockBalanceRepository, type StockPositionRow, type StockScope,
+  AlreadyReversedError, InsufficientStockSignal, MovementIdTakenError,
+  Node, NodeCodeTakenError, NodePath, Quantity, isCustodialKind,
+  type BalanceDelta, type Movement, type MovementFilter, type MovementId,
+  type MovementPage, type MovementRepository, type NodeCode, type NodeFilter,
+  type NodeId, type NodeKind, type NodePage, type NodeRepository,
+  type OpenCustodyFilter, type OpenCustodyRow, type StockBalanceRepository,
+  type StockPage, type StockPosition, type StockPositionRow, type StockQuery,
+  type StockScope,
 } from '@app/inventory';
+import type { BatchId, ProductId } from '@app/catalog';
 
 const key = (orgId: string, id: string) => `${orgId}:${id}`;
 
@@ -110,19 +116,227 @@ export class InMemoryNodeRepository implements NodeRepository {
   }
 }
 
+const positionKey = (nodeId: string, productId: string, batchId?: string) =>
+  `${nodeId}|${productId}|${batchId ?? ''}`;
+
+const page = <T>(all: readonly T[], limit: number, cursorOf: (item: T) => string, cursor?: string): Page<T> => {
+  const after = cursor === undefined ? null : (decodeCursor(cursor as never)?.[0] ?? null);
+  const from = after === null ? 0 : all.findIndex((i) => cursorOf(i) === after) + 1;
+  const rest = all.slice(from);
+  const data = rest.slice(0, limit);
+  const hasMore = rest.length > limit;
+  return { data, hasMore, ...(hasMore ? { nextCursor: encodeCursor([cursorOf(data.at(-1)!)]) } : {}) };
+};
+
+/**
+ * Holds real positions, keyed by the natural key the unique index uses, and
+ * **simulates I-4**: `applyDelta` raises `InsufficientStockSignal` when a
+ * custodial node would go negative and reverts its own writes first. A double
+ * that did not revert would be lying about the savepoint, and the
+ * insufficient-stock test would pass over a corrupted balance.
+ */
 export class InMemoryStockBalanceRepository implements StockBalanceRepository {
-  /** Keyed by nodeId, so a test can park stock on a node in one line. */
-  readonly byNode = new Map<string, StockPositionRow[]>();
+  readonly positions = new Map<string, StockPosition>();
+
+  /** Optional, and only `sumUnder` needs it: a position knows its node's id, not its path. */
+  constructor(private readonly nodes?: InMemoryNodeRepository) {}
+
+  /** Arrange helper: park stock without going through a movement. */
+  park(
+    nodeId: NodeId,
+    productId: string,
+    quantity: string,
+    o: { batchId?: string; nodeKind?: NodeKind } = {},
+  ): void {
+    const position: StockPosition = {
+      nodeId,
+      productId: productId as ProductId,
+      ...(o.batchId !== undefined ? { batchId: o.batchId as BatchId } : {}),
+      nodeKind: o.nodeKind ?? ('INTERNAL' as NodeKind),
+      quantity: Quantity.rehydrate(quantity),
+    };
+    this.positions.set(positionKey(nodeId, productId, o.batchId), position);
+  }
+
+  private all(): StockPosition[] {
+    return [...this.positions.values()];
+  }
 
   async hasAnyStock(orgId: OrgId, scope: StockScope): Promise<boolean> {
     return (await this.positionsIn(orgId, scope, 1)).length > 0;
   }
 
   async positionsIn(_orgId: OrgId, scope: StockScope, cap: number): Promise<readonly StockPositionRow[]> {
-    const rows = scope.nodeId === undefined ? [] : (this.byNode.get(scope.nodeId) ?? []);
-    return rows
-      .filter((r) => scope.productId === undefined || r.productId === scope.productId)
-      .slice(0, cap);
+    return this.all()
+      .filter((p) => scope.nodeId === undefined || p.nodeId === scope.nodeId)
+      .filter((p) => scope.productId === undefined || p.productId === scope.productId)
+      .filter((p) => !p.quantity.isZero())
+      .sort((a, b) => (a.productId < b.productId ? -1 : 1))
+      .slice(0, cap)
+      .map((p) => ({
+        productId: p.productId,
+        ...(p.batchId !== undefined ? { batchId: p.batchId } : {}),
+        quantity: p.quantity.toString(),
+      }));
+  }
+
+  async find(
+    _orgId: OrgId, nodeId: NodeId, productId: ProductId, batchId?: BatchId,
+  ): Promise<StockPosition | null> {
+    return this.positions.get(positionKey(nodeId, productId, batchId)) ?? null;
+  }
+
+  async query(_orgId: OrgId, q: StockQuery, p: StockPage): Promise<Page<StockPosition>> {
+    const rows = this.all()
+      .filter((x) => q.productId === undefined || x.productId === q.productId)
+      .filter((x) => q.nodeId === undefined || x.nodeId === q.nodeId)
+      .filter((x) => q.batchId === undefined || x.batchId === q.batchId)
+      .filter((x) => q.custodialOnly !== true || isCustodialKind(x.nodeKind))
+      .filter((x) => q.nonZeroOnly === false || !x.quantity.isZero())
+      .sort((a, b) => (positionKey(a.nodeId, a.productId, a.batchId) < positionKey(b.nodeId, b.productId, b.batchId) ? -1 : 1));
+    return page(rows, p.limit, (x) => positionKey(x.nodeId, x.productId, x.batchId), p.cursor);
+  }
+
+  private pathOf(nodeId: NodeId): string | undefined {
+    for (const n of this.nodes?.rows.values() ?? []) if (n.id === nodeId) return n.path;
+    return undefined;
+  }
+
+  async sumUnder(_orgId: OrgId, path: NodePath, productId?: ProductId): Promise<StockPosition[]> {
+    const prefix = NodePath.descendantPrefix(path);
+    const totals = new Map<string, StockPosition>();
+    for (const p of this.all()) {
+      const nodePath = this.pathOf(p.nodeId);
+      if (nodePath === undefined || !(nodePath === path || nodePath.startsWith(prefix))) continue;
+      if (productId !== undefined && p.productId !== productId) continue;
+      if (!isCustodialKind(p.nodeKind)) continue;
+      const k = positionKey('', p.productId, p.batchId);
+      const seen = totals.get(k);
+      totals.set(k, seen === undefined ? p : { ...seen, quantity: seen.quantity.plus(p.quantity) });
+    }
+    return [...totals.values()];
+  }
+
+  async custodialTotal(_orgId: OrgId, batchId: BatchId): Promise<Quantity> {
+    return this.all()
+      .filter((p) => p.batchId === batchId && isCustodialKind(p.nodeKind))
+      .reduce((sum, p) => sum.plus(p.quantity), Quantity.zero());
+  }
+
+  async applyDelta(_orgId: OrgId, deltas: readonly BalanceDelta[]): Promise<StockPosition[]> {
+    const ordered = [...deltas].sort((a, b) =>
+      positionKey(a.nodeId, a.productId, a.batchId) < positionKey(b.nodeId, b.productId, b.batchId) ? -1 : 1);
+    const snapshot = new Map(this.positions);
+    const out: StockPosition[] = [];
+
+    for (const d of ordered) {
+      const k = positionKey(d.nodeId, d.productId, d.batchId);
+      const before = snapshot.get(k)?.quantity ?? Quantity.zero();
+      const after = before.plus(d.delta);
+
+      // I-4: only the boundary of the system may go negative.
+      if (after.isNegative() && isCustodialKind(d.nodeKind)) {
+        this.positions.clear();
+        for (const [key2, value] of snapshot) this.positions.set(key2, value);
+        throw new InsufficientStockSignal({
+          nodeId: d.nodeId,
+          productId: d.productId,
+          ...(d.batchId !== undefined ? { batchId: d.batchId } : {}),
+          available: before,
+        });
+      }
+
+      const position: StockPosition = {
+        nodeId: d.nodeId,
+        productId: d.productId,
+        ...(d.batchId !== undefined ? { batchId: d.batchId } : {}),
+        nodeKind: d.nodeKind,
+        quantity: after,
+      };
+      this.positions.set(k, position);
+      out.push(position);
+    }
+    return out;
+  }
+}
+
+/**
+ * Keeps the two indexes the table has: the primary key on the client's id, and
+ * the partial UNIQUE (org_id, reverses_id) that is I-13. No update, no delete —
+ * the port does not have them, and neither does the double (I-3).
+ */
+export class InMemoryMovementRepository implements MovementRepository {
+  readonly rows: Movement[] = [];
+
+  private of(orgId: OrgId): Movement[] {
+    return this.rows.filter((m) => m.orgId === orgId);
+  }
+
+  async findById(orgId: OrgId, id: MovementId): Promise<Movement | null> {
+    return this.of(orgId).find((m) => m.id === id) ?? null;
+  }
+
+  async existsReversalOf(orgId: OrgId, id: MovementId): Promise<boolean> {
+    return this.of(orgId).some((m) => m.reversesId === id);
+  }
+
+  /** I-18: a check-in that was itself compensated stops counting, and the loan re-opens. */
+  async settledQuantity(orgId: OrgId, checkOutId: MovementId): Promise<Quantity> {
+    const reversed = new Set(this.of(orgId).map((m) => m.reversesId).filter(Boolean));
+    return this.of(orgId)
+      .filter((m) => m.settlesId === checkOutId && !reversed.has(m.id))
+      .reduce((sum, m) => sum.plus(m.quantity), Quantity.zero());
+  }
+
+  async listOpenCustodies(
+    orgId: OrgId, filter: OpenCustodyFilter, p: MovementPage,
+  ): Promise<Page<OpenCustodyRow>> {
+    const rows: OpenCustodyRow[] = [];
+    for (const m of this.of(orgId)) {
+      if (m.toNodeKind !== 'CUSTODY') continue;
+      if (m.settlesId !== undefined || m.reversesId !== undefined) continue;
+      if (filter.nodeId !== undefined && m.toNodeId !== filter.nodeId) continue;
+      if (filter.overdueBefore !== undefined && !(m.dueAt && m.dueAt < filter.overdueBefore)) continue;
+      if (await this.existsReversalOf(orgId, m.id)) continue;
+      const pending = m.quantity.minus(await this.settledQuantity(orgId, m.id));
+      if (pending.isPositive()) rows.push({ checkOut: m, pending });
+    }
+    rows.sort((a, b) => a.checkOut.occurredAt.getTime() - b.checkOut.occurredAt.getTime());
+    return page(rows, p.limit, (r) => r.checkOut.id, p.cursor);
+  }
+
+  async countByProduct(orgId: OrgId, productId: ProductId): Promise<number> {
+    return this.of(orgId).filter((m) => m.productId === productId).length;
+  }
+
+  async list(orgId: OrgId, f: MovementFilter, p: MovementPage): Promise<Page<Movement>> {
+    const rows = this.of(orgId)
+      .filter((m) => f.productId === undefined || m.productId === f.productId)
+      .filter((m) => f.nodeId === undefined || m.fromNodeId === f.nodeId || m.toNodeId === f.nodeId)
+      .filter((m) => f.batchId === undefined || m.batchId === f.batchId)
+      .filter((m) => f.actorId === undefined || m.actorId === f.actorId)
+      .filter((m) => f.from === undefined || m.occurredAt >= f.from)
+      .filter((m) => f.to === undefined || m.occurredAt <= f.to)
+      .sort((a, b) => {
+        const d = a.occurredAt.getTime() - b.occurredAt.getTime() || (a.id < b.id ? -1 : 1);
+        return p.sort.dir === 'asc' ? d : -d;
+      });
+    return page(rows, p.limit, (m) => m.id, p.cursor);
+  }
+
+  async append(movement: Movement): Promise<void> {
+    if (this.rows.some((m) => m.id === movement.id)) throw new MovementIdTakenError(movement.id);
+    if (
+      movement.reversesId !== undefined &&
+      this.of(movement.orgId).some((m) => m.reversesId === movement.reversesId)
+    ) {
+      throw new AlreadyReversedError(movement.reversesId);
+    }
+    this.rows.push(movement);
+  }
+
+  async appendMany(movements: readonly Movement[]): Promise<void> {
+    for (const m of movements) await this.append(m);
   }
 }
 

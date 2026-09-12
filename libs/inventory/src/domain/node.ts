@@ -13,6 +13,19 @@ export enum NodeKind {
 
 export const NODE_KINDS = Object.values(NodeKind);
 
+/**
+ * The central predicate of the module, on a kind rather than a whole node: what
+ * the business owns, and whose balance therefore cannot go negative (I-4, I-9).
+ * A SOURCE or a TERMINAL is a boundary of the system and its balance is a
+ * running total — "how much have I sold", not "what is on the shelf".
+ *
+ * A free function because `StockPosition` carries a kind and no node, and the
+ * rule has to have one home: `Node.isCustodial()` delegates here.
+ */
+export function isCustodialKind(kind: NodeKind): boolean {
+  return kind === NodeKind.INTERNAL || kind === NodeKind.CUSTODY;
+}
+
 export interface CreateNodeProps {
   readonly id: NodeId;
   readonly orgId: OrgId;
@@ -90,7 +103,7 @@ export class Node {
   /** The central predicate of the module: what the business owns, and whose
    *  balance therefore cannot go negative (I-4, I-9). */
   isCustodial(): boolean {
-    return this.kind === NodeKind.INTERNAL || this.kind === NodeKind.CUSTODY;
+    return isCustodialKind(this.kind);
   }
 
   isBoundary(): boolean {

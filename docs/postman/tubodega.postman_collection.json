@@ -108,6 +108,26 @@
     {
       "key": "viewerToken",
       "value": ""
+    },
+    {
+      "key": "sourceNodeId",
+      "value": ""
+    },
+    {
+      "key": "terminalNodeId",
+      "value": ""
+    },
+    {
+      "key": "movementId",
+      "value": ""
+    },
+    {
+      "key": "nowIso",
+      "value": ""
+    },
+    {
+      "key": "ledgerBinId",
+      "value": ""
     }
   ],
   "event": [
@@ -128,7 +148,8 @@
           "",
           "// Idempotency-Key nueva por POST: la petición que quiera demostrar el replay",
           "// fija {{replayKey}} a mano y esta línea no la pisa.",
-          "pm.collectionVariables.set('idemKey', pm.variables.replaceIn('{{$guid}}'));"
+          "pm.collectionVariables.set('idemKey', pm.variables.replaceIn('{{$guid}}'));",
+          "pm.collectionVariables.set('nowIso', new Date().toISOString());"
         ]
       }
     },
@@ -2950,6 +2971,614 @@
       "description": "El árbol de la bodega: crear, leer, reorganizar y retirar. Los ocho nodos de frontera ya están antes de la primera petición."
     },
     {
+      "name": "Movimientos",
+      "item": [
+        {
+          "name": "La frontera, para tener contra qué asentar",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes?kind=SOURCE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "SOURCE"
+                }
+              ]
+            },
+            "description": "Los tres nodos SOURCE los sembró el provisioner al dar de alta la organización. Un movimiento es una partida doble: sin frontera no hay de dónde recibir."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('sourceNodeId', pm.response.json().data.find((n) => n.code === 'supplier-default').id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Y el sumidero de las ventas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes?kind=TERMINAL",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "TERMINAL"
+                }
+              ]
+            },
+            "description": "Los cinco TERMINAL. Su saldo es un acumulado —cuánto se ha vendido, consumido o mermado—, no existencias en un estante, y por eso pueden bajar de cero."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('terminalNodeId', pm.response.json().data.find((n) => n.code === 'sale').id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un estante propio del ledger",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/nodes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "nodes"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"INTERNAL\",\n  \"code\": \"B9\",\n  \"name\": \"Bin 9 (ledger)\",\n  \"parentId\": \"{{zonaId}}\"\n}"
+            },
+            "description": "El bin de la carpeta «Ubicaciones» termina retirado —su último caso es justo ese— y un nodo inactivo no admite movimientos nuevos (I-16). El ledger dibuja el suyo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('ledgerBinId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recepción del proveedor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ]
+            },
+            "description": "La partida doble: la cantidad sale de un nodo y entra en otro, en la misma transacción que actualiza los dos saldos. La cantidad viaja como **cadena** — un número de JSON ya pasó por un double, y 0.1 deja de ser 0.1.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{torId}}\",\n  \"fromNodeId\": \"{{sourceNodeId}}\",\n  \"toNodeId\": \"{{ledgerBinId}}\",\n  \"quantity\": \"100.000\",\n  \"occurredAt\": \"{{nowIso}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('devuelve los dos saldos', () => pm.expect(pm.response.json().balances).to.have.lengthOf(2));",
+                  "pm.test('y los dos relojes', () => { const m = pm.response.json().movement; pm.expect(m.occurredAt).to.be.a('string'); pm.expect(m.recordedAt).to.be.a('string'); });",
+                  "pm.collectionVariables.set('movementId', pm.response.json().movement.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Saldo inicial en bloque",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements",
+                "batch"
+              ]
+            },
+            "description": "Todo o nada, en una transacción. Es lo que usa la carga desde una hoja de cálculo; los deltas de las N líneas se suman por clave natural y se aplican una sola vez.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"movements\": [\n    {\n      \"productId\": \"{{torId}}\",\n      \"fromNodeId\": \"{{sourceNodeId}}\",\n      \"toNodeId\": \"{{ledgerBinId}}\",\n      \"quantity\": \"10.000\",\n      \"occurredAt\": \"{{nowIso}}\"\n    },\n    {\n      \"productId\": \"{{torId}}\",\n      \"fromNodeId\": \"{{sourceNodeId}}\",\n      \"toNodeId\": \"{{ledgerBinId}}\",\n      \"quantity\": \"5.000\",\n      \"occurredAt\": \"{{nowIso}}\"\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('dos movimientos', () => pm.expect(pm.response.json().movements).to.have.lengthOf(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El histórico",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements?sort=-occurredAt&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "-occurredAt"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Ordena solo por `occurredAt` y por defecto al revés: es la única columna indexada, y es la tabla que más crece del sistema."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('lo último primero', () => { const d = pm.response.json().data; if (d.length > 1) pm.expect(d[0].occurredAt >= d[d.length - 1].occurredAt).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Todo lo que tocó un nodo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements?nodeId={{ledgerBinId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ],
+              "query": [
+                {
+                  "key": "nodeId",
+                  "value": "{{ledgerBinId}}"
+                }
+              ]
+            },
+            "description": "`nodeId` casa **origen o destino**: es la pregunta que hace de verdad quien concilia una ubicación."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el bin tiene historia', () => pm.expect(pm.response.json().data.length).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un movimiento por id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements/{{movementId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements",
+                "{{movementId}}"
+              ]
+            },
+            "description": "Sin `version`: un movimiento no se edita, así que no hay If-Match que pedir."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('registrado no es anterior a ocurrido', () => { const m = pm.response.json(); pm.expect(m.recordedAt >= m.occurredAt).to.be.true; });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compensar un movimiento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements/{{movementId}}/reverse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements",
+                "{{movementId}}",
+                "reverse"
+              ]
+            },
+            "description": "La única forma de deshacer un asiento, porque los movimientos no se actualizan ni se borran (I-3). Responde **201**: la compensación sí crea un recurso, con su propio id y su propia fila en el histórico.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"eran 10 unidades, no 100\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('apunta al original', () => pm.expect(pm.response.json().movement.reversesId).to.eql(pm.collectionVariables.get('movementId')));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Existencias",
+      "item": [
+        {
+          "name": "Inventario propio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/stock?custodialOnly=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "stock"
+              ],
+              "query": [
+                {
+                  "key": "custodialOnly",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "`custodialOnly` deja fuera SOURCE y TERMINAL, cuyo saldo es un acumulado y no existencias. Sin él se ve «cuánto he vendido», que también es una pregunta legítima — por eso el contrato lo expone en vez de decidirlo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('las cantidades son cadenas de tres decimales', () => pm.response.json().data.forEach((p) => pm.expect(p.quantity).to.match(/^-?\\d+\\.\\d{3}$/)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Todo, incluida la frontera",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/stock?custodialOnly=false&nonZeroOnly=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "stock"
+              ],
+              "query": [
+                {
+                  "key": "custodialOnly",
+                  "value": "false"
+                },
+                {
+                  "key": "nonZeroOnly",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "La suma de todos los saldos de un producto sobre todos los nodos es exactamente cero: es la invariante de conservación, y se sigue de la partida doble."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "El saldo de un subárbol",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/stock?under={{zonaId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "stock"
+              ],
+              "query": [
+                {
+                  "key": "under",
+                  "value": "{{zonaId}}"
+                }
+              ]
+            },
+            "description": "Agrega la zona entera por (producto, lote). Un `under` que no existe responde 400 invalid-filter y no una página vacía: una página vacía sería indistinguible de un subárbol vacío."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Qué está prestado y no ha vuelto",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/stock/custodies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "stock",
+                "custodies"
+              ]
+            },
+            "description": "Por **préstamo**, no por saldo: cada check-out con pendiente mayor que cero es una fila, con su propio `dueAt`. Es la consulta para la que existe `settlesId`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Solo los vencidos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/stock/custodies?overdueOnly=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "stock",
+                "custodies"
+              ],
+              "query": [
+                {
+                  "key": "overdueOnly",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "`overdue` lo decide el caso de uso con su reloj: es una pregunta sobre el ahora, y la infraestructura no tiene por qué saber qué hora es."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Contrato",
       "item": [
         {
@@ -4508,6 +5137,279 @@
         }
       ],
       "description": "Lo que el árbol no deja hacer, y con qué problem+json lo dice."
+    },
+    {
+      "name": "Casos de error del ledger",
+      "item": [
+        {
+          "name": "Despachar lo que no hay",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ]
+            },
+            "description": "I-4, el error más frecuente de la operación diaria. Lo impone un CHECK de la base y no una validación previa: un SELECT seguido de un INSERT tiene una ventana en la que otra transacción consume el stock.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{torId}}\",\n  \"fromNodeId\": \"{{ledgerBinId}}\",\n  \"toNodeId\": \"{{terminalNodeId}}\",\n  \"quantity\": \"999999.000\",\n  \"occurredAt\": \"{{nowIso}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('insufficient-stock', () => pm.expect(pm.response.json().type).to.include('insufficient-stock'));",
+                  "pm.test('nombra el nodo por su path, no por su uuid', () => pm.expect(pm.response.json().detail).to.include('/'));",
+                  "pm.test('dice cuánto hay y cuánto se pidió', () => { const e = pm.response.json().errors[0]; pm.expect(e.available).to.be.a('string'); pm.expect(e.requested).to.be.a('string'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mismo origen y destino",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ]
+            },
+            "description": "I-1. Un movimiento va de un sitio a otro, y los dos extremos siendo el mismo no es uno.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{torId}}\",\n  \"fromNodeId\": \"{{sourceNodeId}}\",\n  \"toNodeId\": \"{{sourceNodeId}}\",\n  \"quantity\": \"100.000\",\n  \"occurredAt\": \"{{nowIso}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('same-node', () => pm.expect(pm.response.json().type).to.include('same-node'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cantidad cero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ]
+            },
+            "description": "I-2. Un negativo no es una cantidad pequeña, es una dirección — y la dirección vive en el par de nodos, nunca en el número.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{torId}}\",\n  \"fromNodeId\": \"{{sourceNodeId}}\",\n  \"toNodeId\": \"{{ledgerBinId}}\",\n  \"quantity\": \"0\",\n  \"occurredAt\": \"{{nowIso}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('non-positive-quantity', () => pm.expect(pm.response.json().type).to.include('non-positive-quantity'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compensar dos veces",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements/{{movementId}}/reverse",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements",
+                "{{movementId}}",
+                "reverse"
+              ]
+            },
+            "description": "I-13, sostenida por un UNIQUE parcial sobre (org_id, reverses_id). Un error se corrige una vez.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"otra vez\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('already-reversed', () => pm.expect(pm.response.json().type).to.include('already-reversed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ordenar por un campo sin índice",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements?sort=quantity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements"
+              ],
+              "query": [
+                {
+                  "key": "sort",
+                  "value": "quantity"
+                }
+              ]
+            },
+            "description": "Spec 03 §8: cada módulo declara qué admite ordenar, y lo demás es 400. Aceptar orden arbitrario sobre la tabla que más crece sería invitar a un seq scan."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('invalid-filter', () => pm.expect(pm.response.json().type).to.include('invalid-filter'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un movimiento que no existe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/movements/018f0000-0000-7000-8000-0000000000ee",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "movements",
+                "018f0000-0000-7000-8000-0000000000ee"
+              ]
+            },
+            "description": "404 y nunca 403: distinguirlos confirmaría que la fila existe en otra organización (I-6)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

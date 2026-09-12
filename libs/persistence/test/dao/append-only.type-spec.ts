@@ -3,7 +3,7 @@
 // and someone would eventually call it. This file is checked by
 // `pnpm typecheck`, before a database exists; vitest does not run it.
 import { expectTypeOf } from 'vitest';
-import { MovementDao, OutboxEventDao, UserDao } from '@app/persistence';
+import { KyselyMovementRepository, MovementDao, OutboxEventDao, UserDao } from '@app/persistence';
 
 expectTypeOf<OutboxEventDao>().not.toHaveProperty('update');
 expectTypeOf<OutboxEventDao>().not.toHaveProperty('updateMany');
@@ -28,3 +28,12 @@ expectTypeOf<MovementDao>().not.toHaveProperty('deleteMany');
 expectTypeOf<MovementDao>().not.toHaveProperty('upsert');
 expectTypeOf<MovementDao>().toHaveProperty('create');
 expectTypeOf<MovementDao>().toHaveProperty('countByProduct');
+
+// And the port above it, which is the layer a use case actually sees. A
+// programmer who wants to modify a movement does not find the method here
+// either, and that is the moment they read spec 12 and understand they must
+// compensate — the layer of I-3 that arrives years before a 42501.
+expectTypeOf<KyselyMovementRepository>().not.toHaveProperty('update');
+expectTypeOf<KyselyMovementRepository>().not.toHaveProperty('delete');
+expectTypeOf<KyselyMovementRepository>().toHaveProperty('append');
+expectTypeOf<KyselyMovementRepository>().toHaveProperty('appendMany');

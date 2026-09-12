@@ -8,13 +8,14 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 4 — el catálogo y las ubicaciones
+## Estado: Plan 5 — el ledger
 
-Las treinta y siete operaciones de abajo están vivas y probadas de tres formas: por
+Las cuarenta y cuatro operaciones de abajo están vivas y probadas de tres formas: por
 dentro (`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de
-verdad (`pnpm blackbox`). El plan 4 cerró la WAVE 2 añadiendo las siete de
-ubicaciones, y con ellas el sitio donde la mercancía puede estar: el ledger de la
-WAVE 3 ya tiene dos extremos contra los que asentar. El índice completo está en el
+verdad (`pnpm blackbox`). El plan 5 trae **el núcleo del producto**: la partida doble
+entre dos nodos, el saldo que se materializa en la misma transacción y no baja de
+cero, la compensación como única forma de corregir, y el préstamo que se salda por
+préstamo. El índice completo está en el
 [plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
 
 | Endpoint | Acción | Qué hace |
@@ -55,6 +56,13 @@ WAVE 3 ya tiene dos extremos contra los que asentar. El índice completo está e
 | `POST /v1/nodes/{id}/move` | `MANAGE_NODES` | Reasigna el padre y recalcula el `path` del subárbol (N-1, N-2) |
 | `DELETE /v1/nodes/{id}` | `MANAGE_NODES` | Lo desactiva; no si tiene saldo o hijos activos |
 | `GET /v1/nodes/{id}/tree` | `READ` | El subárbol anidado, inactivos incluidos |
+| `POST /v1/movements` | `RECORD_MOVEMENT` | La partida doble: sale de un nodo y entra en otro, con los dos saldos en la misma transacción |
+| `POST /v1/movements/batch` | `RECORD_MOVEMENT` | Todo o nada, hasta 500. Lo que usa la carga de saldo inicial |
+| `GET /v1/movements` | `READ` | El histórico; `nodeId` casa origen o destino. Ordena por `occurredAt`, lo último primero |
+| `GET /v1/movements/{id}` | `READ` | Un asiento, con sus dos relojes. Sin `PUT`, `PATCH` ni `DELETE`: la ausencia es el contrato |
+| `POST /v1/movements/{id}/reverse` | `REVERSE_MOVEMENT` | Compensa. Un movimiento no se edita nunca (I-3), y compensar dos veces es `409` |
+| `GET /v1/stock` | `READ` | Qué hay y dónde; `custodialOnly`, `nonZeroOnly` y `under` para agregar un subárbol |
+| `GET /v1/stock/custodies` | `READ` | Qué está prestado y no ha vuelto, **por préstamo** y con su `dueAt` |
 | `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
@@ -130,8 +138,9 @@ Si el correo existe en más de una organización, `login` responde
 ### Postman
 
 [`docs/postman/tubodega.postman_collection.json`](docs/postman/tubodega.postman_collection.json)
-trae **las treinta operaciones** del contrato: 70 peticiones en nueve carpetas, de
-las cuales 25 son casos de error para ver `problem+json` de cerca; y
+trae **las cuarenta y cuatro operaciones** del contrato: 109 peticiones en catorce
+carpetas y 308 aserciones, de las cuales cuatro carpetas son casos de error para ver
+`problem+json` de cerca; y
 [`tubodega.local.postman_environment.json`](docs/postman/tubodega.local.postman_environment.json)
 el entorno local. Importa ambos y ejecuta la colección **en orden**: cada petición
 guarda lo que la siguiente necesita —`orgId`, `accessToken`, los ids de los
@@ -247,7 +256,7 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 ### Caja negra
 
 [`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
-HTTP contra un servidor de verdad — 317 comprobaciones en cuatro suites, 318
+HTTP contra un servidor de verdad — 403 comprobaciones en cinco suites, 404
 si exportas `JWT_SECRET`:
 
 | Suite | Qué recorre |
@@ -255,11 +264,12 @@ si exportas `JWT_SECRET`:
 | [`10-tenencia.sh`](scripts/blackbox/10-tenencia.sh) | Marta abre el negocio: registro, sesiones, refresco y cierre, el equipo y sus roles, revocar un acceso, y que una empresa no vea a la de al lado |
 | [`20-catalogo.sh`](scripts/blackbox/20-catalogo.sh) | Diego migra la hoja de cálculo y Juan escanea en el pasillo: campos propios, importación, fotos, códigos, series y lotes |
 | [`25-ubicaciones.sh`](scripts/blackbox/25-ubicaciones.sh) | Diego dibuja el árbol de la bodega, lo reorganiza y retira un bin: la frontera que ya estaba, el subárbol que se mueve entero, los ciclos y las reglas del árbol |
-| [`30-transversal.sh`](scripts/blackbox/30-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger |
+| [`30-movimientos.sh`](scripts/blackbox/30-movimientos.sh) | Juan recibe, ubica, traslada y despacha; presta el taladro y lo devuelve; se equivoca y Diego lo corrige. El saldo que no baja de cero, la serie que no está en dos sitios, y el préstamo que se salda por préstamo |
+| [`40-transversal.sh`](scripts/blackbox/40-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger. Va la última porque hace falta que exista algo que mover |
 
 ```bash
 pnpm start:dev                       # en otra terminal
-pnpm blackbox                        # las tres suites y el informe de cobertura
+pnpm blackbox                        # las cinco suites y el informe de cobertura
 BASE=http://otra-maquina:3000 pnpm blackbox
 BASE=http://localhost:3001 DB=tubodega_docker pnpm blackbox   # contra la pila de compose
 ./scripts/blackbox.sh --only tenencia

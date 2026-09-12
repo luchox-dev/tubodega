@@ -107,6 +107,7 @@ req POST /products --token "$T_DIEGO" --body '{
   "trackingMode":"QUANTITY", "uom":"KG",
   "customFields":{"proveedor":"Molinos del Valle","familia":"alimentación"}}'
 ok "el arroz, por kilos" 201
+P_ARR="$(jqv '.id')"
 
 req POST /products --token "$T_DIEGO" --body '{
   "sku":"LECHE-1L", "name":"Leche entera 1 L",
@@ -172,9 +173,40 @@ step "6 · una remesa y una unidad concreta"
 # BSH-001 devuelve el taladro y la unidad, no solo el producto.
 req POST "/products/$P_TAL/batches" --token "$T_JUAN" --body '{"serial":"BSH-001"}'
 ok "la serie del taladro" 201
+B_TAL="$(jqv '.id')"
 req POST "/products/$P_LEC/batches" --token "$T_JUAN" \
   --body '{"lotCode":"L-2026-09","expiresAt":"2026-10-01T00:00:00.000Z"}'
 ok "el lote de leche, con su vencimiento" 201
+B_LEC="$(jqv '.id')"
+
+step "7 · el saldo inicial, por HTTP como todo lo demás"
+# Sin existencias, la bodega sembrada es un plano de una bodega vacía: ni GET
+# /v1/stock ni un traslado ni un préstamo tienen nada que enseñar. Entra por
+# `opening-balance`, que es el nodo SOURCE que existe justo para esto, y en un
+# solo lote porque es exactamente lo que hace la carga desde una hoja.
+frontera() { # frontera <var> <kind> <code>
+  local -n dest="$1"
+  req GET "/nodes?kind=$2" --token "$T_DIEGO" --no-cov
+  dest="$(jq -r --arg c "$3" '[.data[] | select(.code==$c)][0].id' < "$BODY_F")"
+}
+frontera N_OPENING SOURCE opening-balance
+
+AHORA="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+linea() { # linea <productId> <nodeId> <cantidad> [batchId]
+  jq -nc --arg p "$1" --arg f "$N_OPENING" --arg t "$2" --arg q "$3" --arg w "$AHORA" --arg b "${4:-}" \
+    '{productId:$p, fromNodeId:$f, toNodeId:$t, quantity:$q, occurredAt:$w}
+     + (if $b == "" then {} else {batchId:$b} end)'
+}
+req POST /movements/batch --token "$T_DIEGO" --body "$(jq -nc \
+  --argjson a "$(linea "$P_TOR" "$N_B2" 500)" \
+  --argjson b "$(linea "$P_ARR" "$N_B3" 120)" \
+  --argjson c "$(linea "$P_LEC" "$N_B3" 48 "$B_LEC")" \
+  --argjson d "$(linea "$P_TAL" "$N_B2" 1 "$B_TAL")" \
+  '{movements:[$a,$b,$c,$d]}')"
+ok "las cuatro posiciones, en un solo lote" 201
+
+req GET "/stock?custodialOnly=true" --token "$T_DIEGO"
+body "y el inventario propio ya tiene cuatro posiciones" '.data | length' 4
 
 # ─────────────────────────────────────────────────────────────────────────────
 printf '\n  aciertos: %d\n  fallos:   %d\n' "$OK" "$BAD"
@@ -200,5 +232,6 @@ cat <<FIN
   escanea        7501000000017 (el tornillo) · BSH-001 (el taladro)
   bodega         BOD-A › MUELLE · BOD-A › Z1 › E3 › B2, B3 · BOD-B › Z2
   y además       juan (CUSTODY) y los ocho nodos de frontera
+  existencias    B2: 500 TOR-M8 y el taladro · B3: 120 ARROZ-25 y 48 LECHE-1L
 
 FIN

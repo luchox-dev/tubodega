@@ -36,6 +36,7 @@ export * from './repositories/catalog/product.repository.js';
 export * from './repositories/catalog/product-code.repository.js';
 export * from './repositories/catalog/batch.repository.js';
 export * from './repositories/catalog/custom-field.repository.js';
+export * from './repositories/inventory/movement.repository.js';
 export * from './repositories/inventory/node.repository.js';
 export * from './repositories/inventory/stock-balance.repository.js';
 export * from './repositories/catalog/media.repository.js';

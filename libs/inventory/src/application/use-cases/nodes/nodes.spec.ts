@@ -309,7 +309,7 @@ describe('DeactivateNode', () => {
   it('con saldo, no (N-3)', async () => {
     const t = build();
     const w = await aWarehouse(t);
-    t.balances.byNode.set(w.b3.id, [{ productId: 'p1', quantity: '4.000' }]);
+    t.balances.park(w.b3.id, 'p1', '4.000');
     await expect(t.deactivate.execute(w.ctx, w.b3.id)).rejects.toMatchObject({
       type: 'node-has-stock',
     });
