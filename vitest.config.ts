@@ -15,6 +15,7 @@ export default defineConfig({
     // tsconfig.json "paths" (one barrel file per library).
     alias: {
       '@app/common': lib('common'),
+      '@app/catalog': lib('catalog'),
       '@app/persistence': lib('persistence'),
       '@app/tenancy': lib('tenancy'),
     },
@@ -30,6 +31,7 @@ export default defineConfig({
       // Floors of docs/specs/06 §9, activated per directory as each lands (decision D-15).
       thresholds: {
         'libs/tenancy/src/domain/**': { lines: 95, branches: 95, functions: 95, statements: 95 },
+        'libs/catalog/src/domain/**': { lines: 95, branches: 95, functions: 95, statements: 95 },
         'libs/tenancy/src/application/**': { lines: 90, branches: 90, functions: 90, statements: 90 },
       },
     },
