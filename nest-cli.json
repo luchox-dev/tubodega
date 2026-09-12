@@ -54,6 +54,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/catalog/tsconfig.lib.json"
       }
+    },
+    "inventory": {
+      "type": "library",
+      "root": "libs/inventory",
+      "entryFile": "index",
+      "sourceRoot": "libs/inventory/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/inventory/tsconfig.lib.json"
+      }
     }
   }
 }
