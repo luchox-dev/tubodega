@@ -35,8 +35,6 @@ export interface BalanceDelta {
 export interface StockQuery {
   readonly productId?: ProductId;
   readonly nodeId?: NodeId;
-  /** Aggregated over a subtree; the use case resolves the id to a path. */
-  readonly underPath?: NodePath;
   readonly batchId?: BatchId;
   /** Excludes SOURCE and TERMINAL: their balance is a running total, not stock. */
   readonly custodialOnly?: boolean;

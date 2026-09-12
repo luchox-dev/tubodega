@@ -187,12 +187,10 @@ export class InMemoryStockBalanceRepository implements StockBalanceRepository {
   }
 
   async query(_orgId: OrgId, q: StockQuery, p: StockPage): Promise<Page<StockPosition>> {
-    const under = q.underPath === undefined ? undefined : NodePath.descendantPrefix(q.underPath);
     const rows = this.all()
       .filter((x) => q.productId === undefined || x.productId === q.productId)
       .filter((x) => q.nodeId === undefined || x.nodeId === q.nodeId)
       .filter((x) => q.batchId === undefined || x.batchId === q.batchId)
-      .filter((x) => under === undefined || (this.pathOf(x.nodeId) ?? '').startsWith(under))
       .filter((x) => q.custodialOnly !== true || isCustodialKind(x.nodeKind))
       .filter((x) => q.nonZeroOnly === false || !x.quantity.isZero())
       .sort((a, b) => (positionKey(a.nodeId, a.productId, a.batchId) < positionKey(b.nodeId, b.productId, b.batchId) ? -1 : 1));

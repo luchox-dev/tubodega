@@ -17,6 +17,7 @@ import {
   KyselyOutboxEventPublisher,
   KyselyProductCodeRepository,
   KyselyProductMediaRepository,
+  KyselyMovementRepository,
   KyselyNodeRepository,
   KyselyProductRepository,
   KyselySessionRepository,
@@ -25,7 +26,7 @@ import {
   PersistenceModule,
 } from '@app/persistence';
 import { ORGANIZATION_REPOSITORY, ORG_PROVISIONER, SESSION_REPOSITORY, USER_REPOSITORY } from '@app/tenancy';
-import { InventoryModule, NODE_REPOSITORY, STOCK_BALANCE_REPOSITORY } from '@app/inventory';
+import { InventoryModule, MOVEMENT_REPOSITORY, NODE_REPOSITORY, STOCK_BALANCE_REPOSITORY } from '@app/inventory';
 import { BoundaryNodesSeeder } from './inventory/boundary-nodes.seeder.js';
 import { CompositeOrgProvisioner, ORG_SEEDERS, type OrgSeeder } from './tenancy/org-provisioner.adapter.js';
 import { MovementCounterAdapter } from './catalog/movement-counter.adapter.js';
@@ -60,6 +61,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     { provide: PRODUCT_CODE_REPOSITORY, useExisting: KyselyProductCodeRepository },
     { provide: BATCH_REPOSITORY, useExisting: KyselyBatchRepository },
     { provide: CUSTOM_FIELD_REPOSITORY, useExisting: KyselyCustomFieldRepository },
+    { provide: MOVEMENT_REPOSITORY, useExisting: KyselyMovementRepository },
     { provide: NODE_REPOSITORY, useExisting: KyselyNodeRepository },
     { provide: STOCK_BALANCE_REPOSITORY, useExisting: KyselyStockBalanceRepository },
     MovementCounterAdapter,
@@ -89,6 +91,7 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     PRODUCT_CODE_REPOSITORY,
     BATCH_REPOSITORY,
     CUSTOM_FIELD_REPOSITORY,
+    MOVEMENT_REPOSITORY,
     NODE_REPOSITORY,
     STOCK_BALANCE_REPOSITORY,
     MOVEMENT_COUNTER,

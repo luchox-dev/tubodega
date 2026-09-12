@@ -387,21 +387,40 @@ schema y la cláusula se añade a mano en la migración (§5.1).
 
 Un upsert por cada extremo del movimiento, en la misma transacción que lo inserta:
 
+**Dos sentencias, y tienen que ser dos.** El upsert de una sola que parecía
+natural aquí —`INSERT … ON CONFLICT … DO UPDATE SET quantity = quantity +
+EXCLUDED.quantity`— **no funciona con un delta negativo**: Postgres ejecuta
+`ExecConstraints` sobre la tupla *propuesta* antes de resolver el conflicto, así
+que una fila que lleva `-5` viola `stock_balance_i4_non_negative` y nunca llega
+al `DO UPDATE` que la habría dejado en `0`. El error lo dice literalmente
+—*«Failing row contains (…, -5.000, INTERNAL)»*— y ese valor no se iba a guardar
+en ningún caso.
+
 ```sql
+-- 1. La fila existe, con cero, que pasa el CHECK en toda circunstancia.
 INSERT INTO stock_balance (id, org_id, node_id, product_id, batch_id, node_kind, quantity)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-ON CONFLICT (org_id, node_id, product_id, batch_id)
-DO UPDATE SET quantity   = stock_balance.quantity + EXCLUDED.quantity,
-              updated_at = now();
+VALUES ($1, $2, $3, $4, $5, $6, 0)
+ON CONFLICT (org_id, node_id, product_id, batch_id) DO NOTHING;
+
+-- 2. Y se le suma el delta, donde el CHECK ya ve el valor resultante.
+UPDATE stock_balance
+   SET quantity = quantity + $7::numeric, updated_at = now()
+ WHERE org_id = $2 AND node_id = $3 AND product_id = $4
+   AND batch_id IS NOT DISTINCT FROM $5
+RETURNING *;
 ```
 
 Con `+quantity` para el destino y `-quantity` para el origen, y un UUIDv7 nuevo
 en `$1` que solo sobrevive si la fila no existía. `ON CONFLICT` infiere el índice
-único de la clave natural, `NULLS NOT DISTINCT` incluido. Si el resultado deja
-negativo un nodo custodiable, el `CHECK` aborta la transacción y el movimiento
-completo se deshace. **La imposibilidad de despachar lo que no existe la impone la
-base de datos, no una validación previa** — así ninguna ruta nueva de código puede
-saltársela.
+único de la clave natural, `NULLS NOT DISTINCT` incluido. El `INSERT` se bloquea
+ante una inserción especulativa concurrente de la misma clave, así que cuando
+vuelve la fila ya está decidida y el `UPDATE` —snapshot nuevo en READ COMMITTED—
+siempre la encuentra; y es el `UPDATE` quien toma el candado de fila, que es lo
+que hace que dos transacciones sobre la misma posición se serialicen en vez de
+leer las dos un saldo viejo. Si el resultado deja negativo un nodo custodiable,
+el `CHECK` aborta la transacción y el movimiento completo se deshace.
+**La imposibilidad de despachar lo que no existe la impone la base de datos, no
+una validación previa** — así ninguna ruta nueva de código puede saltársela.
 
 Para evitar interbloqueos cuando dos transacciones tocan el mismo par de nodos en
 orden opuesto, los upserts de una transacción se emiten **ordenados por la clave
