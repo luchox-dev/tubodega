@@ -44,8 +44,8 @@ que ve el repositorio. Cambiar una columna sin migrarla, o migrarla sin cambiar
 el schema, rompe la compilación.
 
 El costo es honesto: son dos herramientas, y todo lo que el lenguaje de Prisma
-no puede expresar —`CHECK`, índices parciales, RLS, `REVOKE`, `NULLS NOT
-DISTINCT`— se escribe a mano en el SQL de la migración (§5.1). Se acepta porque
+no puede expresar —`CHECK`, índices parciales, opclases, RLS, `REVOKE`, `NULLS
+NOT DISTINCT`— se escribe a mano en el SQL de la migración (§5.1). Se acepta porque
 la alternativa —un solo ORM que haga ambas cosas— sacrifica o la claridad de las
 consultas o la calidad del control de cambios, y este producto necesita las dos.
 
@@ -619,7 +619,8 @@ en el SQL de la migración**:
 | Tablas, columnas, enums, `NOT NULL`, `DEFAULT` | `schema.prisma` |
 | `numeric(18,3)`, `timestamptz`, `citext`, `jsonb` | `schema.prisma` — `@db.Decimal(18,3)`, `@db.Timestamptz`, `@db.Citext`, `Json` |
 | Claves foráneas compuestas `(org_id, x_id)` | `schema.prisma` — `@relation(fields: [orgId, xId], references: [orgId, id])` |
-| Índices totales, incluido `text_pattern_ops` | `schema.prisma` — `@@index([orgId, path(ops: raw("text_pattern_ops"))])` |
+| Índices totales | `schema.prisma` — `@@index([orgId, path])` |
+| **Opclases** (`text_pattern_ops`) | **Solo SQL** — Prisma las escribe pero no las lee, así que un índice que la declare en el schema deja `pnpm db:check` en deriva para siempre |
 | `CREATE EXTENSION citext` | `schema.prisma` — `extensions = [citext]` en el `datasource` |
 | Índices y únicos **parciales** (`WHERE …`) | **Ambos**: `@@index` / `@@unique` en el schema, y el predicado añadido a mano en el SQL |
 | `NULLS NOT DISTINCT` | **Ambos**: `@@unique` en el schema, la cláusula en el SQL |
@@ -635,6 +636,14 @@ que sobra — la siguiente migración generada lo borraría. Declarado en el sch
 Prisma ve un índice con las mismas columnas, ignora el predicado que no sabe
 leer, y no lo toca. Los `CHECK`, las políticas y los `REVOKE` no tienen ese
 problema: Prisma no los introspecciona en absoluto y los deja en paz.
+
+Las opclases son el tercer caso, y el que se paga más caro: Prisma **sí** las
+emite al generar una migración, pero **no** las introspecciona al comparar. Un
+`@@index([orgId, path(ops: raw("text_pattern_ops"))])` en el schema produce una
+diferencia que `pnpm db:check` reporta en cada corrida y que ninguna migración
+puede saldar, porque la base ya tiene el índice que se le pide crear. Por eso el
+`text_pattern_ops` de `node.path` se escribe solo en el SQL, y el `@@index` del
+schema nombra las columnas a secas.
 
 Que la mitad de las garantías del esquema vivan en SQL escrito a mano es
 precisamente lo que hace imprescindibles dos pruebas de
