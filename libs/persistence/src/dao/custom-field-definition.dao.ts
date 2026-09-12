@@ -1,0 +1,13 @@
+import { Injectable } from '@nestjs/common';
+import { TransactionContext } from '../kysely/transaction.context.js';
+import { AbstractOrgDao } from './base/org/abstract-org.dao.js';
+
+@Injectable()
+export class CustomFieldDefinitionDao extends AbstractOrgDao<'customFieldDefinition', string> {
+  protected readonly table = 'customFieldDefinition' as const;
+  protected override readonly versioned = true;
+
+  constructor(ctx: TransactionContext) {
+    super(ctx);
+  }
+}

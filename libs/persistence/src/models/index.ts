@@ -25,3 +25,34 @@ export type NewOutboxEvent = Insertable<DB['outboxEvent']>;
 export type IdempotencyKeyModel = Selectable<DB['idempotencyKey']>;
 export type NewIdempotencyKey = Insertable<DB['idempotencyKey']>;
 export type IdempotencyKeyPatch = Updateable<DB['idempotencyKey']>;
+
+export type ProductModel = Selectable<DB['product']>;
+export type NewProduct = Insertable<DB['product']>;
+export type ProductPatch = Updateable<DB['product']>;
+
+export type ProductCodeModel = Selectable<DB['productCode']>;
+export type NewProductCode = Insertable<DB['productCode']>;
+
+export type ProductMediaModel = Selectable<DB['productMedia']>;
+export type NewProductMedia = Insertable<DB['productMedia']>;
+
+export type MediaUploadModel = Selectable<DB['mediaUpload']>;
+export type NewMediaUpload = Insertable<DB['mediaUpload']>;
+export type MediaUploadPatch = Updateable<DB['mediaUpload']>;
+
+export type BatchModel = Selectable<DB['batch']>;
+export type NewBatch = Insertable<DB['batch']>;
+
+export type CustomFieldDefinitionModel = Selectable<DB['customFieldDefinition']>;
+export type NewCustomFieldDefinition = Insertable<DB['customFieldDefinition']>;
+export type CustomFieldDefinitionPatch = Updateable<DB['customFieldDefinition']>;
+
+export type NodeModel = Selectable<DB['node']>;
+export type NewNode = Insertable<DB['node']>;
+export type NodePatch = Updateable<DB['node']>;
+
+export type MovementModel = Selectable<DB['movement']>;
+export type NewMovement = Insertable<DB['movement']>;
+
+export type StockBalanceModel = Selectable<DB['stockBalance']>;
+export type NewStockBalance = Insertable<DB['stockBalance']>;

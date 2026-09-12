@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsInt,
   IsOptional,
+  IsString,
   Matches,
   Max,
   Min,
@@ -66,6 +67,15 @@ export class EnvironmentVariables {
 
   @Matches(DURATION, { message: 'JWT_REFRESH_TTL must be a duration like 30d' })
   JWT_REFRESH_TTL: string = '30d';
+
+  /**
+   * Where DiskMediaStorage writes product photos, as `MEDIA_ROOT/<orgId>/<key>`
+   * (spec 11 §5). A port, because this becomes object storage later and no use
+   * case should notice.
+   */
+  @IsString()
+  @MinLength(1)
+  MEDIA_ROOT: string = '.media';
 
   /** How often the outbox dispatcher runs (spec 05 §3). Not started under NODE_ENV=test. */
   @Transform(({ value }) => (value === undefined ? 1000 : Number(value)))

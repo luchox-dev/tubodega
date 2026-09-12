@@ -15,6 +15,7 @@ export default defineConfig({
     // tsconfig.json "paths" (one barrel file per library).
     alias: {
       '@app/common': lib('common'),
+      '@app/catalog': lib('catalog'),
       '@app/persistence': lib('persistence'),
       '@app/tenancy': lib('tenancy'),
     },

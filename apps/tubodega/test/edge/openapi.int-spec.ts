@@ -23,7 +23,7 @@ describe('OpenAPI document', () => {
   });
   afterAll(() => started.stop());
 
-  it('publishes every endpoint of spec 10 §7', () => {
+  it('publishes every endpoint of spec 10 §7 and 11 §7', () => {
     const paths = Object.keys(document.paths);
     expect(paths).toEqual(
       expect.arrayContaining([
@@ -35,6 +35,18 @@ describe('OpenAPI document', () => {
         '/v1/me/password',
         '/v1/users',
         '/v1/users/{id}',
+        '/v1/products',
+        '/v1/products/{id}',
+        '/v1/products/import',
+        '/v1/products/{id}/codes',
+        '/v1/products/{id}/codes/{codeId}',
+        '/v1/products/{id}/batches',
+        '/v1/products/{id}/media',
+        '/v1/products/{id}/media/{mediaId}',
+        '/v1/codes/{value}/resolve',
+        '/v1/custom-fields',
+        '/v1/custom-fields/{id}',
+        '/v1/uploads',
       ]),
     );
   });

@@ -52,6 +52,22 @@
     {
       "key": "idemKey",
       "value": ""
+    },
+    {
+      "key": "campoId",
+      "value": ""
+    },
+    {
+      "key": "torId",
+      "value": ""
+    },
+    {
+      "key": "talId",
+      "value": ""
+    },
+    {
+      "key": "lecId",
+      "value": ""
     }
   ],
   "event": [
@@ -768,6 +784,371 @@
       ]
     },
     {
+      "name": "Catálogo",
+      "item": [
+        {
+          "name": "Definir el campo propio «proveedor»",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields"
+              ]
+            },
+            "description": "Un campo nace opcional; se vuelve obligatorio cuando todos lo tienen (C-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entity\": \"PRODUCT\",\n  \"key\": \"proveedor\",\n  \"label\": \"Proveedor\",\n  \"type\": \"TEXT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('campoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar los campos propios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/custom-fields?entity=PRODUCT",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "custom-fields"
+              ],
+              "query": [
+                {
+                  "key": "entity",
+                  "value": "PRODUCT"
+                }
+              ]
+            },
+            "description": "Ordenados por position."
+          }
+        },
+        {
+          "name": "Crear el tornillo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "description": "Puede traer sus códigos de una vez. El SKU es único por organización (C-1).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"TOR-M8\",\n  \"name\": \"Tornillo M8 galvanizado\",\n  \"trackingMode\": \"QUANTITY\",\n  \"uom\": \"UNIT\",\n  \"codes\": [\n    {\n      \"value\": \"7501234567890\",\n      \"kind\": \"EAN\"\n    }\n  ],\n  \"customFields\": {\n    \"proveedor\": \"Ferretería Mundial\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 con Location', () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(pm.response.headers.get('location')).to.be.a('string');",
+                  "});",
+                  "pm.collectionVariables.set('torId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Importar la hoja de cálculo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "import"
+              ]
+            },
+            "description": "Una fila con error no aborta el lote: sale en errors con su número de línea.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rows\": [\n    {\n      \"sku\": \"LEC-1\",\n      \"name\": \"Leche entera\",\n      \"trackingMode\": \"LOT\",\n      \"uom\": \"L\"\n    },\n    {\n      \"sku\": \"TAL-1\",\n      \"name\": \"Taladro\",\n      \"trackingMode\": \"SERIAL\",\n      \"uom\": \"UNIT\"\n    },\n    {\n      \"sku\": \"\",\n      \"name\": \"Fila mala\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 con 2 creadas y 1 error', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b.created).to.eql(2);",
+                  "  pm.expect(b.errors).to.have.lengthOf(1);",
+                  "  pm.expect(b.errors[0].line).to.eql(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar el catálogo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products?limit=50&sort=sku",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "sort",
+                  "value": "sku"
+                }
+              ]
+            },
+            "description": "Filtros: active, trackingMode, q. Cualquier otro parámetro es 400 invalid-filter."
+          }
+        },
+        {
+          "name": "Escanear el código de barras",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/codes/7501234567890/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "codes",
+                "7501234567890",
+                "resolve"
+              ]
+            },
+            "description": "Busca en los códigos, luego en las series y por último en el SKU."
+          }
+        },
+        {
+          "name": "Escanear el SKU",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/codes/TOR-M8/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "codes",
+                "TOR-M8",
+                "resolve"
+              ]
+            },
+            "description": "El operario puede teclear el SKU de la hoja y el sistema acierta igual."
+          }
+        },
+        {
+          "name": "Crear una serie (con token de OPERATOR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{talId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{talId}}",
+                "batches"
+              ]
+            },
+            "description": "CREATE_BATCH lo tiene OPERATOR: un lote llega con la mercancía.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serial\": \"BSH-001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Modificar el tornillo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "if-match",
+                "value": "\"1\""
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}"
+              ]
+            },
+            "description": "Exige If-Match con la versión. Con una vieja, 409 stale-version.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tornillo M8 inoxidable\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Contrato",
       "item": [
         {
@@ -1429,6 +1810,194 @@
                   "  pm.response.to.have.status(401);",
                   "  pm.expect(pm.response.json().type).to.include('refresh-token-invalid');",
                   "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Casos de error del catálogo",
+      "item": [
+        {
+          "name": "SKU repetido → 409 sku-taken",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"TOR-M8\",\n  \"name\": \"Otro\",\n  \"trackingMode\": \"QUANTITY\",\n  \"uom\": \"UNIT\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 sku-taken', () => {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().type).to.include('sku-taken');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Código que no existe → 404 code-not-found",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/codes/NOEXISTE/resolve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "codes",
+                "NOEXISTE",
+                "resolve"
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 code-not-found', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lote sobre un producto por cantidad → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products/{{torId}}/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products",
+                "{{torId}}",
+                "batches"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lotCode\": \"L-1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 batch-not-allowed', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtro inventado → 400 invalid-filter",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/products?foo=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "foo",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 invalid-filter', () => pm.response.to.have.status(400));"
                 ]
               }
             }

@@ -25,6 +25,9 @@
       "@app/common": [
         "./libs/common/src/index.ts"
       ],
+      "@app/catalog": [
+        "./libs/catalog/src/index.ts"
+      ],
       "@app/persistence": [
         "./libs/persistence/src/index.ts"
       ],
@@ -40,6 +43,9 @@
     },
     {
       "path": "./libs/common/tsconfig.lib.json"
+    },
+    {
+      "path": "./libs/catalog/tsconfig.lib.json"
     },
     {
       "path": "./libs/persistence/tsconfig.lib.json"
