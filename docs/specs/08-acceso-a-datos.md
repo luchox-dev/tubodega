@@ -404,7 +404,9 @@ en la entidad (`user.version`) hasta el `update` genérico.
 Siguen los niveles de [06 §2](06-pruebas-y-calidad.md):
 
 - **El genérico se prueba una vez**, en integración, contra dos tablas reales:
-  `app_user` (clave `id`, `versioned`) y `alert_rule` (clave compuesta `{ kind }`).
+  `app_user` (clave `id`, `versioned`) y `user_role` (clave compuesta). Estaba
+  planificado con `alert_rule`, que no existe hasta la WAVE 5; se cambió por `user_role`,
+  que tiene la misma forma de clave y sí existe (decisión D-1 del plan maestro).
   Cada método del contrato, cada operador del DSL con el SQL que produce, los
   cuatro errores, y `findPage` recorriendo tres páginas con inserciones entre
   medias. Es la única prueba que necesita cubrir el DSL: las concreciones lo

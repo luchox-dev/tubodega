@@ -25,9 +25,16 @@ milisegundos.
 | **Integración** | `libs/persistence/test/**/*.int-spec.ts`, `apps/tubodega/test/**/*.int-spec.ts` | Repositorios, constraints, RLS, el borde ([07](07-composicion-y-contexto-de-ejecucion.md)) | Postgres | < 60 s |
 | **e2e** | `apps/tubodega/test/**/*.e2e-spec.ts` | Contrato HTTP completo | Postgres + app | < 120 s |
 | **Invariantes** | `test/invariants/**/*.prop-spec.ts` | Propiedades del sistema sobre datos generados | Postgres | < 180 s |
+| **Caja negra** | `scripts/blackbox/*.sh` | El contrato HTTP **a través de un socket real** | Postgres + app arrancada | < 60 s |
 
 Los dos primeros niveles corren con `pnpm test`, sin infraestructura, y son los que
-se ejecutan en watch mientras se programa. Los tres últimos con `pnpm test:e2e`.
+se ejecutan en watch mientras se programa. Los tres siguientes con `pnpm test:e2e`.
+
+El sexto es el único que no corre con vitest ni tiene sufijo: son guiones de shell con
+`curl`, se invocan con `pnpm blackbox` contra un servidor levantado, y existen por lo que
+el nivel e2e **no** puede ver (§6). Su runner cruza además lo que pidió contra los paths
+del contrato publicado y exige de cada operación un camino feliz y uno de error, que es la
+regla de §6 convertida en algo que se comprueba solo.
 
 **El sufijo del archivo es lo que decide el nivel.** `vitest.config.ts` incluye
 `**/*.spec.ts` y `vitest.config.e2e.ts` incluye `*.int-spec.ts`, `*.e2e-spec.ts`
@@ -114,9 +121,11 @@ Lo que se prueba aquí, y en ningún otro sitio:
 - **La detección de ciclos** al reasignar el padre de un nodo (I-10)
 - **Las claves foráneas compuestas**: un `INSERT` con `product_id` de otra
   organización falla aunque el `org_id` propio sea correcto
-- **El DAO genérico, una sola vez**, contra `app_user` y `alert_rule`: cada método,
+- **El DAO genérico, una sola vez**, contra `app_user` y `user_role`: cada método,
   cada operador del DSL y sus errores ([08 §8](08-acceso-a-datos.md)). Las
-  concreciones solo prueban sus métodos exclusivos
+  concreciones solo prueban sus métodos exclusivos. (La familia `Org` se probaba contra
+  `alert_rule` en el plan original; se usó `user_role` porque `alert_rule` no existe hasta
+  la WAVE 5 — decisión D-1 del maestro)
 - **El índice único `NULLS NOT DISTINCT` de `stock_balance`**: dos upserts de un
   producto `QUANTITY` sobre el mismo nodo actualizan una sola fila, no dos. Es la
   prueba de que la cláusula escrita a mano en la migración
@@ -146,6 +155,12 @@ Contra la aplicación completa, por HTTP, usando supertest —ya presente en el
 repositorio— y hablando **solo el contrato público**. Ninguna prueba e2e toca la
 base de datos directamente ni para preparar ni para comprobar; si algo no se puede
 montar por la API, es que a la API le falta algo.
+
+Con un límite que conviene conocer: estas pruebas corren **en proceso**, con
+`fastify.inject()`, que fabrica la petición en memoria y no la transporta. Hay fallos que
+solo aparecen cuando los bytes cruzan un socket —`@fastify/multipart` corta el archivo
+demasiado grande mientras lo recibe y avisa lanzando un `FastifyError`, que el filtro
+convertía en `500` en vez de `413`— y para eso está el nivel de caja negra de §2.
 
 Los diez criterios de éxito de [00](00-vision-y-alcance.md) son, literalmente, diez
 pruebas e2e. Es la definición operativa de *"el MVP está listo"*. El criterio 5
@@ -246,6 +261,16 @@ pnpm db:check      prisma migrate diff --exit-code: el historial de migraciones
 pnpm test          dominio + aplicación          (sin infraestructura)
 pnpm test:e2e      integración + e2e + invariantes
 ```
+
+Y, en un job aparte que corre en paralelo:
+
+```
+pnpm blackbox      el contrato por HTTP contra la aplicación levantada, sobre un
+                   socket real; compila, arranca start:prod, espera al contrato
+```
+
+Va al lado y no dentro del primero porque levantar la aplicación es lento y no tiene por
+qué alargar la ruta crítica: quien rompe un tipo quiere saberlo sin esperar a un build.
 
 Ninguna se salta. `pnpm db:check` existe porque la mitad del esquema es SQL
 escrito a mano dentro de las migraciones ([04 §5.1](04-persistencia.md)): sin
