@@ -228,3 +228,78 @@ describe('LinearRunner.start', () => {
     expect(i.context.values.size).toBe(0);
   });
 });
+
+describe('LinearRunner · los bordes', () => {
+  /** Un manejador que exige no ser omitido, como CAPTURE_BATCH. */
+  class Exigente implements StepHandler {
+    omisiones = 0;
+    constructor(readonly type: StepType, private readonly acepta: boolean) {}
+    parse(raw: unknown): Result<StepPayload> {
+      return ok(raw as StepPayload);
+    }
+    validate(payload: StepPayload): Promise<Result<StepPayload>> {
+      return Promise.resolve(ok(payload));
+    }
+    apply(_payload: StepPayload, ctx: ProcessContext): ProcessContext {
+      return ctx;
+    }
+    onOmit(ctx: ProcessContext): Promise<Result<ProcessContext>> {
+      this.omisiones += 1;
+      return Promise.resolve(
+        this.acepta ? ok(ctx.withDraft({ reason: 'se omitió a propósito' })) : err(new InvalidStepPayloadError('/', 'no')),
+      );
+    }
+  }
+
+  const opcional = [
+    { id: 'lote', type: 'CAPTURE_BATCH', required: false, transitions: [{ to: 'confirmar' }] },
+    { id: 'confirmar', type: 'CONFIRM', required: true, transitions: [{ to: null }] },
+  ];
+
+  it('un manejador puede aceptar la omisión y aportar algo al contexto', async () => {
+    const t = plantilla(opcional);
+    const h = new Exigente(StepType.CAPTURE_BATCH, true);
+    const out = unwrap(
+      await armar(h, new Espia(StepType.CONFIRM)).advance({
+        instance: instancia(t), template: t, stepId: 'lote' as StepId, payload: null, deps: DEPS,
+      }),
+    );
+    expect(h.omisiones).toBe(1);
+    expect(out.instance.context.draft.reason).toBe('se omitió a propósito');
+  });
+
+  it('y puede negarse: es de donde sale batch-step-required', async () => {
+    const t = plantilla(opcional);
+    const r = await armar(new Exigente(StepType.CAPTURE_BATCH, false), new Espia(StepType.CONFIRM)).advance({
+      instance: instancia(t), template: t, stepId: 'lote' as StepId, payload: null, deps: DEPS,
+    });
+    expect(!r.ok && r.error.type).toBe('invalid-step-payload');
+  });
+
+  it('un manejador sin `effects` que cierra el proceso no produce ninguno', async () => {
+    const solo = [{ id: 'confirmar', type: 'CONFIRM', required: true, transitions: [{ to: null }] }];
+    const t = plantilla(solo);
+    const mudo = new Exigente(StepType.CONFIRM, true);
+    const out = unwrap(
+      await armar(mudo).advance({
+        instance: instancia(t), template: t, stepId: 'confirmar' as StepId, payload: {}, deps: DEPS,
+      }),
+    );
+    expect(out.effects).toEqual([]);
+  });
+
+  // Solo puede pasar si la instancia y la plantilla se cargaron desfasadas.
+  it('una instancia parada en un paso que la plantilla no tiene es invalid-template', async () => {
+    const t = plantilla();
+    const base = instancia(t);
+    const perdida = ProcessInstance.rehydrate({
+      id: base.id, orgId: ORG, templateCode: t.code, templateVersion: t.version,
+      state: ProcessState.OPEN, currentStepId: 'fantasma' as StepId,
+      context: base.context, actorId: ACTOR, version: 1,
+    });
+    const r = await armar().advance({
+      instance: perdida, template: t, stepId: 'fantasma' as StepId, payload: null, deps: DEPS,
+    });
+    expect(!r.ok && r.error.type).toBe('invalid-template');
+  });
+});

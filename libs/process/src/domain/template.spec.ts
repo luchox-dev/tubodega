@@ -39,6 +39,17 @@ describe('ProcessTemplate.create · lo que acepta', () => {
     expect(t.transitionsFrom('noexiste' as StepId)).toEqual([]);
   });
 
+  it('un paso sin `required` es opcional: lo que no se declara no se exige', () => {
+    const t = unwrap(
+      ProcessTemplate.create(
+        templateProps({
+          steps: [{ id: 'confirmar', type: 'CONFIRM', transitions: [{ to: null }] }],
+        }),
+      ),
+    );
+    expect(t.steps[0]?.required).toBe(false);
+  });
+
   it('un paso sin `config` lo trae vacío, no indefinido', () => {
     const t = unwrap(ProcessTemplate.create(templateProps()));
     expect(t.steps[0]?.config).toEqual({});

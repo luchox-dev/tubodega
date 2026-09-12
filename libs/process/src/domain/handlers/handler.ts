@@ -25,6 +25,14 @@ export interface ResolvedCode {
  * (spec 06 §4: no rule calls `new Date()`).
  */
 export interface HandlerDeps {
+  /**
+   * The organization the six reads are scoped by. Spec 13 §4.2 writes the
+   * `orgId` into each signature — which is what lets `application/` bind them
+   * straight from the repository methods without an adapter (D-46) — and a
+   * handler has no other way to know it: `ProcessContext` deliberately carries
+   * no tenancy, and `validate` takes no instance.
+   */
+  readonly orgId: OrgId;
   readonly resolveCode: (orgId: OrgId, raw: string) => Promise<ResolvedCode | null>;
   readonly findNode: (orgId: OrgId, id: NodeId) => Promise<Node | null>;
   readonly findNodeByCode: (orgId: OrgId, code: string) => Promise<Node | null>;
@@ -56,6 +64,16 @@ export interface StepHandler<P extends StepPayload = StepPayload> {
 
   /** A new context. This is the only thing a handler produces. */
   apply(payload: P, ctx: ProcessContext, config: StepConfig): ProcessContext;
+
+  /**
+   * What to do when this step is **omitted**. Only `CAPTURE_BATCH` has one: a
+   * handler may demand to be skipped, or demand not to be (spec 13 §4.2), and
+   * the step is optional in the template because the template does not know
+   * what product will go through it — the handler does.
+   *
+   * A handler without one is genuinely not invoked when its step is omitted.
+   */
+  onOmit?(ctx: ProcessContext, deps: HandlerDeps, config: StepConfig): Promise<Result<ProcessContext>>;
 
   /**
    * What to do once the process is over. Only `CONFIRM` has one: `apply` gives

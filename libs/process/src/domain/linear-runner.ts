@@ -50,6 +50,15 @@ export class LinearRunner implements ProcessRunner {
       // generic client has one single way to advance and needs no "skip"
       // endpoint (spec 13 §4.2).
       if (step.required) return err(new RequiredStepSkippedError(stepId));
+
+      // ...but a handler may still demand not to be skipped. `CAPTURE_BATCH`
+      // is the only one that does, and it is why `batch-step-required` exists.
+      const omitido = this.handlers.get(step.type);
+      if (omitido?.onOmit) {
+        const r = await omitido.onOmit(context, deps, step.config);
+        if (!r.ok) return r;
+        context = r.value;
+      }
     } else {
       const handler = this.handlers.get(step.type);
       if (!handler) return err(new UnknownStepTypeError(step.type));
@@ -67,7 +76,9 @@ export class LinearRunner implements ProcessRunner {
 
     context = context.with(stepId, payload);
 
-    const next = step.transitions[0]?.to ?? null;
+    // `parseSteps` guarantees exactly one transition, so there is no fallback
+    // to write here: a branch nothing can take is a branch nobody can test.
+    const next = step.transitions[0]!.to;
     if (next !== null) {
       return ok({ instance: instance.at(next, context), effects: [], payload });
     }

@@ -271,31 +271,31 @@ README.md                           la fila del seed, y el estado de la WAVE 4  
 `HandlerDeps` es un objeto de **funciones**, no de puertos (D-46), y el doble es un objeto
 literal con mapas en memoria — no hay clase que escribir.
 
-- [ ] **Step 1: spec primero**, cada manejador con payload válido, inválido
+- [x] **Step 1: spec primero**, cada manejador con payload válido, inválido
       (`invalid-step-payload` con `pointer`) y `null`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: los cinco simples.** `SCAN_ITEM` (resuelve con `resolveCode`, que devuelve
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: los cinco simples.** `SCAN_ITEM` (resuelve con `resolveCode`, que devuelve
       `null` en vez de lanzar), `CAPTURE_QTY` (positiva; entera si la unidad es
       `UNIT`/`BOX`/`PACK`), `CAPTURE_REASON` (3-500), `SET_DUE_DATE` (futura contra el
       `clock`; el destino ya es `CUSTODY` porque el paso `tenedor` va antes en la plantilla),
       `CAPTURE_PHOTO` (1-5 claves; **acumula en el contexto, no produce efecto** — la
       corrección de [13 §5](docs/specs/13-process.md); una clave que no está en la zona de
       espera o ya fue reclamada es `upload-not-found`, no `invalid-step-payload`).
-- [ ] **Step 4: `SELECT_NODE`,** que es donde se ve que `validate` y `apply` necesitan el
+- [x] **Step 4: `SELECT_NODE`,** que es donde se ve que `validate` y `apply` necesitan el
       `config`: lee `allowedKinds` al validar y `role` al aplicar. Es **un** manejador
       parametrizado y no dos, y es lo que hace que seis plantillas se armen con ocho piezas.
-- [ ] **Step 5: `CAPTURE_BATCH`,** las **seis celdas** de la tabla de
+- [x] **Step 5: `CAPTURE_BATCH`,** las **seis celdas** de la tabla de
       [13 §5](docs/specs/13-process.md) más «`SCAN_ITEM` ya aportó lote». Decide `batchId`
       contra `newBatch` con `findBatchByLot` y `findBatchBySerial`, que es justo por lo que
       `HandlerDeps` creció.
-- [ ] **Step 6: `CONFIRM`.** Borrador completo y coherente; borrador incompleto →
+- [x] **Step 6: `CONFIRM`.** Borrador completo y coherente; borrador incompleto →
       `incomplete-draft` con la lista de lo que falta en el `detail`; los `defaults`
       resueltos con `findNodeByCode` —y no con una lista de uuids, que sería una plantilla
       de fábrica que solo vale para una empresa—; **lo que el borrador ya trae gana sobre el
       `default`**. Emite los tres efectos en orden.
-- [ ] **Step 7:** `registry.ts`. Un registro y no un `switch`: añadir un paso es una clase.
-- [ ] **Step 8: Run** `pnpm test libs/process` → PASS, cobertura de `domain/**` al 100 %.
-- [ ] **Step 9: Commit** `feat(process): los ocho manejadores, y el registro que los reúne`
+- [x] **Step 7:** `registry.ts`. Un registro y no un `switch`: añadir un paso es una clase.
+- [x] **Step 8: Run** `pnpm test libs/process` → PASS, cobertura de `domain/**` al 100 %.
+- [x] **Step 9: Commit** `feat(process): los ocho manejadores, y el registro que los reúne`
 
 ---
 

@@ -1,5 +1,6 @@
-import type { StorageKey } from '@app/catalog';
-import type { NodeId } from '@app/inventory';
+import type { BatchId, ProductId, StorageKey } from '@app/catalog';
+import type { NodeId, Quantity } from '@app/inventory';
+import type { BatchDraft } from './drafts.js';
 
 /** The eight step types of the MVP (spec 13 §2). Adding a ninth is a class. */
 export enum StepType {
@@ -18,17 +19,34 @@ export const STEP_TYPES = Object.values(StepType);
 export const isStepType = (v: unknown): v is StepType => STEP_TYPES.includes(v as StepType);
 
 // ── The payloads, one per type (spec 13 §2)
+//
+// Several carry fields the client never sends, marked "resolved". `validate`
+// is the only asynchronous half of a handler, so it is the only one that can
+// ask the world; `apply` is synchronous by design — it must not touch the
+// database — and `validate` returns the payload, which is therefore where what
+// it resolved has to travel. It also ends up in the `step_completion`, where
+// what the engine understood is worth keeping.
 
 export interface ScanItemPayload {
   readonly code: string;
+  /** Resolved. */
+  readonly productId?: ProductId;
+  /** Resolved, if the code was a serial that already exists. */
+  readonly batchId?: BatchId;
 }
 export interface CaptureBatchPayload {
   readonly lotCode?: string;
   readonly serial?: string;
   readonly expiresAt?: Date;
+  /** Resolved: the batch exists. */
+  readonly batchId?: BatchId;
+  /** Resolved: it does not, and `CONFIRM` will create it. */
+  readonly newBatch?: BatchDraft;
 }
 export interface CaptureQtyPayload {
   readonly quantity: string;
+  /** Parsed. */
+  readonly value?: Quantity;
 }
 export interface CapturePhotoPayload {
   readonly storageKeys: readonly StorageKey[];
@@ -42,8 +60,14 @@ export interface SetDueDatePayload {
 export interface CaptureReasonPayload {
   readonly reason: string;
 }
-/** `CONFIRM` takes nothing: everything it needs is already in the context. */
-export type ConfirmPayload = Record<string, never>;
+/**
+ * `CONFIRM` takes nothing from the client — `{}` is what arrives. What comes
+ * out of `validate` carries the sides its `config.defaults` resolved.
+ */
+export interface ConfirmPayload {
+  readonly fromNodeId?: NodeId;
+  readonly toNodeId?: NodeId;
+}
 
 /** What a handler accepts. Each type refines this union — see spec 13 §5. */
 export type StepPayload =
