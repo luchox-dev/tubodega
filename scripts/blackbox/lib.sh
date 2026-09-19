@@ -260,6 +260,9 @@ cantidad() {
   local got want
   got="$(jq -r "$JQ_MILI ($2) | mili" < "$BODY_F" 2>/dev/null)"
   want="$(jq -rn "$JQ_MILI \"$3\" | mili" 2>/dev/null)"
+  # Dos vacíos son iguales y no son una comprobación: si jq no devolvió un
+  # número, lo que falló fue la aserción, no el sistema.
+  if [[ -z "$got" || -z "$want" ]]; then fail "$1 — no salió número de «$2» (got=«$got» want=«$want»)"; return; fi
   if [[ "$got" == "$want" ]]; then pass "$1"; else fail "$1 — $2 dio «$got» milésimas, esperaba «$want»"; fi
 }
 
@@ -359,7 +362,7 @@ reconciliar_ledger() { # reconciliar_ledger <token> <productId> [etiqueta]
   mov="$PAGINAS"
   recorrer_paginas GET "/stock?productId=$p&custodialOnly=false&nonZeroOnly=false&limit=200" "$token" || return 1
   saldo="$PAGINAS"
-  malas="$(jq -rn "$JQ_MILI" --argjson m "$mov" --argjson s "$saldo" '
+  malas="$(jq -rn --argjson m "$mov" --argjson s "$saldo" "$JQ_MILI"'
       ($m | reduce .[] as $x ({};
             .[$x.fromNodeId + "|" + ($x.batchId // "—")] += -($x.quantity | mili)
           | .[$x.toNodeId   + "|" + ($x.batchId // "—")] +=  ($x.quantity | mili)
@@ -394,7 +397,7 @@ reconciliar_custodias() { # reconciliar_custodias <token>
   done
 
   # I-18 primero: cada préstamo debe tener entre cero y todo lo que salió.
-  malas="$(jq -rn "$JQ_MILI" --argjson c "$custodias" '
+  malas="$(jq -rn --argjson c "$custodias" "$JQ_MILI"'
     $c | map(select((.pending | mili) < 0 or (.pending | mili) > (.checkOut.quantity | mili)))
        | .[] | "préstamo \(.checkOut.id): pendiente \(.pending) de \(.checkOut.quantity)"')"
   if [[ -z "$malas" ]]; then
@@ -403,7 +406,7 @@ reconciliar_custodias() { # reconciliar_custodias <token>
     falla_detalle "custodias · pendiente imposible (I-18)" "$malas"
   fi
 
-  malas="$(jq -rn "$JQ_MILI" --argjson c "$custodias" --argjson s "$saldos" '
+  malas="$(jq -rn --argjson c "$custodias" --argjson s "$saldos" "$JQ_MILI"'
       ($c | reduce .[] as $x ({};
             .[$x.checkOut.productId + "|" + ($x.checkOut.batchId // "—")] += ($x.pending | mili)
         )) as $pendiente
@@ -421,14 +424,18 @@ reconciliar_custodias() { # reconciliar_custodias <token>
   fi
 }
 
-# arqueo <token> <productId>... — la última línea de cada escenario.
+# arqueo <token> <productId:etiqueta>... — la última línea de cada escenario.
+# La etiqueta importa: los UUIDv7 son ordenados en el tiempo, así que dos
+# productos creados con segundos de diferencia comparten los primeros ocho
+# caracteres y un informe que los recorte no distingue cuál no cuadra.
 arqueo() {
   local token="$1"; shift
   printf '\n  \033[2m── arqueo ──\033[0m\n'
-  local p
-  for p in "$@"; do
-    reconciliar_conservacion "$token" "$p"
-    reconciliar_ledger "$token" "$p"
+  local par p etq
+  for par in "$@"; do
+    p="${par%%:*}"; etq="${par#*:}"; [[ "$etq" == "$p" ]] && etq="${p:0:8}"
+    reconciliar_conservacion "$token" "$p" "$etq"
+    reconciliar_ledger "$token" "$p" "$etq"
   done
   reconciliar_custodias "$token"
 }
@@ -452,26 +459,48 @@ paso() {
 # del motor: un cliente genérico no consulta la plantilla, va detrás de
 # nextStep, y una suite que mande los pasos de memoria no probaría eso nunca.
 # ─────────────────────────────────────────────────────────────────────────────
-ejecutar_proceso() {
+# abrir_proceso <var> <token> <templateCode>
+# Deja la instancia en la variable y en $PROC_SIGUIENTE el paso que el servidor
+# pide a continuación.
+abrir_proceso() {
   local -n inst_out="$1"
-  local token="$2" code="$3"; shift 3
+  local token="$2" code="$3"
   req POST /process-instances --token "$token" --body "$(jq -nc --arg c "$code" '{templateCode:$c}')"
   ok "$code · abre la instancia" 201
-  local inst anunciado par id payload
-  inst="$(jqv '.instance.id')"; inst_out="$inst"
-  anunciado="$(jqv '.nextStep.id // ""')"
+  inst_out="$(jqv '.instance.id')"
+  PROC_SIGUIENTE="$(jqv '.nextStep.id // ""')"
+}
+
+# avanzar_proceso <instancia> <token> <etiqueta> <stepId:payload>...
+# Recorre los pasos que se le den y para. No exige que el proceso termine: eso
+# es lo que permite abandonar una instancia a la mitad, que es un caso real.
+avanzar_proceso() {
+  local inst="$1" token="$2" etq="$3"; shift 3
+  local par id payload
   for par in "$@"; do
     id="${par%%:*}"; payload="${par#*:}"
-    if [[ "$anunciado" != "$id" ]]; then
-      falla_detalle "$code · el servidor pedía «$anunciado» y el guion manda «$id»"
+    if [[ "$PROC_SIGUIENTE" != "$id" ]]; then
+      falla_detalle "$etq · el servidor pedía «$PROC_SIGUIENTE» y el guion manda «$id»"
       return 1
     fi
     paso "$inst" "$token" "$id" "$payload"
-    ok "$code · $id" 200
-    anunciado="$(jqv '.nextStep.id // ""')"
+    ok "$etq · $id" 200
+    PROC_SIGUIENTE="$(jqv '.nextStep.id // ""')"
   done
-  if [[ -n "$anunciado" ]]; then
-    falla_detalle "$code · quedó pidiendo «$anunciado» y el guion se acabó"
+  return 0
+}
+
+# ejecutar_proceso <var> <token> <templateCode> <stepId:payload>...
+# El proceso entero, de punta a punta, y exige que termine: si el servidor
+# sigue pidiendo algo cuando el guion se acabó, la plantilla cambió y esta
+# suite tiene que enterarse.
+ejecutar_proceso() {
+  local -n inst_ref="$1"
+  local token="$2" code="$3"; shift 3
+  abrir_proceso inst_ref "$token" "$code"
+  avanzar_proceso "$inst_ref" "$token" "$code" "$@" || return 1
+  if [[ -n "$PROC_SIGUIENTE" ]]; then
+    falla_detalle "$code · quedó pidiendo «$PROC_SIGUIENTE» y el guion se acabó"
     return 1
   fi
   return 0
@@ -515,6 +544,24 @@ reparto() {
   if [[ "$got" == "$want" ]]; then pass "$desc"; else fail "$desc — llegaron [$got], esperaba [$want]"; fi
 }
 
+# reparto_legitimo <descripción> <alternativa>...
+# Como `reparto`, pero admitiendo varias resoluciones. Una carrera de verdad no
+# siempre se resuelve igual: si la primera petición terminó antes de que la
+# segunda entrara, la segunda es un eco (201) y no un choque en vuelo (409), y
+# las dos son correctas. Fijar una sola sería escribir una prueba intermitente
+# por construcción y echarle después la culpa al sistema. Lo que no admite
+# alternativa es el efecto, y eso se comprueba en el ledger.
+reparto_legitimo() {
+  local desc="$1"; shift
+  local got alt want
+  got="$(printf '%s\n' "${PAR_ST[@]}" | sort | tr '\n' ' ')"
+  for alt in "$@"; do
+    want="$(printf '%s\n' $alt | sort | tr '\n' ' ')"
+    if [[ "$got" == "$want" ]]; then pass "$desc [${got% }]"; return; fi
+  done
+  fail "$desc — llegaron [${got% }] y no es ninguna forma legítima ($*)"
+}
+
 # par_body <índice> <filtro jq> — el cuerpo de una de las respuestas paralelas
 par_body() { jq -r "$2" < "$TMP/par.$1.body" 2>/dev/null; }
 
@@ -543,7 +590,7 @@ frontera_de() {
 saldo() {
   local token="$1" n="$2" p="$3" b="${4:-}"
   req GET "/stock?nodeId=$n&productId=$p&nonZeroOnly=false&limit=200" --token "$token" --no-cov
-  jq -r "$JQ_MILI" --arg b "$b" '
+  jq -r --arg b "$b" "$JQ_MILI"'
     [.data[] | select(($b == "") or (.batchId == $b))]
     | map(.quantity | mili) | add // 0' < "$BODY_F"
 }
@@ -552,7 +599,8 @@ saldo() {
 saldo_es() {
   local got want
   got="$(saldo "$2" "$3" "$4" "${6:-}")"
-  want="$(jq -rn "$JQ_MILI" --arg q "$5" '$q | mili')"
+  want="$(jq -rn --arg q "$5" "$JQ_MILI"'$q | mili')"
+  if [[ -z "$got" || -z "$want" ]]; then fail "$1 — no salió número (got=«$got» want=«$want»)"; return; fi
   if [[ "$got" == "$want" ]]; then pass "$1"; else fail "$1 — hay $got milésimas, esperaba $want"; fi
 }
 
