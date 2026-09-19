@@ -1,5 +1,5 @@
 import { v7 } from 'uuid';
-import { unwrap, type OrgId, type ProcessInstanceId, type UserId } from '@app/common';
+import { unwrap, type Cursor, type OrgId, type ProcessInstanceId, type UserId } from '@app/common';
 import { Organization, Role, User } from '@app/tenancy';
 import { Quantity, type NodeId } from '@app/inventory';
 import type { BatchId, ProductId, StorageKey } from '@app/catalog';
@@ -191,19 +191,40 @@ describe('las instancias de proceso y sus pasos', () => {
     });
   });
 
-  it('pagina por cursor sin saltarse ni repetir', async () => {
+  /**
+   * This is also the regression that holds `process_instance.created_at` at
+   * `timestamptz(3)` (D-67, D-68), and it is worth saying so out loud because
+   * nothing in the shape of the test announces it: what makes it bite is that
+   * `withRollback` runs the whole body in **one** transaction, so Postgres
+   * hands all five rows the same `now()`. Move a `save` out of it and the
+   * timestamps spread apart and the test keeps passing over a broken cursor.
+   *
+   * With a microsecond column the cursor — an ISO string, which only reaches
+   * the millisecond — comes out below the stored value and the second page
+   * arrives empty.
+   */
+  it('pagina por cursor sin saltarse ni repetir, con un solo now() (D-67, D-68)', async () => {
     await withRollback(uow, { pool: 'system' }, async () => {
       const { orgId, actorId } = await mundo();
-      for (let n = 0; n < 3; n += 1) await instances.save(abierta(orgId, actorId));
+      const creadas: string[] = [];
+      for (let n = 0; n < 5; n += 1) {
+        const i = abierta(orgId, actorId);
+        await instances.save(i);
+        creadas.push(i.id);
+      }
 
       const page = { limit: 2, sort: { field: 'createdAt', dir: 'desc' } } as const;
-      const uno = await instances.list(orgId, {}, page);
-      expect(uno.data).toHaveLength(2);
-      expect(uno.hasMore).toBe(true);
-      const dos = await instances.list(orgId, {}, { ...page, cursor: uno.nextCursor! });
-      expect(dos.data).toHaveLength(1);
-      expect(dos.hasMore).toBe(false);
-      expect(new Set([...uno.data, ...dos.data].map((i) => i.id)).size).toBe(3);
+      const vistas: string[] = [];
+      let cursor: Cursor | undefined;
+      for (let vuelta = 0; vuelta < 10; vuelta += 1) {
+        const p = await instances.list(orgId, {}, { ...page, ...(cursor ? { cursor } : {}) });
+        // Without the fix this page came back empty and the walk stopped at 2 of 5.
+        expect(p.data.length).toBeGreaterThan(0);
+        vistas.push(...p.data.map((i) => i.id));
+        if (p.nextCursor === undefined) break;
+        cursor = p.nextCursor;
+      }
+      expect([...vistas].sort()).toEqual([...creadas].sort());
     });
   });
 
