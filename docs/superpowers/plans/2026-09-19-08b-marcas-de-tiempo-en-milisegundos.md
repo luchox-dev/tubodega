@@ -4,7 +4,7 @@
 > `docs/superpowers/plans/2026-09-19-08b-marcas-de-tiempo-en-milisegundos.md`
 > Derivado del plan 8, como 3b..3f lo fueron del 3. **Sin fases del maestro.**
 
-## Estado: **propuesto**
+## Estado: **ejecutado** · 2026-09-19
 
 ---
 
@@ -119,7 +119,7 @@ commit se hace en verde, al final.
 `libs/persistence/prisma/migrations/2026MMDDHHMMSS_all_timestamps_millisecond/migration.sql`
 (nuevo); `libs/persistence/prisma/schema.prisma` (M)
 
-- [ ] **Step 1: la regresión de la cuarta clave.** Dos casos, los dos sobre filas insertadas **por SQL crudo** con
+- [x] **Step 1: la regresión de la cuarta clave.** Dos casos, los dos sobre filas insertadas **por SQL crudo** con
       `occurred_at = now()` —el mecanismo exacto del defecto, y el único escritor posible:
       la tabla tiene `REVOKE UPDATE, DELETE`, así que el microsegundo hay que meterlo al
       insertar—. Reutilizar el sembrador de `libs/persistence/test/support/raw-rows.ts`
@@ -133,9 +133,9 @@ commit se hace en verde, al final.
          sitio donde se usa.
       El assert que carga el peso es el de «esta página no viene vacía», con su comentario
       diciendo qué se veía sin el arreglo — molde de `catalog.int-spec.ts:301`.
-- [ ] **Step 2: Run** `pnpm test:e2e libs/persistence/test/repositories/inventory` →
+- [x] **Step 2: Run** `pnpm test:e2e libs/persistence/test/repositories/inventory` →
       **FAIL**. Anotar los dos casos y con cuántas filas de 5 terminó cada recorrido.
-- [ ] **Step 3: la prueba de convenciones**, molde de `test/schema/rls.int-spec.ts` —que es
+- [x] **Step 3: la prueba de convenciones**, molde de `test/schema/rls.int-spec.ts` —que es
       el precedente de la casa para «afirmar una propiedad del DDL vivo»— con el arnés
       `createPersistenceHarness()` y el pool `system`. Dos casos, ninguno con lista de
       columnas:
@@ -153,9 +153,9 @@ commit se hace en verde, al final.
       → `expect(rows).toEqual([])`, y el mensaje de fallo nombra las columnas.
       El segundo caso, el mismo `select` con
       `data_type like 'timestamp without time zone'` → también vacío.
-- [ ] **Step 4: Run** → **FAIL** con **32** filas. Anotar la lista; es la que hay que
+- [x] **Step 4: Run** → **FAIL** con **32** filas. Anotar la lista; es la que hay que
       escribir en la migración y sirve de comprobación cruzada.
-- [ ] **Step 5: la migración.** Fichero nuevo —**no** se toca
+- [x] **Step 5: la migración.** Fichero nuevo —**no** se toca
       `20260919121500_cursor_millisecond_precision`— con los 32
       `ALTER TABLE "x" ALTER COLUMN "y" TYPE timestamptz(3);` y una cabecera que explique
       D-68 en prosa, como hizo la de D-67. Las 32, por tabla:
@@ -172,12 +172,12 @@ commit se hace en verde, al final.
       Dejar dicho en la cabecera que Postgres **redondea** al estrechar (no trunca), así que
       un valor ya guardado queda en el milisegundo más cercano y a partir de ahí es
       exactamente representable por un `Date` — que es la propiedad entera.
-- [ ] **Step 6: `schema.prisma`**, las mismas 32 líneas a `@db.Timestamptz(3)`. Mecánico, y
+- [x] **Step 6: `schema.prisma`**, las mismas 32 líneas a `@db.Timestamptz(3)`. Mecánico, y
       `pnpm db:check` es quien dice si se escapó alguna.
-- [ ] **Step 7: Run** `pnpm db:migrate` sobre `tubodega` y `tubodega_test`, luego
+- [x] **Step 7: Run** `pnpm db:migrate` sobre `tubodega` y `tubodega_test`, luego
       `pnpm db:check` → **0**, la prueba de convenciones → **PASS** con 0 filas, y los dos
       casos del Step 1 → **PASS**.
-- [ ] **Step 8: Commit** `fix(persistence): toda marca de tiempo a milisegundos (D-68)`
+- [x] **Step 8: Commit** `fix(persistence): toda marca de tiempo a milisegundos (D-68)`
 
 ---
 
@@ -189,24 +189,24 @@ mutando: revertir su `ALTER` a mano sobre `tubodega_test`, correr, y volver a ap
 **Files:** `libs/persistence/test/repositories/inventory/nodes.int-spec.ts` (M);
 `libs/persistence/test/repositories/process/instance.repository.int-spec.ts` (M)
 
-- [ ] **Step 1: `node.created_at`** — hoy no la sostiene nada. Caso nuevo con el molde de
+- [x] **Step 1: `node.created_at`** — hoy no la sostiene nada. Caso nuevo con el molde de
       `catalog.int-spec.ts:268-309`: N nodos guardados **en una sola transacción** (un
       `now()` para todos), recorrer con `sort: {field:'createdAt'}` y `limit < N`, ninguna
       página vacía, el conjunto completo y ordenado al final.
-- [ ] **Step 2: `process_instance.created_at`** — el caso de
+- [x] **Step 2: `process_instance.created_at`** — el caso de
       `instance.repository.int-spec.ts:194` ya funciona como regresión, pero por accidente.
       Renombrarlo para que diga que sostiene D-67/D-68 y añadirle el comentario que explica
       que el `withRollback` es lo que hace que las tres filas compartan `now()`, y que
       sacar un `save` de ahí lo desarma. Si con tres filas y `limit: 2` el recorrido es
       demasiado corto para ser convincente, subirlo a 5 y `limit: 2`.
-- [ ] **Step 3: mutar, ver rojo, revertir.** Por cada una de las tres columnas
+- [x] **Step 3: mutar, ver rojo, revertir.** Por cada una de las tres columnas
       (`product.created_at`, `node.created_at`, `process_instance.created_at`), sobre
       `tubodega_test`:
       `ALTER TABLE "x" ALTER COLUMN "y" TYPE timestamptz(6);` → correr su caso → **anotar
       qué falló y con cuántas filas terminó el recorrido** → `TYPE timestamptz(3)`.
       Tres mutaciones, tres rojos. **Ninguna se commitea.**
-- [ ] **Step 4: Run** `pnpm test:e2e` entero → PASS.
-- [ ] **Step 5: Commit** `test(persistence): las regresiones que sostienen las cuatro claves de cursor`
+- [x] **Step 4: Run** `pnpm test:e2e` entero → PASS.
+- [x] **Step 5: Commit** `test(persistence): las regresiones que sostienen las cuatro claves de cursor`
 
 ---
 
@@ -215,13 +215,13 @@ mutando: revertir su `ALTER` a mano sobre `tubodega_test`, correr, y volver a ap
 **Files:** `libs/persistence/src/dao/base/keyset.ts` (M);
 `libs/persistence/src/dao/movement.dao.ts` (M); `scripts/blackbox/20-catalogo.sh` (M)
 
-- [ ] **Step 1: los dos comentarios** (en inglés, sin cambio de comportamiento), en los dos
+- [x] **Step 1: los dos comentarios** (en inglés, sin cambio de comportamiento), en los dos
       sitios donde un `Date` se convierte en parte de cursor: `toPart` de `keyset.ts:22-26`
       y el `encodeCursor` de `movement.dao.ts:117`. Que digan que el ISO de 3 decimales es
       seguro **porque D-68 obliga a la columna a ser `timestamptz(3)`**, y que quien quiera
       guardar microsegundos tiene que arreglar esto primero. Sin la nota, el siguiente
       lector ve una conversión que pierde precisión y la «arregla» por el otro lado.
-- [ ] **Step 2: la caja negra.** En `20-catalogo.sh`, la reproducción que nombraste, por el
+- [x] **Step 2: la caja negra.** En `20-catalogo.sh`, la reproducción que nombraste, por el
       socket real y no por `inject`: `POST /v1/products/import` con un lote grande en una
       sola petición (todas las filas con el mismo `now()`), luego recorrer
       `GET /v1/products?sort=createdAt&limit=50` siguiendo `nextCursor` hasta agotarlo y
@@ -229,10 +229,10 @@ mutando: revertir su `ALTER` a mano sobre `tubodega_test`, correr, y volver a ap
       esperado. Es el par de endpoints exacto del defecto; que solo lo cubran los int-spec
       deja sin probar el camino que el cliente usa. Contar las comprobaciones nuevas para
       la bitácora.
-- [ ] **Step 3: Run** contra un binario recién compilado en puerto libre:
+- [x] **Step 3: Run** contra un binario recién compilado en puerto libre:
       `pnpm build && PORT=3100 node dist/apps/tubodega/main &`, `ss -ltnp | grep :3100`,
       `BASE=http://localhost:3100 pnpm blackbox` → **0 fallos**.
-- [ ] **Step 4: Commit** `test(blackbox): mil filas y su segunda página`
+- [x] **Step 4: Commit** `test(blackbox): mil filas y su segunda página`
 
 ---
 
@@ -240,16 +240,97 @@ mutando: revertir su `ALTER` a mano sobre `tubodega_test`, correr, y volver a ap
 
 **Files:** este documento; el maestro; `README.md`
 
-- [ ] **Step 1:** cerrar este documento — lo ejecutado, los rojos vistos (los dos de la Task
+- [x] **Step 1:** cerrar este documento — lo ejecutado, los rojos vistos (los dos de la Task
       1, las 32 filas de la Task 2, las tres mutaciones de la Task 3), las desviaciones, y
       «lo que encontró cada capa de prueba».
-- [ ] **Step 2: el maestro:** **D-68** en la tabla de decisiones; la coletilla en la fila
+- [x] **Step 2: el maestro:** **D-68** en la tabla de decisiones; la coletilla en la fila
       **D-67** («revisada y ampliada en el 8b: las claves de cursor eran cuatro»); y la fila
       **8b · hecho *(derivado)*** en la tabla de planes, entre el 8 y el 9.
-- [ ] **Step 3: `README.md`** — la convención de precisión junto a lo que ya documenta de
+- [x] **Step 3: `README.md`** — la convención de precisión junto a lo que ya documenta de
       `pnpm db:check`: toda `timestamptz` es `(3)` y hay una prueba que lo exige.
-- [ ] **Step 4:** las seis puertas.
-- [ ] **Step 5: Commit** `docs(plan): la bitácora del plan 8b`
+- [x] **Step 4:** las seis puertas.
+- [x] **Step 5: Commit** `docs(plan): la bitácora del plan 8b`
+
+---
+
+## Bitácora
+
+Ejecutado el 2026-09-19 en `plan/08b-marcas-de-tiempo-en-milisegundos`, cuatro tareas y
+cinco commits. Al terminar, las **35** columnas de tiempo del esquema son `timestamptz(3)`
+y hay una prueba que lo exige sin guardar una lista de cuáles.
+
+### Los rojos que se vieron
+
+| Qué | Cómo salió |
+|---|---|
+| `movement.occurred_at`, por `GET /v1/movements` | `expected 0 to be greater than 0` — la segunda página vacía |
+| `movement.occurred_at`, por las custodias | lo mismo, y por su cuenta: `openCustodies` keysetea a mano |
+| La prueba de convenciones | **32 filas**, `alert.due_at (6)` … `stock_balance.updated_at (6)` |
+| `product.created_at` mutada a `(6)` | el caso del plan 8 cayó |
+| `node.created_at` mutada a `(6)` | `expected [ …(20) ] to deeply equal [ …(5) ]` |
+| `process_instance.created_at` mutada a `(6)` | `expected 0 to be greater than 0` |
+| Las tres del blackbox, con la columna mutada en la base del servidor | y entre ellas «la segunda no viene vacía — dio 0» |
+
+Las tres mutaciones se revirtieron; ninguna se commiteó.
+
+### Lo que se encontró y no estaba previsto
+
+**El defecto tiene dos síntomas, y la dirección decide cuál.** El plan —y la nota de
+D-67, y el comentario de la prueba del plan 8— hablan de saltarse filas. Eso es lo que pasa
+**descendente**: el cursor truncado cae por debajo del valor guardado y
+`(created_at, id) < (cursor)` excluye el milisegundo entero. **Ascendente** el mismo
+truncamiento hace lo contrario: `> (cursor)` vuelve a incluir lo ya visto, y el recorrido
+**no termina**. Se vio mutando `node.created_at`, donde el caso nuevo devolvió 20 filas en
+vez de 5 — y solo porque lleva tope de vueltas.
+
+**La regresión del plan 8 moría de timeout, no de aserción.** Recorría con `while (cursor)`
+y sin tope, y ordena ascendente: con la columna mutada tardaba **30 002 ms** en caer por el
+límite de vitest en lugar de fallar donde tiene el `expect`. Con un tope de 10 vueltas falla
+en **80 ms** y dice `['M-0','M-1','M-0','M-1',…]`, que nombra el síntoma. El comentario que
+decía «el bucle terminaba con 2 de 5» describía el caso descendente y no el suyo; corregido.
+
+**El plugin de camelCase alcanza también a la consulta cruda.** La primera versión de la
+prueba de convenciones pedía `table_name` de `information_schema` y recibía 32 filas de
+`undefined.undefined (undefined)`: `KyselyFactory` monta `CamelCasePlugin`, que mapea la
+salida de cualquier consulta, `sql` incluida. El rojo era correcto y el mensaje inútil.
+
+**`prisma migrate dev` no pidió reset.** Era el riesgo que el plan 8 pagó al editar una
+migración ya aplicada; escribiéndola nueva, `tubodega` y `tubodega_test` avanzaron con las
+32 columnas sin perder una fila.
+
+**La caja negra cuenta 548 o 549 según el entorno, y no es una flakez.** La comprobación
+del token caducado de `10-tenencia.sh` solo corre si `JWT_SECRET` está exportado en el
+shell —es la grieta que la propia suite declara con un `skip`—, así que sourcear `.env`
+antes de `pnpm blackbox` suma una. Es anterior a este plan; queda anotado porque cuesta
+media hora averiguarlo cuando el total baila entre dos corridas.
+
+### Desviaciones
+
+| Qué dijo el plan | Qué se hizo, y por qué |
+|---|---|
+| Cinco tareas: la cuarta clave, las marcas de tiempo, las regresiones, los comentarios, la bitácora | **Cuatro.** Partir el ciclo rojo-verde entre dos tareas obligaba a un commit en rojo; la regresión de la cuarta clave y la migración son un solo ciclo y van en un commit |
+| El comentario de `Product.createdAt` en `schema.prisma` no se nombraba | Decía que la precisión importa «porque esta columna es clave de cursor», que después de D-68 es la razón pequeña. Reescrito |
+| La prueba del plan 8 no se tocaba | Ganó tope de vueltas y su comentario corregido: sin eso, su rojo son 30 s de timeout |
+| «Contar las comprobaciones nuevas» | **Siete**, no las pocas previstas: el recorrido ascendente completo (tres asertos), el descendente de dos páginas (dos), y las dos de forma. Catálogo 132 → 139, total 541 → **548** |
+
+### Lo que encontró cada capa de prueba
+
+**La integración** encontró todo lo que este plan arregla. Las dos claves vivas salieron
+rojas sin tocar nada, y las tres ya parcheadas solo hablaron al mutarlas — que es
+exactamente el hueco que el plan venía a cerrar: una columna arreglada sin prueba es una
+columna que el siguiente refactor devuelve al estado anterior en silencio.
+
+**La caja negra** confirmó que el camino del cliente estaba cubierto y no solo el del
+repositorio, y es la única capa que reprodujo el síntoma **tal como se reportó**: segunda
+página vacía sobre el par `POST /v1/products/import` + `GET /v1/products?sort=createdAt`.
+
+**La prueba de convenciones** es la que no encontró nada hoy y existe para mañana: lo que
+falla en ella no es un defecto que ya pasó, sino una tabla nueva que aún no se ha escrito.
+
+### Decisión nueva
+
+**D-68**, en el maestro. Y con ella, la corrección del registro de D-67: las columnas
+alcanzables como clave de cursor eran **cuatro**.
 
 ---
 
