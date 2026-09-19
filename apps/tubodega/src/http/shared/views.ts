@@ -2,8 +2,9 @@ import type { Page } from '@app/common';
 import type {
   Batch, CustomFieldDefinition, Product, ProductCode, StoredMedia,
 } from '@app/catalog';
+import { Quantity } from '@app/inventory';
 import type { Movement, Node, NodeTree, OpenCustody, StockPosition } from '@app/inventory';
-import type { ProcessTemplate } from '@app/process';
+import type { ProcessInstance, ProcessTemplate, StepCompletion, StepDefinition } from '@app/process';
 import type { Organization, User } from '@app/tenancy';
 import type { CustomFieldView } from '../custom-fields/custom-fields.dto.js';
 import type { MovementView, StockPositionView } from '../movements/movements.dto.js';
@@ -12,7 +13,10 @@ import type { OpenCustodyView } from '../stock/stock.dto.js';
 import type {
   BatchView, MediaView, ProductCodeView, ProductView,
 } from '../products/products.dto.js';
-import type { ProcessTemplateView } from '../process-templates/process-templates.dto.js';
+import type { ProcessTemplateView, StepView } from '../process-templates/process-templates.dto.js';
+import type {
+  ProcessInstanceView, StepCompletionView,
+} from '../process-instances/process-instances.dto.js';
 import type { OrganizationView, UserView } from './shared.dto.js';
 
 export const userView = (u: User): UserView => ({
@@ -143,11 +147,53 @@ export const processTemplateView = (t: ProcessTemplate): ProcessTemplateView => 
   code: t.code,
   version: t.version,
   active: t.active,
-  steps: t.steps.map((s) => ({
-    id: s.id,
-    type: s.type,
-    required: s.required,
-    config: s.config,
-    transitions: s.transitions.map((tr) => ({ to: tr.to })),
-  })),
+  steps: t.steps.map(stepView),
+});
+
+export const stepView = (s: StepDefinition): StepView => ({
+  id: s.id,
+  type: s.type,
+  required: s.required,
+  config: s.config,
+  transitions: s.transitions.map((tr) => ({ to: tr.to })),
+});
+
+export const processInstanceView = (i: ProcessInstance): ProcessInstanceView => ({
+  id: i.id,
+  templateCode: i.templateCode,
+  templateVersion: i.templateVersion,
+  state: i.state,
+  ...(i.currentStepId !== undefined ? { currentStepId: i.currentStepId } : {}),
+  actorId: i.actorId,
+});
+
+/**
+ * A stored payload is the **enriched** one `validate` gave back (D-56), so it
+ * carries domain values and not only JSON: `CAPTURE_QTY` leaves a `Quantity`
+ * and `CAPTURE_BATCH` a `Date`. Handing that straight to the serializer is a
+ * 500 — a `Quantity` keeps its thousandths in a `bigint`, and `JSON.stringify`
+ * refuses those outright.
+ *
+ * So the wire form is built here, where every other entity of the house is also
+ * turned into a view: decimals as strings and dates as ISO 8601, which is what
+ * spec 03 §1 says the contract speaks.
+ */
+const payloadView = (value: unknown): unknown => {
+  if (value instanceof Quantity) return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(payloadView);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, payloadView(v)]));
+  }
+  return value;
+};
+
+export const stepCompletionView = (c: StepCompletion): StepCompletionView => ({
+  id: c.id,
+  stepId: c.stepId,
+  actorId: c.actorId,
+  // ...or the literal null of an omitted step, which is a different thing from
+  // a step that never ran.
+  payload: (payloadView(c.payload) ?? null) as Record<string, unknown> | null,
+  completedAt: c.completedAt.toISOString(),
 });

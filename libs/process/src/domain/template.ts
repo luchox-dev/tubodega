@@ -179,4 +179,18 @@ export class ProcessTemplate {
   transitionsFrom(id: StepId): readonly Transition[] {
     return this.step(id)?.transitions ?? [];
   }
+
+  /**
+   * P-9: a template with instances is not modified, it is versioned — and the
+   * old version does not disappear, it stops being offered. A receipt from
+   * March is still audited with March's rules; what changes is that nobody
+   * starts a new process on them.
+   *
+   * The steps go through untouched rather than back through `create`: they are
+   * already parsed, and re-validating what is leaving memory would be the one
+   * place the validator cannot tell you anything new.
+   */
+  deactivated(): ProcessTemplate {
+    return new ProcessTemplate(this.id, this.orgId, this.code, this.version, this.steps, false);
+  }
 }

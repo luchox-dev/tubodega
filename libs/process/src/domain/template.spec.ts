@@ -148,3 +148,18 @@ describe('ProcessTemplate.create · el validador', () => {
     expect(!r.ok && r.error.message).toContain('cantidda');
   });
 });
+
+describe('desactivar una versión (P-9)', () => {
+  it('conserva id, código, versión y pasos, y solo apaga `active`', () => {
+    const viva = unwrap(ProcessTemplate.create(templateProps()));
+    const muerta = viva.deactivated();
+
+    expect(muerta.active).toBe(false);
+    expect(muerta.id).toBe(viva.id);
+    expect(muerta.code).toBe(viva.code);
+    expect(muerta.version).toBe(viva.version);
+    expect(muerta.steps).toEqual(viva.steps);
+    // La versión vieja no desaparece: deja de ofrecerse.
+    expect(viva.active).toBe(true);
+  });
+});

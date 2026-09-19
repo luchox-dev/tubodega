@@ -23,12 +23,17 @@ import {
   KyselySessionRepository,
   KyselyStockBalanceRepository,
   KyselyUserRepository,
+  KyselyProcessInstanceRepository,
   KyselyProcessTemplateRepository,
+  KyselyStepCompletionRepository,
   PersistenceModule,
 } from '@app/persistence';
 import { ORGANIZATION_REPOSITORY, ORG_PROVISIONER, SESSION_REPOSITORY, USER_REPOSITORY } from '@app/tenancy';
 import { InventoryModule, MOVEMENT_REPOSITORY, NODE_REPOSITORY, STOCK_BALANCE_REPOSITORY } from '@app/inventory';
-import { PROCESS_TEMPLATE_REPOSITORY, ProcessModule } from '@app/process';
+import {
+  PROCESS_INSTANCE_REPOSITORY, PROCESS_TEMPLATE_REPOSITORY, STEP_COMPLETION_REPOSITORY,
+  ProcessModule,
+} from '@app/process';
 import { BoundaryNodesSeeder } from './inventory/boundary-nodes.seeder.js';
 import { FactoryTemplatesSeeder } from './process/factory-templates.seeder.js';
 import { CompositeOrgProvisioner, ORG_SEEDERS, type OrgSeeder } from './tenancy/org-provisioner.adapter.js';
@@ -75,6 +80,8 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     { provide: NODE_REPOSITORY, useExisting: KyselyNodeRepository },
     { provide: STOCK_BALANCE_REPOSITORY, useExisting: KyselyStockBalanceRepository },
     { provide: PROCESS_TEMPLATE_REPOSITORY, useExisting: KyselyProcessTemplateRepository },
+  { provide: PROCESS_INSTANCE_REPOSITORY, useExisting: KyselyProcessInstanceRepository },
+  { provide: STEP_COMPLETION_REPOSITORY, useExisting: KyselyStepCompletionRepository },
     MovementCounterAdapter,
     StockCheckerAdapter,
     { provide: MOVEMENT_COUNTER, useExisting: MovementCounterAdapter },
@@ -106,6 +113,8 @@ import { StockCheckerAdapter } from './catalog/stock-checker.adapter.js';
     NODE_REPOSITORY,
     STOCK_BALANCE_REPOSITORY,
     PROCESS_TEMPLATE_REPOSITORY,
+    PROCESS_INSTANCE_REPOSITORY,
+    STEP_COMPLETION_REPOSITORY,
     MOVEMENT_COUNTER,
     STOCK_CHECKER,
     MEDIA_UPLOAD_REPOSITORY,

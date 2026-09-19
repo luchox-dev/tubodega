@@ -59,6 +59,11 @@ describe('OpenAPI document', () => {
         '/v1/stock/custodies',
         '/v1/process-templates',
         '/v1/process-templates/{code}',
+        '/v1/process-templates/{code}/versions',
+        '/v1/process-instances',
+        '/v1/process-instances/{id}',
+        '/v1/process-instances/{id}/steps/{stepId}/complete',
+        '/v1/process-instances/{id}/cancel',
       ]),
     );
   });

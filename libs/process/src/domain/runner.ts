@@ -46,3 +46,10 @@ export interface ProcessRunner {
   start(input: StartInput): ProcessInstance;
   advance(input: AdvanceInput): Promise<Result<AdvanceOutcome>>;
 }
+
+/**
+ * The seam of spec 13 §4.1. `GraphRunner` will be registered here instead, and
+ * neither the domain, nor the schema, nor the handlers find out — which is why
+ * the use cases inject the token and never `LinearRunner` by class (D-66).
+ */
+export const PROCESS_RUNNER = Symbol('ProcessRunner');

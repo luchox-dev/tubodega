@@ -3,6 +3,7 @@ import {
   IncompleteDraftError, InstanceClosedError, InvalidStepPayloadError, InvalidTemplateError,
   ProcessInstanceIdTakenError, ProcessInstanceNotFoundError, RequiredStepSkippedError,
   StepAlreadyCompletedError, TemplateHasInstancesError, TemplateNotFoundError,
+  TemplateVersionTakenError,
   UnknownStepTypeError, WrongStepError,
 } from './errors.js';
 
@@ -55,6 +56,14 @@ describe('los errores del motor', () => {
     const e = new InvalidStepPayloadError('/quantity', 'La cantidad tiene que ser positiva');
     expect(e.message).toBe('La cantidad tiene que ser positiva');
     expect(e.errors?.[0]).toEqual({ pointer: '/quantity', code: 'invalid-step-payload' });
+  });
+
+  it('template-version-taken nombra la versión que ya estaba (D-61)', () => {
+    const e = new TemplateVersionTakenError('RECEPCION', 2);
+    expect(e.type).toBe('template-version-taken');
+    expect(e.status).toBe(409);
+    expect(e.message).toContain('RECEPCION');
+    expect(e.message).toContain('2');
   });
 
   it('los demás llevan su estado y su tipo', () => {

@@ -8,19 +8,23 @@ de construcción en [`docs/superpowers/plans/`](docs/superpowers/plans/).
 NestJS **monorepo** sobre **pnpm**, servido con **Fastify**, compilado con
 **SWC**, con **PostgreSQL 16** (Prisma para el esquema, Kysely en ejecución).
 
-## Estado: Plan 7 — el motor de procesos
+## Estado: Plan 8 — la WAVE 4 cerrada
 
-Las cuarenta y cinco operaciones de abajo están vivas y probadas de tres formas: por
+Las cincuenta y una operaciones de abajo están vivas y probadas de tres formas: por
 dentro (`pnpm test`), contra Postgres (`pnpm test:e2e`) y atravesando un socket de
-verdad (`pnpm blackbox`). El plan 7 abre la **WAVE 4**: `libs/process` existe, con el
-motor lineal, los ocho manejadores y las seis plantillas de fábrica que toda
-organización trae sembradas desde el instante en que se registra. Seis procesos, ocho
-manejadores, un motor: la diferencia entre una recepción y un traslado es qué
-`allowedKinds` lleva un paso.
+verdad (`pnpm blackbox`). El plan 8 cierra la **WAVE 4**: los seis procesos que toda
+organización trae sembrados **se ejecutan**, paso a paso, y de ahí salen movimientos
+de verdad. Seis procesos, ocho manejadores, un motor: la diferencia entre una
+recepción y un traslado es qué `allowedKinds` lleva un paso.
 
-Lo que hoy se puede hacer con ellas es **leerlas**. Abrir una instancia y completar
-sus pasos —y que de ahí salgan movimientos de verdad— llega con el plan 8. El índice
-completo está en el
+Lo que eso significa por HTTP: el cliente abre una instancia, el servidor le devuelve
+la **definición** del paso siguiente, y él manda lo que ese paso pide. No consulta la
+plantilla nunca. Un mismo cliente genérico ejecuta las seis operaciones —y las que se
+añadan— sin que la palabra «recepción» aparezca en él. Un proceso a medias no ensucia
+nada: hasta que no se confirma, ni el inventario se movió ni el catálogo ganó un lote.
+
+Lo que queda: las alertas de vencimiento y custodia (plan 9) y el cierre del MVP
+(plan 10). El índice completo está en el
 [plan maestro](docs/superpowers/plans/2026-09-06-00-plan-maestro-mvp.md).
 
 | Endpoint | Acción | Qué hace |
@@ -70,6 +74,12 @@ completo está en el
 | `GET /v1/stock/custodies` | `READ` | Qué está prestado y no ha vuelto, **por préstamo** y con su `dueAt` |
 | `GET /v1/process-templates` | `READ` | Los seis procesos que la organización sabe ejecutar, sembrados al registrarla |
 | `GET /v1/process-templates/{code}` | `READ` | Una plantilla por su código de negocio, con sus pasos y sus transiciones |
+| `POST /v1/process-templates/{code}/versions` | `MANAGE_CATALOG` | Publica la versión siguiente. Nunca edita la anterior: lo abierto termina con las reglas con las que nació (P-9) |
+| `POST /v1/process-instances` | `RECORD_MOVEMENT` | Abre un proceso. Devuelve la **definición** del primer paso, no su id |
+| `GET /v1/process-instances` | `READ` | Qué se está ejecutando y qué se ejecutó; filtra por `state`, `templateCode` y `actorId` |
+| `GET /v1/process-instances/{id}` | `READ` | Un proceso con lo que ya se completó, y el paso que espera si sigue abierto |
+| `POST /v1/process-instances/{id}/steps/{stepId}/complete` | `RECORD_MOVEMENT` | Completa el paso actual. `payload: null` lo omite. Al cerrar devuelve los asientos |
+| `POST /v1/process-instances/{id}/cancel` | `RECORD_MOVEMENT` | Abandona. Sin efectos: ni inventario ni catálogo (P-6) |
 | `GET /v1/openapi.json` | — | El contrato generado desde el código |
 
 Con RLS real en Postgres, `application/problem+json` en todo error,
@@ -191,7 +201,7 @@ libs/persistence/        schema.prisma, migraciones, tipos generados, Kysely, DA
 libs/tenancy/            organización, usuarios, roles, autenticación (@app/tenancy)
 libs/catalog/            productos, códigos, lotes, campos propios, fotos (@app/catalog)
 libs/inventory/          el grafo de nodos y el ledger: dónde puede haber mercancía y qué se movió (@app/inventory)
-libs/process/            el motor de procesos: plantillas, pasos tipados y el runner lineal (@app/process)
+libs/process/            el motor de procesos: plantillas, instancias, pasos tipados y el runner lineal (@app/process)
 test/support/            harness de integración (withRollback) y cliente e2e
 scripts/blackbox.sh      caja negra: corre las suites de scripts/blackbox/ y cruza la cobertura
 docs/specs/              los specs; docs/superpowers/plans/ los planes; docs/postman/ la colección
@@ -356,7 +366,6 @@ que el contrato sabe crear; lo que aún no existe:
 
 | Todavía no siembra | Llega en |
 |---|---|
-| Instancias de proceso | plan 8 |
 | Reglas de alerta | plan 9 |
 
 Las **plantillas** de proceso no están en esa lista y tampoco las crea el seed: las

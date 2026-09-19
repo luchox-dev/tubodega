@@ -181,7 +181,11 @@ model Product {
   uom          String       @db.VarChar(16)
   active       Boolean      @default(true)
   customFields Json         @default("{}") @map("custom_fields")
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  /// Milliseconds, and it is load-bearing: this column is a cursor sort key, and a
+  /// JS Date cannot hold the microseconds `now()` puts in a bare timestamptz. The
+  /// cursor would then carry a truncated value and the keyset predicate would
+  /// silently skip every row of the same millisecond (decision D-67).
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime     @default(now()) @map("updated_at") @db.Timestamptz
   version      Int          @default(1)
 
@@ -322,7 +326,11 @@ model Node {
   path         String
   active       Boolean  @default(true)
   customFields Json     @default("{}") @map("custom_fields")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  /// Milliseconds, and it is load-bearing: this column is a cursor sort key, and a
+  /// JS Date cannot hold the microseconds `now()` puts in a bare timestamptz. The
+  /// cursor would then carry a truncated value and the keyset predicate would
+  /// silently skip every row of the same millisecond (decision D-67).
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
   version      Int      @default(1)
 
@@ -452,7 +460,11 @@ model ProcessInstance {
   currentStepId   String?      @map("current_step_id") @db.VarChar(64)
   context         Json         @default("{}")
   actorId         String       @map("actor_id") @db.Uuid
-  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  /// Milliseconds, and it is load-bearing: this column is a cursor sort key, and a
+  /// JS Date cannot hold the microseconds `now()` puts in a bare timestamptz. The
+  /// cursor would then carry a truncated value and the keyset predicate would
+  /// silently skip every row of the same millisecond (decision D-67).
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime     @default(now()) @map("updated_at") @db.Timestamptz
   version         Int          @default(1)
 
@@ -463,6 +475,11 @@ model ProcessInstance {
 
   @@unique([orgId, id])
   @@index([orgId, state])
+  /// The only order `GET /v1/process-instances` offers (decision D-62): the one
+  /// indexed column, like the movement history, so the listing of "what is
+  /// still open" never turns into a seq scan over a table that grows with every
+  /// guided operation.
+  @@index([orgId, createdAt(sort: Desc)])
   @@map("process_instance")
 }
 

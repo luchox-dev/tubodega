@@ -60,3 +60,12 @@ export type NewStockBalance = Insertable<DB['stockBalance']>;
 export type ProcessTemplateModel = Selectable<DB['processTemplate']>;
 export type NewProcessTemplate = Insertable<DB['processTemplate']>;
 export type ProcessTemplatePatch = Updateable<DB['processTemplate']>;
+
+export type ProcessInstanceModel = Selectable<DB['processInstance']>;
+export type NewProcessInstance = Insertable<DB['processInstance']>;
+export type ProcessInstancePatch = Updateable<DB['processInstance']>;
+
+// No `Patch`: `step_completion` is append-only, and a `Updateable` alias for it
+// would be a type nobody should be able to reach for (spec 04 §3.4, D-49).
+export type StepCompletionModel = Selectable<DB['stepCompletion']>;
+export type NewStepCompletion = Insertable<DB['stepCompletion']>;
