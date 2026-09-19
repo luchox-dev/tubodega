@@ -23,6 +23,8 @@ export * from './domain/handlers/capture-reason.js';
 export * from './domain/handlers/confirm.js';
 export * from './domain/handlers/index.js';
 export * from './application/ports/process-template.repository.js';
+export * from './application/ports/process-instance.repository.js';
+export * from './application/ports/step-completion.repository.js';
 export * from './application/use-cases/seed-factory-templates.js';
 export * from './application/use-cases/list-templates.js';
 export * from './application/use-cases/get-active-template.js';

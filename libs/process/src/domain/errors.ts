@@ -194,3 +194,20 @@ export class TemplateHasInstancesError extends DomainError {
     super(`La versión ${version} de "${code}" ya tiene procesos: crea una versión nueva en vez de editarla`);
   }
 }
+
+/**
+ * Not in the table of spec 13 §12, and needed because decision D-61 lets the
+ * client propose the number: `POST /v1/process-templates/{code}/versions` can
+ * hit `UNIQUE (org_id, code, version)`, and a bare 23505 would surface as a
+ * 500. Same mould as `movement-id-taken` and `process-instance-id-taken`.
+ *
+ * A version that does not *beat* the active one is `invalid-template` instead:
+ * that one is a template you cannot put into service, not a name already taken.
+ */
+export class TemplateVersionTakenError extends DomainError {
+  readonly type = 'template-version-taken';
+  readonly status = 409;
+  constructor(code: string, version: number) {
+    super(`La versión ${version} de "${code}" ya existe: las versiones no se reescriben`);
+  }
+}

@@ -166,20 +166,20 @@ step-completion.repository.ts}`; `libs/process/src/domain/errors.ts` (M) + spec;
 in-memory-step-completion.repository.ts}`; `libs/process/test/builders/an-instance.ts`;
 `libs/process/src/index.ts` (M)
 
-- [ ] **Step 1: spec primero** para `TemplateVersionTakenError`: `type`
+- [x] **Step 1: spec primero** para `TemplateVersionTakenError`: `type`
       `template-version-taken`, estado 409, y el `detail` nombra código y versión.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: los dos puertos.** `ProcessInstanceRepository { findById, list(orgId,
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: los dos puertos.** `ProcessInstanceRepository { findById, list(orgId,
       filter, page), save(instance, expectedVersion?): Promise<number> }` y
       `StepCompletionRepository { listByInstance, append }`, cada uno con su `Symbol`.
       `save` devuelve la versión guardada (molde D-31) aunque la vista **no** la exponga:
       [13 §9] dice que `process_instance.version` es lock interno y no contrato, y ningún
       endpoint pide `If-Match`.
-- [ ] **Step 4: los dobles** en memoria, con comportamiento: el de instancias respeta el
+- [x] **Step 4: los dobles** en memoria, con comportamiento: el de instancias respeta el
       lock óptimista y el de completados rechaza el `(instanceId, stepId)` repetido, que es
       P-3. Un doble que no muerda deja la Task 5 probando nada.
-- [ ] **Step 5: Run** `pnpm test` → PASS.
-- [ ] **Step 6: Commit** `feat(process): los puertos de instancia, y el error de la versión repetida`
+- [x] **Step 5: Run** `pnpm test` → PASS.
+- [x] **Step 6: Commit** `feat(process): los puertos de instancia, y el error de la versión repetida`
 
 ---
 
