@@ -189,22 +189,22 @@ in-memory-step-completion.repository.ts}`; `libs/process/test/builders/an-instan
 `libs/process/src/application/use-cases/{start-process,cancel-process,
 get-process-instance,list-process-instances}.ts` + specs
 
-- [ ] **Step 1: spec primero** de los cuatro, con los dobles de la Task 1:
+- [x] **Step 1: spec primero** de los cuatro, con los dobles de la Task 1:
       `requireAction` como primera línea (`RECORD_MOVEMENT` los dos primeros, `READ` los
       dos últimos); `StartProcess` sobre un código sin versión activa → `404
       template-not-found`; `CancelProcess` sobre una cerrada → `409 instance-closed` y
       **sin invocar nada** (P-6); `GetProcessInstance` de otra organización → `404`
       (I-6, nunca 403); `ListProcessInstances` filtra por los tres campos.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `StartProcess` acuña el id con `IdGenerator` si el cliente no
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `StartProcess` acuña el id con `IdGenerator` si el cliente no
       lo trae, llama a `runner.start` y devuelve `{ instance, nextStep }`.
       `GetProcessInstance` carga la plantilla **en la versión de la instancia** (P-1) para
       poder devolver `currentStep` (D-63).
-- [ ] **Step 4:** `application/events.ts` con `processEvent()` y los cuatro tipos de
+- [x] **Step 4:** `application/events.ts` con `processEvent()` y los cuatro tipos de
       [13 §11], molde de `inventoryEvent`. Aquí se publican `process.started` y
       `process.cancelled`.
-- [ ] **Step 5: Run** → PASS.
-- [ ] **Step 6: Commit** `feat(process): abrir una instancia, cancelarla y consultarla`
+- [x] **Step 5: Run** → PASS.
+- [x] **Step 6: Commit** `feat(process): abrir una instancia, cancelarla y consultarla`
 
 ---
 
