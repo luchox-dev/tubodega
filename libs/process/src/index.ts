@@ -36,4 +36,5 @@ export * from './application/use-cases/complete-step.js';
 export * from './application/use-cases/cancel-process.js';
 export * from './application/use-cases/get-process-instance.js';
 export * from './application/use-cases/list-process-instances.js';
+export * from './application/use-cases/create-template-version.js';
 export * from './process.module.js';

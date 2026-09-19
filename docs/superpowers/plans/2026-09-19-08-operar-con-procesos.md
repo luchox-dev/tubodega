@@ -270,16 +270,16 @@ get-process-instance,list-process-instances}.ts` + specs
 
 **Files:** `libs/process/src/application/use-cases/create-template-version.ts` + spec
 
-- [ ] **Step 1: spec primero:** `MANAGE_CATALOG`; crea `v2` y **desactiva todas** las demás
+- [x] **Step 1: spec primero:** `MANAGE_CATALOG`; crea `v2` y **desactiva todas** las demás
       del código; una instancia abierta en `v1` sigue resolviendo `v1`; las reglas de D-61.
       Reutiliza `parseSteps` —ya exportado para esto— así que hereda
       `branching-not-supported`, `unknown-step-type` e `invalid-template` sin escribir
       validación nueva.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** Nota de [13 §12]: `template-has-instances` **sigue sin ruta
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** Nota de [13 §12]: `template-has-instances` **sigue sin ruta
       que lo produzca** —no hay edición, solo versionado— y `hasInstances` queda disponible.
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(process): versionar una plantilla, sin tocar la anterior`
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(process): versionar una plantilla, sin tocar la anterior`
 
 ---
 
