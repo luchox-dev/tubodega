@@ -3318,6 +3318,16 @@
               }
             }
           },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
           "401": {
             "description": "invalid-credentials",
             "content": {
@@ -3412,6 +3422,526 @@
           }
         ],
         "summary": "La versión activa de una plantilla",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-templates/{code}/versions": {
+      "post": {
+        "description": "P-9: nunca se edita una versión, se crea la siguiente y se desactiva la anterior. Los procesos ya abiertos siguen con la suya y terminan con las reglas con las que nacieron.",
+        "operationId": "ProcessTemplatesController_version",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateVersionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessTemplateView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "template-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "template-version-taken · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "branching-not-supported · unknown-step-type · invalid-template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Publica una versión nueva de una plantilla",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-instances": {
+      "get": {
+        "description": "Filtros: state, templateCode y actorId. Ordena solo por createdAt, lo último primero.",
+        "operationId": "ProcessInstancesController_listing",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessInstancePageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid-filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Los procesos de la organización",
+        "tags": [
+          "process"
+        ]
+      },
+      "post": {
+        "description": "Devuelve la definición del primer paso, no su id: el cliente sigue lo que el servidor le indica y nunca consulta la plantilla.",
+        "operationId": "ProcessInstancesController_open",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartProcessDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedProcessView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "template-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "process-instance-id-taken · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abre un proceso",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-instances/{id}": {
+      "get": {
+        "description": "Mientras siga abierto trae además la definición del paso que espera, para poder retomarlo sin consultar la plantilla.",
+        "operationId": "ProcessInstancesController_one",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessInstanceDetailView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "process-instance-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Un proceso por id, con lo que ya se completó",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-instances/{id}/steps/{stepId}/complete": {
+      "post": {
+        "description": "El cuerpo lleva lo que ese paso pide. `payload: null` lo omite, si el paso lo admite. Al cerrar el proceso devuelve los asientos que produjo.",
+        "operationId": "ProcessInstancesController_step",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stepId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteStepDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompletedStepView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "validation-failed · missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "process-instance-not-found · not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "wrong-step · step-already-completed · instance-closed · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "invalid-step-payload · required-step-skipped · incomplete-draft · batch-step-required · batch-step-not-allowed · upload-not-found · insufficient-stock · y las demás del asiento",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Completa el paso actual",
+        "tags": [
+          "process"
+        ]
+      }
+    },
+    "/v1/process-instances/{id}/cancel": {
+      "post": {
+        "description": "Sin efectos: un proceso a medias no deja rastro ni en el inventario ni en el catálogo (P-6). Conserva dónde se abandonó.",
+        "operationId": "ProcessInstancesController_abandon",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessInstanceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "missing-idempotency-key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "invalid-credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient-role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "process-instance-not-found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "instance-closed · idempotency-key-reuse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Abandona un proceso",
         "tags": [
           "process"
         ]
@@ -5142,6 +5672,230 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "CreateTemplateVersionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "number",
+            "example": 2,
+            "description": "Debe superar a la activa; si ya existe, 409 template-version-taken"
+          },
+          "steps": {
+            "description": "La plantilla entera, no un parche: se crea una versión nueva, no se edita la anterior (P-9)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepView"
+            }
+          }
+        },
+        "required": [
+          "version",
+          "steps"
+        ]
+      },
+      "ProcessInstanceView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6"
+          },
+          "templateCode": {
+            "type": "string",
+            "example": "RECEPCION"
+          },
+          "templateVersion": {
+            "type": "number",
+            "example": 1,
+            "description": "La versión con la que nació, y con la que termina (P-1)"
+          },
+          "state": {
+            "type": "string",
+            "example": "OPEN",
+            "enum": [
+              "OPEN",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "currentStepId": {
+            "type": "string",
+            "example": "cantidad",
+            "description": "El paso que espera. En una cancelada es dónde se abandonó"
+          },
+          "actorId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f7",
+            "description": "Quién la abrió"
+          }
+        },
+        "required": [
+          "id",
+          "templateCode",
+          "templateVersion",
+          "state",
+          "actorId"
+        ]
+      },
+      "ProcessInstancePageView": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProcessInstanceView"
+            }
+          },
+          "page": {
+            "$ref": "#/components/schemas/PageView"
+          }
+        },
+        "required": [
+          "data",
+          "page"
+        ]
+      },
+      "StartProcessDto": {
+        "type": "object",
+        "properties": {
+          "templateCode": {
+            "type": "string",
+            "example": "RECEPCION",
+            "description": "El código de negocio del proceso a ejecutar"
+          },
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6",
+            "description": "UUIDv7 del cliente. Si se repite con otra Idempotency-Key, 409 process-instance-id-taken"
+          }
+        },
+        "required": [
+          "templateCode"
+        ]
+      },
+      "StartedProcessView": {
+        "type": "object",
+        "properties": {
+          "instance": {
+            "$ref": "#/components/schemas/ProcessInstanceView"
+          },
+          "nextStep": {
+            "description": "La definición del primer paso, no su id",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StepView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "instance",
+          "nextStep"
+        ]
+      },
+      "StepCompletionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f8"
+          },
+          "stepId": {
+            "type": "string",
+            "example": "cantidad"
+          },
+          "actorId": {
+            "type": "string",
+            "example": "018f3a2b-7c4d-7000-8000-a1b2c3d4e5f7"
+          },
+          "payload": {
+            "type": "object",
+            "nullable": true,
+            "example": {
+              "quantity": "24"
+            },
+            "description": "Lo que el motor entendió, no solo lo que llegó. null si el paso se omitió"
+          },
+          "completedAt": {
+            "type": "string",
+            "example": "2026-09-19T14:32:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "stepId",
+          "actorId",
+          "payload",
+          "completedAt"
+        ]
+      },
+      "ProcessInstanceDetailView": {
+        "type": "object",
+        "properties": {
+          "instance": {
+            "$ref": "#/components/schemas/ProcessInstanceView"
+          },
+          "completions": {
+            "description": "En el orden en que ocurrieron",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StepCompletionView"
+            }
+          },
+          "currentStep": {
+            "description": "La definición del paso que espera, mientras siga abierta: así se retoma sin consultar la plantilla",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StepView"
+              }
+            ]
+          }
+        },
+        "required": [
+          "instance",
+          "completions"
+        ]
+      },
+      "CompleteStepDto": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "type": "object",
+            "example": {
+              "quantity": "24"
+            },
+            "nullable": true,
+            "description": "Lo que pide el paso. null omite el paso, si el paso lo admite"
+          }
+        }
+      },
+      "CompletedStepView": {
+        "type": "object",
+        "properties": {
+          "instance": {
+            "$ref": "#/components/schemas/ProcessInstanceView"
+          },
+          "nextStep": {
+            "description": "Lo siguiente que pedir. Ausente si el proceso terminó",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StepView"
+              }
+            ]
+          },
+          "movements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "description": "Los asientos que produjo el proceso. Solo al terminar (P-6)"
+          }
+        },
+        "required": [
+          "instance"
         ]
       }
     }

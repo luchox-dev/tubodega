@@ -323,21 +323,21 @@ process-instances.dto.ts}`; `apps/tubodega/src/http/process-templates/*` (M);
 `apps/tubodega/src/adapters/adapters.module.ts` (M); `apps/tubodega/openapi.json` (M);
 `apps/tubodega/test/edge/openapi.int-spec.ts` (M)
 
-- [ ] **Step 1: los controladores**, molde exacto de `movements.controller.ts`:
+- [x] **Step 1: los controladores**, molde exacto de `movements.controller.ts`:
       `@ApiTags('process')`, `@Ctx()` primero, `UuidParam` en `{id}` y **no** en `{code}`
       ni en `{stepId}`, `Location` en los `201`, todo error declarado como
       `ProblemDetailsView` con los slugs separados por ` · `.
-- [ ] **Step 2: el listado.** `PAGE_OPTIONS = { sortable: ['createdAt'], defaultSort:
+- [x] **Step 2: el listado.** `PAGE_OPTIONS = { sortable: ['createdAt'], defaultSort:
       '-createdAt', filters: ['state','templateCode','actorId'] }` y un `parseFilters` que
       valide el enum — `?state=FOO` es `400 invalid-filter`, no una página vacía.
-- [ ] **Step 3: D-60.** La guarda de claves en `GET /v1/process-templates`.
-- [ ] **Step 4: el cableado.** Los dos tokens en `adapters.module.ts`, el controlador en
+- [x] **Step 3: D-60.** La guarda de claves en `GET /v1/process-templates`.
+- [x] **Step 4: el cableado.** Los dos tokens en `adapters.module.ts`, el controlador en
       `app.module.ts`. Los tres `POST` **no** se eximen de `Idempotency-Key`.
-- [ ] **Step 5: el snapshot.** La lista literal de paths de `openapi.int-spec.ts`,
+- [x] **Step 5: el snapshot.** La lista literal de paths de `openapi.int-spec.ts`,
       `pnpm openapi:write`, y **contar el diff de verdad** antes de escribir el número en la
       bitácora: el plan 7 lo puso mal.
-- [ ] **Step 6: Run** `pnpm lint && pnpm typecheck && pnpm test:e2e` → PASS.
-- [ ] **Step 7: Commit** `feat(http): las instancias de proceso, y el versionado de plantillas`
+- [x] **Step 6: Run** `pnpm lint && pnpm typecheck && pnpm test:e2e` → PASS.
+- [x] **Step 7: Commit** `feat(http): las instancias de proceso, y el versionado de plantillas`
 
 ---
 

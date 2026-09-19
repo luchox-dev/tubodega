@@ -3,7 +3,7 @@ import type {
   Batch, CustomFieldDefinition, Product, ProductCode, StoredMedia,
 } from '@app/catalog';
 import type { Movement, Node, NodeTree, OpenCustody, StockPosition } from '@app/inventory';
-import type { ProcessTemplate } from '@app/process';
+import type { ProcessInstance, ProcessTemplate, StepCompletion, StepDefinition } from '@app/process';
 import type { Organization, User } from '@app/tenancy';
 import type { CustomFieldView } from '../custom-fields/custom-fields.dto.js';
 import type { MovementView, StockPositionView } from '../movements/movements.dto.js';
@@ -12,7 +12,10 @@ import type { OpenCustodyView } from '../stock/stock.dto.js';
 import type {
   BatchView, MediaView, ProductCodeView, ProductView,
 } from '../products/products.dto.js';
-import type { ProcessTemplateView } from '../process-templates/process-templates.dto.js';
+import type { ProcessTemplateView, StepView } from '../process-templates/process-templates.dto.js';
+import type {
+  ProcessInstanceView, StepCompletionView,
+} from '../process-instances/process-instances.dto.js';
 import type { OrganizationView, UserView } from './shared.dto.js';
 
 export const userView = (u: User): UserView => ({
@@ -143,11 +146,32 @@ export const processTemplateView = (t: ProcessTemplate): ProcessTemplateView => 
   code: t.code,
   version: t.version,
   active: t.active,
-  steps: t.steps.map((s) => ({
-    id: s.id,
-    type: s.type,
-    required: s.required,
-    config: s.config,
-    transitions: s.transitions.map((tr) => ({ to: tr.to })),
-  })),
+  steps: t.steps.map(stepView),
+});
+
+export const stepView = (s: StepDefinition): StepView => ({
+  id: s.id,
+  type: s.type,
+  required: s.required,
+  config: s.config,
+  transitions: s.transitions.map((tr) => ({ to: tr.to })),
+});
+
+export const processInstanceView = (i: ProcessInstance): ProcessInstanceView => ({
+  id: i.id,
+  templateCode: i.templateCode,
+  templateVersion: i.templateVersion,
+  state: i.state,
+  ...(i.currentStepId !== undefined ? { currentStepId: i.currentStepId } : {}),
+  actorId: i.actorId,
+});
+
+export const stepCompletionView = (c: StepCompletion): StepCompletionView => ({
+  id: c.id,
+  stepId: c.stepId,
+  actorId: c.actorId,
+  // The enriched payload `validate` gave back (D-56), or the literal null of an
+  // omitted step — which is a different thing from a step that never ran.
+  payload: (c.payload ?? null) as Record<string, unknown> | null,
+  completedAt: c.completedAt.toISOString(),
 });

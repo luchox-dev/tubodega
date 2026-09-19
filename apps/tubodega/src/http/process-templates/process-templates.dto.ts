@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ArrayMinSize, IsArray, IsInt, Min } from 'class-validator';
 import { STEP_TYPES, type StepType } from '@app/process';
 
 export class TransitionView {
@@ -49,4 +50,31 @@ export class ProcessTemplateView {
  */
 export class ProcessTemplateListView {
   @ApiProperty({ type: ProcessTemplateView, isArray: true }) data!: ProcessTemplateView[];
+}
+
+/**
+ * Los pasos viajan como JSON crudo y el borde no los mira: quien decide si una
+ * plantilla es ejecutable es `parseSteps` del dominio, que ya lo hace para las
+ * seis de fábrica. Un `@ValidateNested` aquí sería una segunda copia de esas
+ * reglas, y las dos se separarían —y sus respuestas serían `validation-failed`
+ * en vez de los `branching-not-supported` / `unknown-step-type` /
+ * `invalid-template` que la spec 13 §12 promete—.
+ */
+export class CreateTemplateVersionDto {
+  @ApiProperty({
+    example: 2,
+    description: 'Debe superar a la activa; si ya existe, 409 template-version-taken',
+  })
+  @IsInt()
+  @Min(1)
+  version!: number;
+
+  @ApiProperty({
+    type: StepView,
+    isArray: true,
+    description: 'La plantilla entera, no un parche: se crea una versión nueva, no se edita la anterior (P-9)',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  steps!: unknown[];
 }
