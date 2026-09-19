@@ -293,25 +293,25 @@ step-completion.repository.ts, mapping.ts (M)}`;
 `libs/persistence/src/index.ts` (M);
 `libs/persistence/test/repositories/process/instance.repository.int-spec.ts`
 
-- [ ] **Step 1: spec primero** (integración): type-spec de que `StepCompletionDao` no tiene
+- [x] **Step 1: spec primero** (integración): type-spec de que `StepCompletionDao` no tiene
       `update`, `upsert` ni `delete`; **P-1** (instancia con versión inexistente → `23503`);
       **P-3** bajo concurrencia (dos `append` al mismo paso: uno gana, una sola fila); ida y
       vuelta del contexto por `jsonb` con `Quantity`, `Date` y el `Map`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: los DAOs.** `ProcessInstanceDao` con `versioned =` **`true`** — aquí
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: los DAOs.** `ProcessInstanceDao` con `versioned =` **`true`** — aquí
       `version` **sí** es lock óptimista y la tabla **sí** tiene `updated_at`: es la trampa
       del plan 7 al revés, y equivocarla en cualquiera de los dos sentidos rompe algo.
       `StepCompletionDao` extiende `AbstractOrgAppendDao`.
-- [ ] **Step 4: el mapeo del contexto (D-64)**, que es lo delicado: `values` es un `Map`,
+- [x] **Step 4: el mapeo del contexto (D-64)**, que es lo delicado: `values` es un `Map`,
       `draft.quantity` es un `Quantity` y hay `Date` dentro de los payloads.
-- [ ] **Step 5: los repositorios**, con el `translate` de la casa: `23505` sobre
+- [x] **Step 5: los repositorios**, con el `translate` de la casa: `23505` sobre
       `process_instance_pkey` → `process-instance-id-taken`, sobre
       `step_completion_org_id_instance_id_step_id_key` → `step-already-completed`.
-- [ ] **Step 6: la migración.** `REVOKE UPDATE, DELETE ON step_completion FROM tubodega_app,
+- [x] **Step 6: la migración.** `REVOKE UPDATE, DELETE ON step_completion FROM tubodega_app,
       tubodega_system` (D-49) y el índice de D-62, más el `@@index` gemelo en
       `schema.prisma`. `pnpm db:check` tiene que salir **0**.
-- [ ] **Step 7: Run** `pnpm test:e2e libs/persistence` → PASS.
-- [ ] **Step 8: Commit** `feat(persistence): las instancias y sus pasos, append-only de verdad`
+- [x] **Step 7: Run** `pnpm test:e2e libs/persistence` → PASS.
+- [x] **Step 8: Commit** `feat(persistence): las instancias y sus pasos, append-only de verdad`
 
 ---
 

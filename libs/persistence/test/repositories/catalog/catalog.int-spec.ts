@@ -264,6 +264,50 @@ describe('catalogue repositories', () => {
     expect(third.hasMore).toBe(false);
   });
 
+  /**
+   * Regresión de D-67, y el caso no es rebuscado: `POST /v1/products/import`
+   * escribe hasta mil filas en **una** transacción, así que todas comparten el
+   * mismo `now()`. Con `created_at` en microsegundos, el cursor —que pasa por
+   * un `Date` de JavaScript y solo llega al milisegundo— salía por debajo del
+   * valor guardado y el keyset se saltaba en silencio todas las filas de ese
+   * milisegundo: la segunda página venía vacía.
+   */
+  it('pages by createdAt even when every row shares one now() (D-67)', async () => {
+    const own = v7() as OrgId;
+    await h.uow.runAs({ pool: 'system' }, () =>
+      h.ctx.current().insertInto('organization').values({ id: own, name: 'Ms', slug: `ms-${own.slice(-8)}` }).execute(),
+    );
+    const inOwn = <T>(fn: () => Promise<T>) => h.uow.runAs({ pool: 'tenant', orgId: own }, fn);
+
+    // Una sola transacción: es lo que hace el import, y es lo que fuerza que
+    // los cinco `created_at` sean idénticos hasta el microsegundo.
+    await inOwn(async () => {
+      for (let i = 0; i < 5; i++) {
+        await products.save(unwrap(Product.create({
+          id: v7() as ProductId, orgId: own, sku: `M-${i}`, name: `Masivo ${i}`,
+          trackingMode: TrackingMode.QUANTITY, uom: 'UNIT',
+        })));
+      }
+    });
+
+    const sort = { field: 'createdAt', dir: 'asc' } as const;
+    const vistos: string[] = [];
+    let cursor: (typeof first)['nextCursor'] | undefined;
+    const first = await inOwn(() => products.list(own, {}, { limit: 2, sort }));
+    vistos.push(...first.data.map((p) => p.sku as string));
+    cursor = first.nextCursor;
+
+    while (cursor) {
+      const page = await inOwn(() => products.list(own, {}, { limit: 2, sort, cursor: cursor! }));
+      // Sin el arreglo esta página venía vacía y el bucle terminaba con 2 de 5.
+      expect(page.data.length).toBeGreaterThan(0);
+      vistos.push(...page.data.map((p) => p.sku as string));
+      cursor = page.nextCursor;
+    }
+
+    expect(vistos).toEqual(['M-0', 'M-1', 'M-2', 'M-3', 'M-4']);
+  });
+
   it('filters by q over sku and name, and by tracking mode', async () => {
     const own = v7() as OrgId;
     await h.uow.runAs({ pool: 'system' }, () =>

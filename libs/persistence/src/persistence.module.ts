@@ -19,6 +19,8 @@ import { NodeDao } from './dao/node.dao.js';
 import { MovementDao } from './dao/movement.dao.js';
 import { StockBalanceDao } from './dao/stock-balance.dao.js';
 import { ProcessTemplateDao } from './dao/process-template.dao.js';
+import { ProcessInstanceDao } from './dao/process-instance.dao.js';
+import { StepCompletionDao } from './dao/step-completion.dao.js';
 
 import { KyselyOutboxEventPublisher } from './outbox/outbox-event-publisher.js';
 import { KyselyOrganizationRepository } from './repositories/organization.repository.js';
@@ -36,11 +38,14 @@ import {
   KyselyProductMediaRepository,
 } from './repositories/catalog/media.repository.js';
 import { KyselyProcessTemplateRepository } from './repositories/process/template.repository.js';
+import { KyselyProcessInstanceRepository } from './repositories/process/instance.repository.js';
+import { KyselyStepCompletionRepository } from './repositories/process/step-completion.repository.js';
 
 const DAOS = [
   OrganizationDao, UserDao, UserRoleDao, RefreshTokenDao, OutboxEventDao, IdempotencyKeyDao,
   ProductDao, ProductCodeDao, ProductMediaDao, MediaUploadDao, BatchDao,
   CustomFieldDefinitionDao, NodeDao, MovementDao, StockBalanceDao, ProcessTemplateDao,
+  ProcessInstanceDao, StepCompletionDao,
 ];
 const ADAPTERS = [
   KyselyOrganizationRepository,
@@ -57,6 +62,8 @@ const ADAPTERS = [
   KyselyMediaUploadRepository,
   KyselyProductMediaRepository,
   KyselyProcessTemplateRepository,
+  KyselyProcessInstanceRepository,
+  KyselyStepCompletionRepository,
 ];
 
 /** Registered once by the root module; no domain library imports it (R-4). */
