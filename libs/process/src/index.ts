@@ -29,6 +29,7 @@ export * from './application/use-cases/seed-factory-templates.js';
 export * from './application/use-cases/list-templates.js';
 export * from './application/use-cases/get-active-template.js';
 export * from './application/events.js';
+export * from './application/handler-deps.factory.js';
 export * from './application/use-cases/start-process.js';
 export * from './application/use-cases/cancel-process.js';
 export * from './application/use-cases/get-process-instance.js';

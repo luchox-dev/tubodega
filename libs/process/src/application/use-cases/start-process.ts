@@ -7,7 +7,7 @@ import { Action, requireAction, type RequestContext } from '@app/tenancy';
 import { TemplateNotFoundError } from '../../domain/errors.js';
 import { TemplateCode } from '../../domain/ids.js';
 import type { ProcessInstance } from '../../domain/instance.js';
-import { LinearRunner } from '../../domain/linear-runner.js';
+import { PROCESS_RUNNER, type ProcessRunner } from '../../domain/runner.js';
 import type { StepDefinition } from '../../domain/template.js';
 import { processEvent } from '../events.js';
 import { PROCESS_INSTANCE_REPOSITORY, type ProcessInstanceRepository } from '../ports/process-instance.repository.js';
@@ -30,7 +30,7 @@ export class StartProcess {
   constructor(
     @Inject(PROCESS_INSTANCE_REPOSITORY) private readonly instances: ProcessInstanceRepository,
     @Inject(PROCESS_TEMPLATE_REPOSITORY) private readonly templates: ProcessTemplateRepository,
-    private readonly runner: LinearRunner,
+    @Inject(PROCESS_RUNNER) private readonly runner: ProcessRunner,
     @Inject(EVENT_PUBLISHER) private readonly events: EventPublisher,
     @Inject(ID_GENERATOR) private readonly ids: IdGenerator,
     @Inject(CLOCK) private readonly clock: Clock,

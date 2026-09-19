@@ -213,18 +213,18 @@ get-process-instance,list-process-instances}.ts` + specs
 **Files:** `libs/process/src/application/handler-deps.factory.ts` + spec;
 `libs/process/src/process.module.ts` (M)
 
-- [ ] **Step 1: spec primero:** las siete entradas de `HandlerDeps` resuelven contra los
+- [x] **Step 1: spec primero:** las siete entradas de `HandlerDeps` resuelven contra los
       repositorios reales, y el `orgId` sale del `ctx`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar** `handlerDeps(ctx)` (D-65). Cierra sobre el `RequestContext`
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar** `handlerDeps(ctx)` (D-65). Cierra sobre el `RequestContext`
       porque `ResolveCode.execute(ctx, raw)` lo exige mientras que la firma del dep es
       `(orgId, raw)`; las otras cinco se atan directas a los métodos del repositorio, que ya
       tienen la firma exacta (D-46).
-- [ ] **Step 4:** `ProcessModule` gana `PROCESS_RUNNER` → `LinearRunner(mvpRegistry())`
+- [x] **Step 4:** `ProcessModule` gana `PROCESS_RUNNER` → `LinearRunner(mvpRegistry())`
       (D-66), e **importa `CatalogModule` e `InventoryModule`** para poder inyectar sus
       casos de uso por clase.
-- [ ] **Step 5: Run** `pnpm test && pnpm typecheck` → PASS.
-- [ ] **Step 6: Commit** `feat(process): los deps del manejador, y el runner registrado`
+- [x] **Step 5: Run** `pnpm test && pnpm typecheck` → PASS.
+- [x] **Step 6: Commit** `feat(process): los deps del manejador, y el runner registrado`
 
 ---
 
