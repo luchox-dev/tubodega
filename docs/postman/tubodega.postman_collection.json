@@ -128,6 +128,14 @@
     {
       "key": "ledgerBinId",
       "value": ""
+    },
+    {
+      "key": "procInstanceId",
+      "value": ""
+    },
+    {
+      "key": "procCancelId",
+      "value": ""
     }
   ],
   "event": [
@@ -3689,6 +3697,637 @@
               }
             }
           ]
+        },
+        {
+          "name": "Juan abre una recepción",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances"
+              ]
+            },
+            "description": "El cliente no lee la plantilla: abre el proceso y el servidor le devuelve la **definición** del primer paso, no su id. Eso es lo que permite que un solo cliente genérico ejecute las seis operaciones sin saber qué es una recepción.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateCode\": \"RECEPCION\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('empieza por el origen', () => pm.expect(b.nextStep.id).to.eql('origen'));",
+                  "pm.test('con la definición entera', () => pm.expect(b.nextStep.type).to.eql('SELECT_NODE'));",
+                  "pm.test('anota la versión de la plantilla (P-1)', () => pm.expect(b.instance.templateVersion).to.eql(1));",
+                  "pm.collectionVariables.set('procInstanceId', b.instance.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 1 · el proveedor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/origen/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "origen",
+                "complete"
+              ]
+            },
+            "description": "`SELECT_NODE` mira `config.allowedKinds` al validar y `config.role` al aplicar: el mismo manejador sirve de origen y de destino, y es lo que evita ocho manejadores casi iguales.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": { \"nodeId\": \"{{sourceNodeId}}\" }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('ahora toca escanear', () => pm.expect(pm.response.json().nextStep.id).to.eql('item'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 2 · escanear el tornillo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/item/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "item",
+                "complete"
+              ]
+            },
+            "description": "Resuelve el código contra el catálogo y deja el producto en el borrador. Lo que se guarda en `step_completion` es el payload **enriquecido**, no solo lo que llegó (D-56).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": { \"code\": \"TOR-M8\" }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('toca el lote', () => pm.expect(pm.response.json().nextStep.id).to.eql('lote'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 3 · omitir el lote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/lote/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "lote",
+                "complete"
+              ]
+            },
+            "description": "`payload: null` omite el paso. El tornillo se lleva por cantidad, así que no hay lote del que hablar — y quien lo sabe es el manejador, no la plantilla: la plantilla no sabe qué producto va a pasar por ella.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('toca contar', () => pm.expect(pm.response.json().nextStep.id).to.eql('cantidad'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 4 · la cantidad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/cantidad/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "cantidad",
+                "complete"
+              ]
+            },
+            "description": "Decimal como cadena, y entera porque la unidad es UNIT. Todavía no se ha movido nada: los efectos salen solo al confirmar (P-6).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": { \"quantity\": \"120\" }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('toca la foto', () => pm.expect(pm.response.json().nextStep.id).to.eql('foto'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 5 · sin foto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/foto/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "foto",
+                "complete"
+              ]
+            },
+            "description": "El único paso `CAPTURE_PHOTO` de las seis plantillas, y es opcional: es la única operación en la que hay algo que fotografiar que el catálogo no tenga ya.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('toca ubicar', () => pm.expect(pm.response.json().nextStep.id).to.eql('destino'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 6 · el destino",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/destino/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "destino",
+                "complete"
+              ]
+            },
+            "description": "Mismo manejador que el paso 1, otro `config`: aquí `role: TO` y `allowedKinds: [INTERNAL]`. Un proveedor no es una ubicación, y mandarlo aquí sería `invalid-step-payload`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": { \"nodeId\": \"{{ledgerBinId}}\" }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('solo queda confirmar', () => pm.expect(pm.response.json().nextStep.id).to.eql('confirmar'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paso 7 · confirmar, y ahí sí se mueve el inventario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}/steps/confirmar/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}",
+                "steps",
+                "confirmar",
+                "complete"
+              ]
+            },
+            "description": "El único punto en el que el motor toca el inventario. Sale el asiento, con `processInstanceId` apuntando a la instancia que lo produjo, y la instancia queda COMPLETED sin paso siguiente que pedir.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('el proceso terminó', () => pm.expect(b.instance.state).to.eql('COMPLETED'));",
+                  "pm.test('sin paso siguiente', () => pm.expect(b.nextStep).to.be.undefined);",
+                  "pm.test('y devuelve el asiento', () => pm.expect(b.movements).to.have.lengthOf(1));",
+                  "pm.test('que apunta a la instancia', () => pm.expect(b.movements[0].processInstanceId).to.eql(pm.collectionVariables.get('procInstanceId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La instancia, con todo lo que se completó",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procInstanceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procInstanceId}}"
+              ]
+            },
+            "description": "Los siete completados en el orden en que ocurrieron. El de la foto está y su payload es `null`: la diferencia entre «este paso se omitió» y «este paso no existe» es precisamente la fila."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('siete pasos', () => pm.expect(b.completions).to.have.lengthOf(7));",
+                  "pm.test('el omitido guarda null', () => pm.expect(b.completions.find((c) => c.stepId === 'foto').payload).to.be.null);",
+                  "pm.test('cerrada, sin paso actual', () => pm.expect(b.currentStep).to.be.undefined);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La bandeja de procesos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances?state=COMPLETED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "COMPLETED"
+                }
+              ]
+            },
+            "description": "Filtra por `state`, `templateCode` y `actorId`, y ordena solo por `createdAt` —lo último primero—, que es la única columna indexada: ofrecer más invitaría a un seq scan sobre una tabla que crece con cada operación guiada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('la recepción está', () => pm.expect(pm.response.json().data.some((i) => i.id === pm.collectionVariables.get('procInstanceId'))).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un traslado que se abandona a la mitad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances"
+              ]
+            },
+            "description": "Abrir para poder cancelar: es la demostración de P-6 por los dos lados —ni inventario ni catálogo—.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"templateCode\": \"TRASLADO\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('procCancelId', pm.response.json().instance.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Abandonarlo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procCancelId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procCancelId}}",
+                "cancel"
+              ]
+            },
+            "description": "Sin efectos (P-6): un proceso a medias no deja rastro ni en el inventario ni en el catálogo. Conserva `currentStepId` porque dónde se abandonó una operación es parte de lo que pasó."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('cancelado', () => pm.expect(pm.response.json().state).to.eql('CANCELLED'));",
+                  "pm.test('recordando dónde se quedó', () => pm.expect(pm.response.json().currentStepId).to.eql('origen'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Diego publica la versión 2 de la recepción",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/RECEPCION/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "RECEPCION",
+                "versions"
+              ]
+            },
+            "description": "P-9: nunca se edita una versión, se crea la siguiente y se desactiva la anterior. Los procesos ya abiertos siguen apuntando a la suya y terminan con las reglas con las que nacieron — una recepción de marzo se audita con las reglas de marzo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 2,\n  \"steps\": [\n    {\n      \"id\": \"origen\",\n      \"type\": \"SELECT_NODE\",\n      \"required\": true,\n      \"config\": {\n        \"role\": \"FROM\",\n        \"allowedKinds\": [\n          \"SOURCE\"\n        ]\n      },\n      \"transitions\": [\n        {\n          \"to\": \"item\"\n        }\n      ]\n    },\n    {\n      \"id\": \"item\",\n      \"type\": \"SCAN_ITEM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": \"cantidad\"\n        }\n      ]\n    },\n    {\n      \"id\": \"cantidad\",\n      \"type\": \"CAPTURE_QTY\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": \"destino\"\n        }\n      ]\n    },\n    {\n      \"id\": \"destino\",\n      \"type\": \"SELECT_NODE\",\n      \"required\": true,\n      \"config\": {\n        \"role\": \"TO\",\n        \"allowedKinds\": [\n          \"INTERNAL\"\n        ]\n      },\n      \"transitions\": [\n        {\n          \"to\": \"confirmar\"\n        }\n      ]\n    },\n    {\n      \"id\": \"confirmar\",\n      \"type\": \"CONFIRM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": null\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('es la v2 y está activa', () => { const b = pm.response.json(); pm.expect(b.version).to.eql(2); pm.expect(b.active).to.be.true; });",
+                  "pm.test('sin el paso de la foto', () => pm.expect(pm.response.json().steps.map((s) => s.id)).to.not.include('foto'));"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -5589,6 +6228,232 @@
                 "exec": [
                   "pm.test('401', () => pm.response.to.have.status(401));",
                   "pm.test('invalid-credentials', () => pm.expect(pm.response.json().type).to.include('invalid-credentials'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Completar un paso que no toca",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/{{procCancelId}}/steps/confirmar/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "{{procCancelId}}",
+                "steps",
+                "confirmar",
+                "complete"
+              ]
+            },
+            "description": "P-2: solo se completa el paso actual. El detalle nombra cuál es, porque quien llega aquí es un cliente que se quedó atrás y lo que necesita es saber dónde está el proceso. Sobre una instancia ya cancelada gana P-4, que es `instance-closed`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payload\": {}\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('instance-closed', () => pm.expect(pm.response.json().type).to.include('instance-closed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una instancia que no existe",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-instances/018f0000-0000-7000-8000-0000000000ff",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-instances",
+                "018f0000-0000-7000-8000-0000000000ff"
+              ]
+            },
+            "description": "I-6: la de otra organización tampoco está, y nunca es un 403 — un 403 confirmaría que el recurso existe en algún sitio."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('process-instance-not-found', () => pm.expect(pm.response.json().type).to.include('process-instance-not-found'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una query que el listado no conoce",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates?limit=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "2"
+                }
+              ]
+            },
+            "description": "D-60. Este listado no pagina —son seis— así que no lleva `parsePage`, y hasta el plan 8 se tragaba la clave en silencio: era la única colección del contrato que no contestaba a una clave que no conoce."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.test('invalid-filter', () => pm.expect(pm.response.json().type).to.include('invalid-filter'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Una plantilla con una rama",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/RECEPCION/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "RECEPCION",
+                "versions"
+              ]
+            },
+            "description": "P-8: hoy cada paso lleva exactamente una transición. Merece un mensaje explícito y no un fallo genérico — es la señal de que alguien ha llegado al límite del MVP, y el mensaje dice que la capacidad está prevista y qué falta para habilitarla.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 9,\n  \"steps\": [\n    {\n      \"id\": \"item\",\n      \"type\": \"SCAN_ITEM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": \"confirmar\"\n        },\n        {\n          \"to\": null\n        }\n      ]\n    },\n    {\n      \"id\": \"confirmar\",\n      \"type\": \"CONFIRM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": null\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('branching-not-supported', () => pm.expect(pm.response.json().type).to.include('branching-not-supported'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Un operario no redefine plantillas",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "content-type",
+                "value": "application/json"
+              },
+              {
+                "key": "authorization",
+                "value": "Bearer {{operarioToken}}"
+              },
+              {
+                "key": "idempotency-key",
+                "value": "{{idemKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/process-templates/RECEPCION/versions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "process-templates",
+                "RECEPCION",
+                "versions"
+              ]
+            },
+            "description": "Ninguna acción nueva: los ocho endpoints se reparten entre RECORD_MOVEMENT, MANAGE_CATALOG y READ. El OPERATOR opera procesos y no los versiona, que es exactamente el reparto que el producto quiere.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 9,\n  \"steps\": [\n    {\n      \"id\": \"item\",\n      \"type\": \"SCAN_ITEM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": \"confirmar\"\n        }\n      ]\n    },\n    {\n      \"id\": \"confirmar\",\n      \"type\": \"CONFIRM\",\n      \"required\": true,\n      \"transitions\": [\n        {\n          \"to\": null\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));",
+                  "pm.test('insufficient-role', () => pm.expect(pm.response.json().type).to.include('insufficient-role'));"
                 ]
               }
             }

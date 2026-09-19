@@ -178,7 +178,7 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-step "6 · el ledger es inmutable desde la base (I-3)"
+step "6 · lo append-only es inmutable desde la base (I-3, D-49)"
 # TRAMPA: hay que fijar app.current_org antes del UPDATE. Sin él, RLS falla
 # primero —current_setting() no encuentra el parámetro— y la respuesta no dice
 # nada sobre el REVOKE, que es lo que se quiere comprobar.
@@ -187,6 +187,25 @@ if docker compose version >/dev/null 2>&1; then
     -c "SET app.current_org = '$ORG_ID'; UPDATE movement SET quantity = 1;" 2>&1)"
   if grep -q '42501\|permission denied' <<<"$SQLOUT"; then
     pass "UPDATE movement lo niega el permiso, no la aplicación"
+  else
+    fail "esperaba 42501; psql dijo: $(tr '\n' ' ' <<<"$SQLOUT" | head -c 200)"
+  fi
+
+  # D-49. La segunda capa de `step_completion`, prometida tres veces en prosa
+  # desde [13 §2] y hasta el plan 8 en ningún SQL. El tipo del DAO es la
+  # primera; esta es la que sobrevive a que alguien abra una consola.
+  SQLOUT="$(docker compose exec -T db psql -U tubodega_app -d "$DB" -v ON_ERROR_STOP=0 \
+    -c "SET app.current_org = '$ORG_ID'; UPDATE step_completion SET step_id = 'x';" 2>&1)"
+  if grep -q '42501\|permission denied' <<<"$SQLOUT"; then
+    pass "UPDATE step_completion, igual"
+  else
+    fail "esperaba 42501; psql dijo: $(tr '\n' ' ' <<<"$SQLOUT" | head -c 200)"
+  fi
+
+  SQLOUT="$(docker compose exec -T db psql -U tubodega_app -d "$DB" -v ON_ERROR_STOP=0 \
+    -c "SET app.current_org = '$ORG_ID'; DELETE FROM step_completion;" 2>&1)"
+  if grep -q '42501\|permission denied' <<<"$SQLOUT"; then
+    pass "y borrarlo tampoco se puede"
   else
     fail "esperaba 42501; psql dijo: $(tr '\n' ' ' <<<"$SQLOUT" | head -c 200)"
   fi

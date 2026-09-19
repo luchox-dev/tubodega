@@ -17,7 +17,6 @@
 # construir. Hoy siembra todo lo que el contrato sabe crear —tenencia, catálogo
 # y ubicaciones—; lo que todavía no existe, con el plan que lo traerá:
 #
-#   instancias de proceso .................... plan 8
 #   reglas de alerta ......................... plan 9
 # ─────────────────────────────────────────────────────────────────────────────
 #
@@ -199,6 +198,7 @@ frontera() { # frontera <var> <kind> <code>
   dest="$(jq -r --arg c "$3" '[.data[] | select(.code==$c)][0].id' < "$BODY_F")"
 }
 frontera N_OPENING SOURCE opening-balance
+frontera N_SUPPLIER SOURCE supplier-default
 
 AHORA="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 linea() { # linea <productId> <nodeId> <cantidad> [batchId]
@@ -216,6 +216,36 @@ ok "las cuatro posiciones, en un solo lote" 201
 
 req GET "/stock?custodialOnly=true" --token "$T_DIEGO"
 body "y el inventario propio ya tiene cuatro posiciones" '.data | length' 4
+
+step "9 · una recepción guiada, ejecutada de verdad"
+# Juan no consulta la plantilla: abre el proceso y manda lo que el servidor le
+# pide en `nextStep`. Queda una instancia COMPLETED con su asiento, y otra
+# abierta a medias para poder mirar por dónde va una operación en curso.
+req POST /process-instances --token "$T_JUAN" --body '{"templateCode":"RECEPCION"}'
+ok "Juan abre una recepción" 201
+P_INST="$(jqv '.instance.id')"
+
+guiado() { # guiado <stepId> <payload json>
+  req POST "/process-instances/$P_INST/steps/$1/complete" --token "$T_JUAN" \
+    --body "$(jq -nc --argjson p "$2" '{payload:$p}')"
+}
+guiado origen "$(jq -nc --arg n "$N_SUPPLIER" '{nodeId:$n}')"
+guiado item "$(jq -nc --arg s "TOR-M8" '{code:$s}')"
+guiado lote 'null'
+guiado cantidad '{"quantity":"120"}'
+guiado foto 'null'
+guiado destino "$(jq -nc --arg n "$N_B2" '{nodeId:$n}')"
+guiado confirmar '{}'
+ok "y la recorre entera hasta el asiento" 200
+body "el proceso queda terminado" '.instance.state' 'COMPLETED'
+body "con su movimiento, que apunta a la instancia" '.movements[0].processInstanceId' "$P_INST"
+
+req POST /process-instances --token "$T_JUAN" --body '{"templateCode":"TRASLADO"}'
+ok "y deja un traslado a medias, para ver una operación en curso" 201
+P_ABIERTA="$(jqv '.instance.id')"
+req POST "/process-instances/$P_ABIERTA/steps/origen/complete" --token "$T_JUAN" \
+  --body "$(jq -nc --arg n "$N_B2" '{payload:{nodeId:$n}}')"
+body "esperando por el escaneo" '.nextStep.id' 'item'
 
 # ─────────────────────────────────────────────────────────────────────────────
 printf '\n  aciertos: %d\n  fallos:   %d\n' "$OK" "$BAD"
@@ -243,5 +273,6 @@ cat <<FIN
   y además       juan (CUSTODY) y los ocho nodos de frontera
   existencias    B2: 500 TOR-M8 y el taladro · B3: 120 ARROZ-25 y 48 LECHE-1L
   procesos       RECEPCION · TRASLADO · SALIDA · AJUSTE_ENTRADA · AJUSTE_SALIDA · CUSTODIA
+  y en curso     una RECEPCION terminada y un TRASLADO esperando el escaneo
 
 FIN

@@ -2,6 +2,7 @@ import type { Page } from '@app/common';
 import type {
   Batch, CustomFieldDefinition, Product, ProductCode, StoredMedia,
 } from '@app/catalog';
+import { Quantity } from '@app/inventory';
 import type { Movement, Node, NodeTree, OpenCustody, StockPosition } from '@app/inventory';
 import type { ProcessInstance, ProcessTemplate, StepCompletion, StepDefinition } from '@app/process';
 import type { Organization, User } from '@app/tenancy';
@@ -166,12 +167,33 @@ export const processInstanceView = (i: ProcessInstance): ProcessInstanceView => 
   actorId: i.actorId,
 });
 
+/**
+ * A stored payload is the **enriched** one `validate` gave back (D-56), so it
+ * carries domain values and not only JSON: `CAPTURE_QTY` leaves a `Quantity`
+ * and `CAPTURE_BATCH` a `Date`. Handing that straight to the serializer is a
+ * 500 — a `Quantity` keeps its thousandths in a `bigint`, and `JSON.stringify`
+ * refuses those outright.
+ *
+ * So the wire form is built here, where every other entity of the house is also
+ * turned into a view: decimals as strings and dates as ISO 8601, which is what
+ * spec 03 §1 says the contract speaks.
+ */
+const payloadView = (value: unknown): unknown => {
+  if (value instanceof Quantity) return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(payloadView);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, payloadView(v)]));
+  }
+  return value;
+};
+
 export const stepCompletionView = (c: StepCompletion): StepCompletionView => ({
   id: c.id,
   stepId: c.stepId,
   actorId: c.actorId,
-  // The enriched payload `validate` gave back (D-56), or the literal null of an
-  // omitted step — which is a different thing from a step that never ran.
-  payload: (c.payload ?? null) as Record<string, unknown> | null,
+  // ...or the literal null of an omitted step, which is a different thing from
+  // a step that never ran.
+  payload: (payloadView(c.payload) ?? null) as Record<string, unknown> | null,
   completedAt: c.completedAt.toISOString(),
 });

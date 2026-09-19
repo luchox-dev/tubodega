@@ -65,6 +65,10 @@ plantilla() {
     s#^/movements/$u/reverse\$#/movements/{id}/reverse#;
     s#^/movements/$u\$#/movements/{id}#;
     s#^/stock/custodies\$#/stock/custodies#;
+    s#^/process-instances/$u/steps/[^/]+/complete\$#/process-instances/{id}/steps/{stepId}/complete#;
+    s#^/process-instances/$u/cancel\$#/process-instances/{id}/cancel#;
+    s#^/process-instances/$u\$#/process-instances/{id}#;
+    s#^/process-templates/[^/]+/versions\$#/process-templates/{code}/versions#;
     s#^/process-templates/[^/]+\$#/process-templates/{code}#;
   " <<<"$p")"
   printf '/v1%s' "$p"

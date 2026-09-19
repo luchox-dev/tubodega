@@ -346,18 +346,18 @@ process-instances.dto.ts}`; `apps/tubodega/src/http/process-templates/*` (M);
 **Files:** `scripts/blackbox/lib.sh` (M); `scripts/blackbox/35-procesos.sh` (M);
 `scripts/seed.sh` (M); `docs/postman/tubodega.postman_collection.json` (M)
 
-- [ ] **Step 1:** `plantilla()` aprende las cuatro rutas nuevas, **las más específicas
+- [x] **Step 1:** `plantilla()` aprende las cuatro rutas nuevas, **las más específicas
       primero** (`…/{code}/versions`, `…/{id}/steps/{stepId}/complete`, `…/{id}/cancel`,
       `…/{id}`). Sin esto el cruce de contrato da las operaciones por no ejercitadas y el
       verde es falso.
-- [ ] **Step 2:** `35-procesos.sh` recorre una `RECEPCION` entera y un camino de error por
+- [x] **Step 2:** `35-procesos.sh` recorre una `RECEPCION` entera y un camino de error por
       cada operación nueva, que es lo que el cruce del runner exige.
-- [ ] **Step 3: Run** contra un proceso propio **en un puerto libre**, comprobando antes con
+- [x] **Step 3: Run** contra un proceso propio **en un puerto libre**, comprobando antes con
       `ss -ltnp` quién responde.
-- [ ] **Step 4:** `scripts/seed.sh` deja por fin una instancia guiada —es lo que su cabecera
+- [x] **Step 4:** `scripts/seed.sh` deja por fin una instancia guiada —es lo que su cabecera
       reserva desde el plan 3f— y la fila «instancias de proceso … plan 8» desaparece.
-- [ ] **Step 5:** Postman gana el par feliz/error por operación.
-- [ ] **Step 6: Commit** `test(blackbox): los procesos, de punta a punta por el socket`
+- [x] **Step 5:** Postman gana el par feliz/error por operación.
+- [x] **Step 6: Commit** `test(blackbox): los procesos, de punta a punta por el socket`
 
 ---
 
