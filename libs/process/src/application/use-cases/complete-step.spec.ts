@@ -215,25 +215,24 @@ describe('CompleteStep', () => {
   });
 
   /**
-   * Una plantilla que cierra sin `CONFIRM`: no produce efectos, así que la
-   * instancia termina sin movimientos y el evento de cierre los lista vacíos.
-   * Es el único camino por el que un proceso completa sin asentar nada.
+   * Antes, una plantilla que cerraba sin `CONFIRM` completaba la instancia sin
+   * asentar nada: el runner solo pide efectos al cerrar y solo `CONFIRM` los
+   * emite, así que no había efectos que pedir. Esto se probaba aquí como una
+   * propiedad del runner, y lo es — pero visto desde la bodega era un agujero:
+   * el operario «terminaba» una recepción, recibía un 200, y el inventario no
+   * se enteraba. Ahora la plantilla no se puede construir, así que el camino no
+   * existe y esta prueba comprueba justo eso.
+   *
+   * La propiedad del runner sigue viva y probada donde le toca: en
+   * linear-runner.spec.ts, que los efectos solo salen al cerrar (P-6).
    */
-  it('un proceso que cierra sin CONFIRM termina sin movimientos', async () => {
-    const t = build();
-    const sinConfirmar = unwrap(ProcessTemplate.create({
+  it('una plantilla que cierra sin CONFIRM ya no se puede ni construir', () => {
+    const r = ProcessTemplate.create({
       id: v7() as ProcessTemplateId, orgId: ORG, code: 'SOLOMIRAR', version: 1,
       steps: [{ id: 'item', type: 'SCAN_ITEM', required: true, transitions: [{ to: null }] }],
-    }));
-    await t.templates.save(sinConfirmar);
-    const i = anInstance({ templateCode: 'SOLOMIRAR', currentStepId: 'item' });
-    t.instances.sembrar(i);
-
-    const out = await t.complete.execute(ctx(), { instanceId: i.id, stepId: 'item' as StepId, payload: { code: 'TOR-M8' } });
-    expect(out.instance.state).toBe(ProcessState.COMPLETED);
-    expect(out.movements).toBeUndefined();
-    expect(t.efectos).toEqual([]);
-    expect(t.publicados.at(-1)).toBe('process.completed');
+    });
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error.type).toBe('invalid-template');
   });
 
   it('resuelve la plantilla en la versión de la instancia, no en la activa (P-1)', async () => {

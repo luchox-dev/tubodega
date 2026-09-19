@@ -277,8 +277,10 @@ Todo se ejecuta con `.env.test` contra `tubodega_test`.
 ### Caja negra
 
 [`scripts/blackbox.sh`](scripts/blackbox.sh) recorre **el contrato entero** por
-HTTP contra un servidor de verdad — 455 comprobaciones en seis suites, 456
-si exportas `JWT_SECRET`:
+HTTP contra un servidor de verdad — 1063 comprobaciones en trece suites. Las
+seis primeras van por endpoint, con el camino feliz y el de error de cada
+operación; las siete siguientes son **jornadas de trabajo** que cruzan módulos
+y cierran con arqueo:
 
 | Suite | Qué recorre |
 |---|---|
@@ -289,9 +291,30 @@ si exportas `JWT_SECRET`:
 | [`35-procesos.sh`](scripts/blackbox/35-procesos.sh) | Las seis plantillas que toda organización trae puestas, sin que nadie las cree: sus pasos, sus transiciones de un elemento (P-8), el lado que el ajuste fija por código de nodo, y la de la empresa de al lado, que no está |
 | [`40-transversal.sh`](scripts/blackbox/40-transversal.sh) | Lo que el borde da a todos por igual: idempotencia (incluida una carrera real de dos peticiones), trazas, `problem+json`, el documento publicado y la inmutabilidad del ledger. Va la última porque hace falta que exista algo que mover |
 
+Y las siete jornadas, que comparten el prólogo de
+[`mundo.sh`](scripts/blackbox/mundo.sh) — sin prefijo numérico, porque el runner
+descubre las suites con `[0-9]*.sh` y un fichero numerado ahí se ejecutaría
+como una:
+
+| Escenario | La jornada |
+|---|---|
+| [`50-jornada-recepcion.sh`](scripts/blackbox/50-jornada-recepcion.sh) | **El camión de las seis.** Marta abre la casa, Diego dibuja la bodega y Juan descarga con una recepción guiada de siete pasos. La foto queda reclamada de verdad, el asiento es trazable hasta su instancia, y dos peticiones a la vez con la misma clave dejan un solo tornillo en el estante |
+| [`51-conteo-ciclico.sh`](scripts/blackbox/51-conteo-ciclico.sh) | **El inventario del sábado.** Sobran doce y faltan tres, y eso se asienta contra las fronteras de ajuste con un motivo. Después de cada 422 se relee el saldo: un error que deja el inventario a medias es peor que no tener el endpoint |
+| [`52-prestamo-herramienta.sh`](scripts/blackbox/52-prestamo-herramienta.sh) | **El taladro de Juan.** Prestar no es despachar: devolución parcial que deja el préstamo abierto, vencidos, y una compensación que cierra el préstamo y devuelve la herramienta. Cruza I-17 e I-18 contra el saldo real |
+| [`53-venta-y-devolucion.sh`](scripts/blackbox/53-venta-y-devolucion.sh) | **La venta del martes y el cliente que devuelve.** Las cinco fronteras de salida, la compensación que no se hace dos veces, y el histórico recorrido entero de dos en dos |
+| [`54-reorganizacion-y-personal.sh`](scripts/blackbox/54-reorganizacion-y-personal.sh) | **Se muda la zona.** El estante cambia de padre y los `path` se reescriben, pero el saldo no se muda. Y la vecina de al lado pide seis recursos de la primera y recibe seis `404`, nunca un `403` |
+| [`55-catalogo-masivo.sh`](scripts/blackbox/55-catalogo-masivo.sh) | **La hoja de cálculo del proveedor.** Ciento veinte referencias con una repetida y una en docenas; el catálogo recorrido entero paginando; y el lote de movimientos que con una línea mala no deja ni una fila |
+| [`56-cierre-de-jornada.sh`](scripts/blackbox/56-cierre-de-jornada.sh) | **El arqueo, con dos operarios a la vez.** Lo que `fastify.inject()` no fabrica: dos despachos de siete sobre un saldo de diez, el mismo paso de la misma instancia, y dos jefes publicando la misma versión |
+
+Cada jornada cierra con **arqueo**, que es la forma HTTP de las propiedades de
+`test/invariants/`: la suma de todos los saldos de un producto es cero, el saldo
+materializado es la suma de los asientos, y lo pendiente en las custodias es lo
+que está en manos de alguien. Un verde que solo dijera «contestó 200» no es el
+verde que quiere un jefe de almacén.
+
 ```bash
 pnpm start:dev                       # en otra terminal
-pnpm blackbox                        # las seis suites y el informe de cobertura
+pnpm blackbox                        # las trece suites y el informe de cobertura
 BASE=http://otra-maquina:3000 pnpm blackbox
 BASE=http://localhost:3001 DB=tubodega_docker pnpm blackbox   # contra la pila de compose
 ./scripts/blackbox.sh --only tenencia
@@ -304,10 +327,10 @@ alguna queda sin cubrir, la nombra y sale distinto de cero: «completo» deja de
 ser una palabra y pasa a ser algo que se comprueba solo.
 
 ```
-  operaciones del contrato: 46
-  ejercitadas:              46
-  con camino feliz:         46
-  con camino de error:      46  (1 sin error posible)
+  operaciones del contrato: 52
+  ejercitadas:              52
+  con camino feliz:         52
+  con camino de error:      52  (1 sin error posible)
 ```
 
 **No sustituye a `pnpm test:e2e`, lo complementa.** La suite corre en proceso con
@@ -324,7 +347,7 @@ interior del servidor.
 
 En CI corre sola, en un job hermano de las cinco puertas
 ([`ci.yml`](.github/workflows/ci.yml)): compila, levanta `start:prod`, espera al
-contrato y ejecuta las tres suites. Va al lado y no dentro porque arrancar la
+contrato y ejecuta las suites. Va al lado y no dentro porque arrancar la
 aplicación es lento y no tiene por qué alargar la ruta crítica.
 
 ## Datos de ejemplo

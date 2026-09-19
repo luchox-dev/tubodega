@@ -121,3 +121,45 @@ describe('CreateTemplateVersion', () => {
     expect(t.repo.rows.every((p) => p.orgId === ORG)).toBe(true);
   });
 });
+
+/**
+ * Publicar una versión no puede depender de que la que está en servicio se
+ * pueda construir. La guarda que exige que una plantilla termine en un CONFIRM
+ * obligatorio corre también al leer —`parseSteps` se re-evalúa en cada lectura,
+ * a propósito— así que una organización que hubiera publicado una plantilla
+ * inválida antes de la guarda se quedaba sin leerla y, si publicar la cargaba,
+ * sin poder sustituirla tampoco: atascada para siempre.
+ *
+ * El caso de uso pregunta por el NÚMERO de la activa, que es una columna. Aquí
+ * se comprueba que basta con eso.
+ */
+describe('CreateTemplateVersion · salir de una plantilla que ya no se puede construir', () => {
+  it('publica una versión sana sin necesitar parsear la activa', async () => {
+    const repo = new InMemoryTemplateRepository();
+    const ids = { next: () => v7() };
+    const crear = new CreateTemplateVersion(repo, ids as never);
+
+    // Una fila como las que dejó el defecto: cierra sin CONFIRM. Se siembra
+    // saltándose el constructor, que es exactamente como llegó a la tabla.
+    const rota = {
+      id: v7() as ProcessTemplateId,
+      orgId: ORG,
+      code: 'TRASLADO' as TemplateCode,
+      version: 4,
+      active: true,
+      steps: [{ id: 'item', type: 'SCAN_ITEM', required: true, config: {}, transitions: [{ to: null }] }],
+      deactivated() {
+        throw new Error('no se debería construir la rota para publicar encima');
+      },
+    } as unknown as ProcessTemplate;
+    repo.rows.push(rota);
+
+    const v5 = await crear.execute(admin(), { code: 'TRASLADO', version: 5, steps: SIN_FOTO });
+
+    expect(v5.version).toBe(5);
+    expect(v5.active).toBe(true);
+    // Y la rota queda fuera de servicio, así que el listado vuelve a leerse.
+    expect(await repo.listActive(ORG)).toHaveLength(1);
+    expect((await repo.listActive(ORG))[0]?.version).toBe(5);
+  });
+});

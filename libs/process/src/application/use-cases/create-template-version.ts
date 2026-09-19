@@ -43,22 +43,28 @@ export class CreateTemplateVersion {
 
     // You version what you can see: the same 404 as
     // `GET /v1/process-templates/{code}`, and for the same reason.
-    const active = await this.templates.findActive(ctx.orgId, code.value);
-    if (!active) throw new TemplateNotFoundError(input.code);
+    //
+    // Se pregunta por el NÚMERO y no por la plantilla: publicar solo necesita
+    // saber a cuál hay que superar. Cargarla entera ataba este camino a que la
+    // versión en servicio se pudiera parsear, y entonces una organización que
+    // hubiera publicado una inválida no podía ni leerla ni sustituirla — sin
+    // salida. Publicar una sana es el arreglo, y tiene que funcionar siempre.
+    const activeVersion = await this.templates.activeVersion(ctx.orgId, code.value);
+    if (activeVersion === null) throw new TemplateNotFoundError(input.code);
 
     // **Before the "must beat the active one" check**, because when both are
     // true — reposting the version in service — "that number is taken" is the
     // specific answer and "it does not move forward" is the vague one.
-    if (await this.templates.findVersion(ctx.orgId, code.value, input.version)) {
+    if (await this.templates.versionExists(ctx.orgId, code.value, input.version)) {
       throw new TemplateVersionTakenError(input.code, input.version);
     }
 
-    if (!Number.isInteger(input.version) || input.version <= active.version) {
+    if (!Number.isInteger(input.version) || input.version <= activeVersion) {
       // Not `template-version-taken`: the number may well be free. What it
       // cannot be is behind the one in service — activating that would be
       // going back, not versioning.
       throw new InvalidTemplateError(
-        `la versión ${input.version} no supera a la activa (${active.version})`,
+        `la versión ${input.version} no supera a la activa (${activeVersion})`,
       );
     }
 
@@ -75,7 +81,7 @@ export class CreateTemplateVersion {
     // Deactivate first: if the new one fails to save, the transaction of the
     // request takes both back, and this order means there is never an instant
     // with two active versions of one code visible to a concurrent reader.
-    await this.templates.save(active.deactivated());
+    await this.templates.deactivateAll(ctx.orgId, code.value);
     await this.templates.save(created.value);
 
     return created.value;

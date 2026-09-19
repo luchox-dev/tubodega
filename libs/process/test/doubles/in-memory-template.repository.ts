@@ -21,6 +21,37 @@ export class InMemoryTemplateRepository implements ProcessTemplateRepository {
     );
   }
 
+  activeVersion(orgId: OrgId, code: TemplateCode): Promise<number | null> {
+    return Promise.resolve(
+      this.rows.find((t) => t.orgId === orgId && t.code === code && t.active)?.version ?? null,
+    );
+  }
+
+  versionExists(orgId: OrgId, code: TemplateCode, version: number): Promise<boolean> {
+    return Promise.resolve(
+      this.rows.some((t) => t.orgId === orgId && t.code === code && t.version === version),
+    );
+  }
+
+  /**
+   * El repositorio real hace esto con un UPDATE sobre la columna `active`, sin
+   * construir la entidad. El doble tiene que hacer lo mismo —no llamar a
+   * `deactivated()`— o mentiría justo donde importa: publicar una versión sana
+   * encima de una plantilla que ya no se puede construir es el único camino de
+   * salida para una organización que publicó una inválida.
+   */
+  deactivateAll(orgId: OrgId, code: TemplateCode): Promise<void> {
+    this.rows.forEach((t, i) => {
+      if (t.orgId === orgId && t.code === code && t.active) {
+        this.escrituras += 1;
+        this.rows[i] = Object.assign(Object.create(Object.getPrototypeOf(t) as object), t, {
+          active: false,
+        }) as ProcessTemplate;
+      }
+    });
+    return Promise.resolve();
+  }
+
   listActive(orgId: OrgId): Promise<ProcessTemplate[]> {
     return Promise.resolve(
       this.rows.filter((t) => t.orgId === orgId && t.active).sort((a, b) => a.code.localeCompare(b.code)),

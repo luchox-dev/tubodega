@@ -13,6 +13,7 @@ import { Ctx } from '../pipeline/params.decorators.js';
 import { ProblemDetailsView } from '../shared/shared.dto.js';
 import { mediaView } from '../shared/views.js';
 import { UuidParam } from '../shared/uuid-param.pipe.js';
+import { ValidationFailedError } from '../pipeline/validation.pipe.js';
 import { isMultipart, readFiles } from '../uploads/multipart.js';
 import { AttachMediaDto, MediaView } from './products.dto.js';
 
@@ -56,10 +57,22 @@ export class ProductMediaController {
 
     // The global pipe does not see this body: the route also accepts multipart,
     // so the DTO is validated here, by hand, on the JSON branch only.
+    //
+    // Y el error es 400, no 415: el cliente mandó `application/json`, que es un
+    // tipo que esta ruta acepta, y lo que trae dentro está mal. El 415 se queda
+    // para lo que de verdad lo es —un multipart sin fichero, o un tipo que no
+    // se sirve—, porque a un cliente que recibe «tipo de contenido no
+    // soportado» por un array mal escrito no le queda forma de averiguarlo.
     const body = req.body as { storageKeys?: unknown } | undefined;
     const keys = Array.isArray(body?.storageKeys) ? body.storageKeys : [];
     if (keys.length === 0 || keys.some((k) => typeof k !== 'string')) {
-      throw new UnsupportedMediaTypeError('ninguno');
+      throw new ValidationFailedError([
+        {
+          pointer: '/storageKeys',
+          code: 'isArray',
+          message: 'storageKeys debe ser un array no vacío de claves de la zona de espera',
+        },
+      ]);
     }
     const attached = await this.attach.execute(ctx, {
       productId,

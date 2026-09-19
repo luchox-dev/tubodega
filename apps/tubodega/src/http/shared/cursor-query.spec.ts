@@ -1,5 +1,5 @@
 import type { Cursor } from '@app/common';
-import { InvalidFilterError, parsePage } from './cursor-query.js';
+import { InvalidFilterError, idFilter, parsePage } from './cursor-query.js';
 
 const opts = { sortable: ['name', 'email'], defaultSort: 'name', filters: ['active', 'role'] } as const;
 
@@ -51,5 +51,56 @@ describe('parsePage', () => {
       expect((e as InvalidFilterError).status).toBe(400);
       expect((e as InvalidFilterError).type).toBe('invalid-filter');
     }
+  });
+});
+
+describe('idFilter', () => {
+  const id = '018f3a2b-7c4d-7000-8000-a1b2c3d4e5f6';
+
+  it('lets a well-formed identifier through', () => {
+    expect(idFilter({ productId: id }, 'productId')).toBe(id);
+    expect(idFilter({}, 'productId')).toBeUndefined();
+  });
+
+  // Every one of these reached the database and came back as a 500 with
+  // `invalid input syntax for type uuid` in the log. The literal "null" is the
+  // one that actually happens: a client whose variable came back empty.
+  it.each([['null'], ['undefined'], ['no-soy-uuid'], ['123'], [''], ['018f3a2b-7c4d-7000-8000-a1b2c3d4e5f']])(
+    'refuses %s as a filter instead of letting the uuid cast blow up',
+    (raw) => {
+      expect(() => idFilter({ productId: raw }, 'productId')).toThrow(InvalidFilterError);
+    },
+  );
+
+  it('an array of ids is not an id either', () => {
+    expect(() => idFilter({ productId: [id] }, 'productId')).toThrow(InvalidFilterError);
+  });
+});
+
+describe('parsePage · una colección que no ofrece orden', () => {
+  // El saldo: su único orden con sentido es su clave natural. Antes declaraba
+  // `sortable: ['nodeId']` y el orden resuelto no llegaba al caso de uso, así
+  // que `?sort=-nodeId` devolvía lo mismo que `?sort=nodeId` y el cliente se
+  // quedaba creyendo que había ordenado. Aceptar y tirar es lo único inadmisible.
+  const sinOrden = { sortable: [] as readonly string[], defaultSort: 'nodeId', filters: ['productId'] } as const;
+
+  it('funciona sin que nadie pida orden', () => {
+    expect(parsePage({}, sinOrden)).toEqual({ limit: 50, sort: { field: 'nodeId', dir: 'asc' } });
+    expect(parsePage({ limit: '10' }, sinOrden).limit).toBe(10);
+  });
+
+  it('sigue paginando', () => {
+    const cursor = 'W3siYSI6MX1d' as Cursor;
+    expect(parsePage({ cursor }, sinOrden).cursor).toBe(cursor);
+  });
+
+  it('y rechaza un sort explícito en vez de descartarlo en silencio', () => {
+    expect(() => parsePage({ sort: 'nodeId' }, sinOrden)).toThrow(InvalidFilterError);
+    expect(() => parsePage({ sort: '-nodeId' }, sinOrden)).toThrow(InvalidFilterError);
+    expect(() => parsePage({ sort: 'loquesea' }, sinOrden)).toThrow(InvalidFilterError);
+  });
+
+  it('sigue rechazando los filtros no declarados', () => {
+    expect(() => parsePage({ color: 'rojo' }, sinOrden)).toThrow(InvalidFilterError);
   });
 });
