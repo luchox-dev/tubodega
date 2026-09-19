@@ -232,19 +232,19 @@ get-process-instance,list-process-instances}.ts` + specs
 
 **Files:** `libs/process/src/application/effect-applier.ts` + spec
 
-- [ ] **Step 1: spec primero**, con **espías sobre los casos de uso reales** (`CreateBatch`,
+- [x] **Step 1: spec primero**, con **espías sobre los casos de uso reales** (`CreateBatch`,
       `RecordMovementBatch`, `AttachMedia`) y no sobre `Recording*Port`, que ya no existen
       (D-46): el orden es `CREATE_BATCH` → `EMIT_MOVEMENTS` → `ATTACH_MEDIA`; el `id` del
       lote recién creado aterriza en `drafts[feeds].batchId` **antes** de emitir nada; sin
       `CREATE_BATCH` no se llama a `CreateBatch`; sin claves no se llama a `AttachMedia`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar.** `occurredAt` lo pone el `Clock` —una instancia puede llevar
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar.** `occurredAt` lo pone el `Clock` —una instancia puede llevar
       abierta desde ayer, y la hora del asiento es el instante en que se confirma— y
       `processInstanceId` se estampa aquí: es lo que por fin llena la columna. `AttachMedia`
       se llama en su forma `storageKeys`, la que exige `RECORD_MOVEMENT` (D-14) y la que
       lanza el `upload-not-found` de `@app/catalog` (D-52, D-58).
-- [ ] **Step 4: Run** → PASS.
-- [ ] **Step 5: Commit** `feat(process): el aplicador de efectos, y el asiento que sale del confirmar`
+- [x] **Step 4: Run** → PASS.
+- [x] **Step 5: Commit** `feat(process): el aplicador de efectos, y el asiento que sale del confirmar`
 
 ---
 
