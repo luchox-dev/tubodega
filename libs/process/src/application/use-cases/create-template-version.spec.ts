@@ -97,6 +97,18 @@ describe('CreateTemplateVersion', () => {
       .rejects.toMatchObject({ type: 'template-not-found', status: 404 });
   });
 
+  it('un código imposible es 404, no un 422 sobre el ancho de una columna', async () => {
+    const t = build();
+    await expect(t.crear.execute(admin(), { code: 'x'.repeat(65), version: 2, steps: SIN_FOTO }))
+      .rejects.toMatchObject({ type: 'template-not-found', status: 404 });
+  });
+
+  it('una versión que no es entera tampoco avanza', async () => {
+    const t = build();
+    await expect(t.crear.execute(admin(), { code: 'RECEPCION', version: 1.5, steps: SIN_FOTO }))
+      .rejects.toMatchObject({ type: 'invalid-template', status: 422 });
+  });
+
   it('exige MANAGE_CATALOG: Juan opera procesos y no los redefine', async () => {
     const t = build();
     await expect(t.crear.execute(aContext([Role.OPERATOR]), { code: 'RECEPCION', version: 2, steps: SIN_FOTO }))

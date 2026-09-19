@@ -201,6 +201,41 @@ describe('CompleteStep', () => {
       .rejects.toBeInstanceOf(InsufficientRoleError);
   });
 
+  /**
+   * La FK compuesta `(org_id, code, version)` es la que hace de P-1 una
+   * garantía de base, así que solo se llega aquí leyendo una plantilla que
+   * alguien borró a mano. Sale con su tipo, no como un 500.
+   */
+  it('si la versión que la instancia registró no aparece, es template-not-found', async () => {
+    const t = build();
+    const i = anInstance({ templateCode: 'TRASLADO', templateVersion: 99, currentStepId: 'origen' });
+    t.instances.sembrar(i);
+    await expect(t.complete.execute(ctx(), { instanceId: i.id, stepId: 'origen' as StepId, payload: { nodeId: b2.id } }))
+      .rejects.toMatchObject({ type: 'template-not-found', status: 404 });
+  });
+
+  /**
+   * Una plantilla que cierra sin `CONFIRM`: no produce efectos, así que la
+   * instancia termina sin movimientos y el evento de cierre los lista vacíos.
+   * Es el único camino por el que un proceso completa sin asentar nada.
+   */
+  it('un proceso que cierra sin CONFIRM termina sin movimientos', async () => {
+    const t = build();
+    const sinConfirmar = unwrap(ProcessTemplate.create({
+      id: v7() as ProcessTemplateId, orgId: ORG, code: 'SOLOMIRAR', version: 1,
+      steps: [{ id: 'item', type: 'SCAN_ITEM', required: true, transitions: [{ to: null }] }],
+    }));
+    await t.templates.save(sinConfirmar);
+    const i = anInstance({ templateCode: 'SOLOMIRAR', currentStepId: 'item' });
+    t.instances.sembrar(i);
+
+    const out = await t.complete.execute(ctx(), { instanceId: i.id, stepId: 'item' as StepId, payload: { code: 'TOR-M8' } });
+    expect(out.instance.state).toBe(ProcessState.COMPLETED);
+    expect(out.movements).toBeUndefined();
+    expect(t.efectos).toEqual([]);
+    expect(t.publicados.at(-1)).toBe('process.completed');
+  });
+
   it('resuelve la plantilla en la versión de la instancia, no en la activa (P-1)', async () => {
     const t = build();
     // La v2 quita el paso `origen`; la instancia nació en la v1 y lo sigue viendo.

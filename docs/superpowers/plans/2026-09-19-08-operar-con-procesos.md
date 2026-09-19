@@ -3,7 +3,7 @@
 > Rama `plan/08-operar-con-procesos` · documento en `docs/superpowers/plans/2026-09-19-08-operar-con-procesos.md`
 > Fases del maestro: **F4.3**, el resto de **F4.4** y la **e2e WAVE 4** *(re-corte, D-51)*
 
-## Estado: **en ejecución** · 2026-09-19
+## Estado: **ejecutado** · 2026-09-19
 
 ---
 
@@ -379,13 +379,110 @@ process-instances.dto.ts}`; `apps/tubodega/src/http/process-templates/*` (M);
 
 **Files:** este documento; `README.md`; el maestro
 
-- [ ] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba
+- [x] **Step 1:** cerrar este documento con lo ejecutado, lo que se encontró y no estaba
       previsto, las desviaciones, y «lo que encontró cada capa de prueba».
-- [ ] **Step 2:** `README.md` — la tabla de endpoints, el estado de la WAVE 4 y la fila del
+- [x] **Step 2:** `README.md` — la tabla de endpoints, el estado de la WAVE 4 y la fila del
       seed.
-- [ ] **Step 3:** el maestro: D-60..D-66 y la fila 8 de la Parte A a **hecho**.
-- [ ] **Step 4:** las seis puertas.
-- [ ] **Step 5: Commit** `docs(plan): la bitácora del plan 8`
+- [x] **Step 3:** el maestro: D-60..D-66 y la fila 8 de la Parte A a **hecho**.
+- [x] **Step 4:** las seis puertas.
+- [x] **Step 5: Commit** `docs(plan): la bitácora del plan 8`
+
+---
+
+## Bitácora
+
+Ejecutado el 2026-09-19 en `plan/08-operar-con-procesos`, doce tareas y doce commits.
+Al terminar, los seis procesos que toda organización trae sembrados **se ejecutan** por
+HTTP, paso a paso, y de ahí salen asientos del ledger con su `processInstanceId`.
+45 → **51** operaciones, en 32 → 37 paths.
+
+### Lo que se encontró y no estaba previsto
+
+**El cursor de keyset se saltaba filas en silencio, y no en mi código.** La prueba de
+paginación de las instancias salió en rojo con una segunda página vacía. La causa: `now()`
+escribe microsegundos, un `Date` de JavaScript solo llega al milisegundo, y el cursor
+—que pasa por ahí— salía truncado **por debajo** del valor guardado, así que
+`(created_at, id) < (cursor)` excluía todas las filas de ese milisegundo. No es teórico ni
+nuevo: `POST /v1/products/import` escribe hasta mil filas en una transacción, todas con el
+mismo `now()`, y `GET /v1/products?sort=createdAt&limit=50` devolvía la segunda página
+vacía **desde el plan 3**. Las tres columnas alcanzables como clave de cursor pasan a
+`timestamptz(3)` (D-67), con su regresión en `catalog.int-spec.ts` probada en rojo
+revirtiendo la columna a mano.
+
+**Un 500 que solo vio la caja negra.** `GET /v1/process-instances/{id}` sobre una
+instancia con un paso `CAPTURE_QTY` completado reventaba con «Do not know how to serialize
+a BigInt». Lo que se guarda es el payload **enriquecido** (D-56), así que lleva un
+`Quantity`, y un `Quantity` guarda sus milésimas en un `bigint` que `JSON.stringify`
+rechaza de plano. La forma de cable se construye ahora en `views.ts`. El caso 2 de la e2e
+lo fija: mutando `stepCompletionView` para devolver el payload crudo caen tres casos.
+
+**La regla de «sin stubs en producción» disparó a mitad de plan.** Registrar los casos de
+uso de instancia en `ProcessModule` antes de que sus dos puertos tuvieran adaptador hizo
+fallar el arranque de Nest —no una prueba: el arranque—. Se quedaron fuera del módulo
+hasta la Task 7, que es exactamente lo que la regla del maestro pide y no lo que este
+documento había planificado.
+
+**Editar una migración ya aplicada rompe su checksum.** El arreglo de D-67 se escribió
+primero dentro de `20260919120000_process_append_only`, que ya se había aplicado a las dos
+bases; Prisma pidió un `migrate reset`. Se partió en una migración propia
+(`20260919121500_cursor_millisecond_precision`) y las dos bases avanzaron sin perder nada,
+que es lo que «solo hacia adelante, nunca editadas» significa en la práctica.
+
+**El doble de instancias mentía en lo que el lock mide.** La `version` de la entidad no
+cambia al guardar —`at()` y `completed()` conservan la que traían— así que un doble que no
+reflejara la versión de la **fila** al leer hacía fallar dos escrituras seguidas con una
+versión obsoleta que en Postgres no existiría. Ahora `findById` devuelve lo que devolvería
+Postgres.
+
+**P-3 tiene que comprobarse antes que P-2.** El runner no distingue: un paso ya hecho
+quedó detrás del cursor, así que lo llamaría `wrong-step` y le diría al cliente que llegó
+tarde en vez de que eso ya lo hizo. `CompleteStep` mira los completados antes de llamar al
+motor. P-4 sigue ganándoles a los dos: un proceso cancelado está cerrado, no desordenado.
+
+**`ProcessTemplate` necesitaba `deactivated()`.** No existía forma de apagar una versión
+sin volver a pasar los pasos por el validador, que es el único sitio donde no puede contar
+nada nuevo — lo que sale de memoria ya se validó al entrar.
+
+### Desviaciones
+
+| Qué dijo el plan | Qué se hizo, y por qué |
+|---|---|
+| La Task 3 registra el runner y los casos de uso | Solo el runner y la fábrica de deps. Los cuatro de instancia esperan a la Task 7, porque sus puertos no tenían adaptador y Nest no arranca |
+| Una migración, la del `REVOKE` y el índice | **Dos.** La de D-67 no podía ir en la primera sin romperle el checksum a una migración ya aplicada |
+| «45 → 51 operaciones» | Correcto, y contado del `openapi.json` antes de escribirlo: 32 → 37 paths. El plan 7 se equivocó en esto y aquí se midió |
+| `handlerDeps(ctx)` como función | `HandlerDepsFactory.for(ctx)`: necesita inyectar cuatro repositorios y un reloj, y eso en Nest es una clase |
+| La e2e no nombraba el orden de sus pasos | El ayudante `recorrer` sigue el `nextStep` de cada respuesta y recibe un **mapa**, no una lista. Con la lista escrita, la prueba comprobaría su propia lista y no que el servidor va diciendo qué sigue |
+| La cobertura saldría sola | `application/**` se quedó en 87,8 % de ramas. Faltaban seis caminos reales —la plantilla borrada bajo una instancia, el `feeds` que no señala a nadie, un proceso que cierra sin `CONFIRM`— y cada uno ganó su prueba |
+
+### Lo que encontró cada capa de prueba
+
+**El dominio y la aplicación** (831 pruebas) encontraron lo que aún era barato: que P-3
+tenía que ir antes que P-2, que el doble mentía sobre la versión, y —al cerrar
+cobertura— que hay un camino por el que un proceso completa sin asentar nada: una
+plantilla que cierra en un paso que no es `CONFIRM`. Existe, y ahora está probado.
+
+**La integración** encontró lo que solo se ve contra Postgres: que el contexto no
+sobrevive a un `JSON.stringify` ingenuo, que la FK compuesta es de verdad quien sostiene
+P-1, y el defecto del cursor —que llevaba publicado desde el plan 3 y ninguna prueba
+miraba, porque todas las que paginaban lo hacían por `sku` o por `path`—.
+
+**La caja negra** encontró el 500 del `bigint`, que las 277 pruebas en proceso no habían
+tocado porque ninguna leía todavía una instancia con una cantidad capturada. 541 aciertos,
+0 fallos, y 52/52 operaciones con camino feliz y de error.
+
+**La e2e** (14 casos, 6,4 s) es la que demuestra la promesa entera: Juan recorre las seis
+plantillas sin consultar ninguna, el lote nace en la misma transacción que el movimiento
+que lo usa, un confirmar sin existencias deja la instancia intacta en su paso, y una
+recepción abandonada no deja ni stock ni lote.
+
+**Newman** sale con 7 fallos, **los mismos 7 que antes de este plan** (se comprobó
+corriendo la colección desde el árbol anterior): son de la carpeta «Fotos» y de multipart,
+no de nada que este plan toque. Las 18 peticiones nuevas y sus 67 afirmaciones pasan.
+
+### Decisiones nuevas
+
+Continúan la serie en **D-60** y están en el maestro. La que más importa fuera de este
+módulo es **D-67**, que arregla un defecto que llevaba publicado desde el plan 3.
 
 ---
 

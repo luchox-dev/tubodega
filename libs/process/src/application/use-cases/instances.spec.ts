@@ -154,6 +154,21 @@ describe('CancelProcess', () => {
       .rejects.toMatchObject({ type: 'process-instance-not-found', status: 404 });
   });
 
+  /**
+   * Una fila con `current_step_id` en NULL: el motor no la produce estando
+   * abierta, pero la columna lo admite y el repositorio la rehidrataría así.
+   * El evento dice `null` y no se cae.
+   */
+  it('una abierta sin paso actual se cancela igual, y el evento dice null', async () => {
+    const t = build();
+    const rara = anInstance({ currentStepId: undefined });
+    t.instances.sembrar(rara);
+
+    const out = await t.cancel.execute(aContext([Role.OPERATOR]), rara.id);
+    expect(out.state).toBe(ProcessState.CANCELLED);
+    expect(t.events.publicados[0]?.data.abandonedAt).toBeNull();
+  });
+
   it('publica process.cancelled', async () => {
     const t = build();
     const abierta = anInstance();
@@ -207,6 +222,31 @@ describe('GetProcessInstance', () => {
 
     const out = await t.get.execute(aContext(), abierta.id);
     expect(out.currentStep?.id).toBe('item');
+  });
+
+  /**
+   * La fila apunta a una versión que no está: la FK compuesta lo impide, así
+   * que solo se llega aquí leyendo una plantilla borrada a mano. Se responde sin
+   * paso actual en vez de reventar — el histórico de completados sigue siendo
+   * lo que el cliente vino a ver.
+   */
+  it('si la versión de la plantilla no aparece, no hay paso actual que enseñar', async () => {
+    const t = build();
+    const abierta = anInstance({ templateVersion: 99 });
+    t.instances.sembrar(abierta);
+
+    const out = await t.get.execute(aContext(), abierta.id);
+    expect(out.currentStep).toBeUndefined();
+    expect(out.instance.id).toBe(abierta.id);
+  });
+
+  it('y si el paso actual no está en esa versión, tampoco', async () => {
+    const t = build();
+    await sembrarPlantilla(t);
+    const abierta = anInstance({ currentStepId: 'un-paso-que-no-existe' });
+    t.instances.sembrar(abierta);
+
+    expect((await t.get.execute(aContext(), abierta.id)).currentStep).toBeUndefined();
   });
 
   it('la de otra organización no está (I-6)', async () => {

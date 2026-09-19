@@ -139,6 +139,40 @@ describe('EffectApplier', () => {
     expect(out).toEqual([{ id: 'mov-1' }]);
   });
 
+  it('un lote por serie viaja con su serie, y sin vencimiento no manda ninguno', async () => {
+    const t = build();
+    await t.applier.apply(aContext(), INSTANCIA, [
+      { kind: 'CREATE_BATCH', draft: { productId: leche.id, serial: 'BSH-001' }, feeds: 0 },
+      { kind: 'EMIT_MOVEMENTS', drafts: [borrador()] },
+    ]);
+    expect(t.recibido.batch).toEqual({ productId: leche.id, serial: 'BSH-001' });
+  });
+
+  it('un lote nuevo con vencimiento lo lleva puesto', async () => {
+    const t = build();
+    const vence = new Date('2026-10-01T00:00:00.000Z');
+    await t.applier.apply(aContext(), INSTANCIA, [
+      { kind: 'CREATE_BATCH', draft: { productId: leche.id, lotCode: 'L-1', expiresAt: vence }, feeds: 0 },
+      { kind: 'EMIT_MOVEMENTS', drafts: [borrador()] },
+    ]);
+    expect(t.recibido.batch).toEqual({ productId: leche.id, lotCode: 'L-1', expiresAt: vence });
+  });
+
+  /**
+   * Hoy `feeds` vale siempre 0 y siempre hay un borrador (spec 13 §3), pero el
+   * día multi-línea el índice puede señalar a un borrador que no está: el lote
+   * se crea igual y no se escribe nada, en vez de reventar con un `undefined`.
+   */
+  it('un `feeds` que no señala a ningún borrador no rompe nada', async () => {
+    const t = build();
+    await t.applier.apply(aContext(), INSTANCIA, [
+      { kind: 'CREATE_BATCH', draft: { productId: leche.id, lotCode: 'L-1' }, feeds: 7 },
+      { kind: 'EMIT_MOVEMENTS', drafts: [borrador()] },
+    ]);
+    expect(t.llamadas).toEqual(['CREATE_BATCH', 'EMIT_MOVEMENTS']);
+    expect((t.recibido.movements as { batchId?: string }[])[0]?.batchId).toBeUndefined();
+  });
+
   it('sin efectos no llama a nadie ni inventa movimientos', async () => {
     const t = build();
     expect(await t.applier.apply(aContext(), INSTANCIA, [])).toEqual([]);
