@@ -119,6 +119,32 @@ export function parseSteps(raw: unknown): Result<readonly StepDefinition[]> {
     return err(new InvalidTemplateError(`el paso "${suelto.id}" confirma pero no cierra el proceso`));
   }
 
+  // Y el reverso, que es el que de verdad muerde: los efectos solo salen de
+  // CONFIRM, así que una plantilla que cierra en otra cosa lleva la instancia a
+  // COMPLETED sin lote, sin asiento y sin foto, devolviendo un 200 que dice que
+  // todo fue bien. Para una bodega es la peor clase de fallo: el operario cree
+  // que recibió y nadie lo descubre hasta el conteo siguiente.
+  const cierra = steps.filter((s) => s.transitions[0]?.to === null);
+  const sinConfirmar = cierra.find((s) => s.type !== StepType.CONFIRM);
+  if (sinConfirmar) {
+    return err(
+      new InvalidTemplateError(
+        `el paso "${sinConfirmar.id}" cierra el proceso sin ser un CONFIRM, así que no emitiría ningún asiento`,
+      ),
+    );
+  }
+
+  // Un CONFIRM que se puede omitir es lo mismo por otro camino: con
+  // `required:false`, el runner ve `payload:null`, no invoca al manejador y no
+  // pide efectos. La plantilla decide si un paso es opcional; que el proceso
+  // haga algo no es negociable.
+  const omitible = cierra.find((s) => !s.required);
+  if (omitible) {
+    return err(
+      new InvalidTemplateError(`el paso "${omitible.id}" confirma el proceso, así que no puede ser opcional`),
+    );
+  }
+
   // Reachability from the first step. With P-8 this is a walk and not a search,
   // and the cycle guard is `seen`: a loop the model does not admit would hang.
   const reached = new Set<string>();

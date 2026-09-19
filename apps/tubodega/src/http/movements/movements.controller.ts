@@ -11,7 +11,7 @@ import {
 } from '@app/inventory';
 import type { RequestContext } from '@app/tenancy';
 import { Ctx } from '../pipeline/params.decorators.js';
-import { InvalidFilterError, parsePage } from '../shared/cursor-query.js';
+import { InvalidFilterError, idFilter, parsePage } from '../shared/cursor-query.js';
 import { ProblemDetailsView } from '../shared/shared.dto.js';
 import { movementView, pageView, stockPositionView } from '../shared/views.js';
 import { UuidParam } from '../shared/uuid-param.pipe.js';
@@ -179,9 +179,8 @@ function parseFilters(query: Record<string, unknown>) {
   } = {};
 
   for (const key of ['productId', 'nodeId', 'batchId', 'actorId'] as const) {
-    const raw = query[key];
+    const raw = idFilter(query, key);
     if (raw === undefined) continue;
-    if (typeof raw !== 'string' || raw === '') throw new InvalidFilterError(key, `"${key}" debe ser un id`);
     out[key] = raw as never;
   }
   for (const key of ['from', 'to'] as const) {

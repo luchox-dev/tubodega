@@ -40,10 +40,16 @@ describe('ProcessTemplate.create · lo que acepta', () => {
   });
 
   it('un paso sin `required` es opcional: lo que no se declara no se exige', () => {
+    // Sobre un paso que no sea el que confirma: desde que una plantilla tiene
+    // que mover algo, el CONFIRM no puede ser opcional y ya no sirve para
+    // demostrar el valor por defecto de `required`.
     const t = unwrap(
       ProcessTemplate.create(
         templateProps({
-          steps: [{ id: 'confirmar', type: 'CONFIRM', transitions: [{ to: null }] }],
+          steps: [
+            { id: 'foto', type: 'CAPTURE_PHOTO', transitions: [{ to: 'confirmar' }] },
+            { id: 'confirmar', type: 'CONFIRM', required: true, config: {}, transitions: [{ to: null }] },
+          ],
         }),
       ),
     );
@@ -84,8 +90,11 @@ describe('ProcessTemplate.create · el validador', () => {
   });
 
   it('un paso inalcanzable desde el primero es invalid-template', () => {
+    // El huérfano transita a `confirmar` y no a null: si cerrara, caería antes
+    // en la guarda de «cierra sin confirmar nada» y esta prueba dejaría de
+    // probar la inalcanzabilidad sin dejar de pasar.
     falla(
-      [...STEPS_MINIMOS, { id: 'huerfano', type: 'CAPTURE_QTY', required: false, transitions: [{ to: null }] }],
+      [...STEPS_MINIMOS, { id: 'huerfano', type: 'CAPTURE_QTY', required: false, transitions: [{ to: 'confirmar' }] }],
       'invalid-template',
     );
   });
@@ -161,5 +170,59 @@ describe('desactivar una versión (P-9)', () => {
     expect(muerta.steps).toEqual(viva.steps);
     // La versión vieja no desaparece: deja de ofrecerse.
     expect(viva.active).toBe(true);
+  });
+});
+
+/**
+ * Un proceso que llega a COMPLETED sin emitir un asiento es la peor clase de
+ * fallo que puede tener una bodega: el operario cree que recibió, el inventario
+ * no se entera, y nadie lo descubre hasta el conteo siguiente. P-6 dice que los
+ * efectos salen al cerrar y que quien los emite es CONFIRM, así que las dos
+ * formas de quedarse sin ellos son no terminar en CONFIRM y poder saltárselo.
+ */
+describe('ProcessTemplate.create · una plantilla tiene que mover algo', () => {
+  const CONFIRMA_AL_FINAL = [
+    { id: 'item', type: 'SCAN_ITEM', required: true, config: {}, transitions: [{ to: 'confirmar' }] },
+    { id: 'confirmar', type: 'CONFIRM', required: true, config: {}, transitions: [{ to: null }] },
+  ];
+
+  it('acepta la que termina en un CONFIRM obligatorio', () => {
+    expect(ProcessTemplate.create(templateProps({ steps: CONFIRMA_AL_FINAL })).ok).toBe(true);
+  });
+
+  it('rechaza un CONFIRM que se puede omitir', () => {
+    // Con required:false, el runner ve payload:null, NO invoca al manejador y
+    // effectsOf queda vacío: la instancia se cierra sin lote, sin asiento y sin
+    // foto, y con un 200 que dice que todo fue bien.
+    falla(
+      [
+        { id: 'item', type: 'SCAN_ITEM', required: true, config: {}, transitions: [{ to: 'confirmar' }] },
+        { id: 'confirmar', type: 'CONFIRM', required: false, config: {}, transitions: [{ to: null }] },
+      ],
+      'invalid-template',
+    );
+  });
+
+  it('rechaza la que termina sin confirmar nada', () => {
+    falla(
+      [
+        { id: 'item', type: 'SCAN_ITEM', required: true, config: {}, transitions: [{ to: 'cantidad' }] },
+        { id: 'cantidad', type: 'CAPTURE_QTY', required: true, config: {}, transitions: [{ to: null }] },
+      ],
+      'invalid-template',
+    );
+  });
+
+  it('y la que no tiene ningún CONFIRM en ninguna parte', () => {
+    falla([{ id: 'item', type: 'SCAN_ITEM', required: true, config: {}, transitions: [{ to: null }] }], 'invalid-template');
+  });
+
+  it('las seis de fábrica cumplen, que es lo que hace este arreglo seguro', async () => {
+    const { FACTORY_TEMPLATES } = await import('./factory-templates.js');
+    expect(FACTORY_TEMPLATES).toHaveLength(6);
+    for (const plantilla of FACTORY_TEMPLATES) {
+      const r = ProcessTemplate.create(templateProps({ code: plantilla.code, steps: plantilla.steps }));
+      expect(r.ok, `la plantilla ${plantilla.code} dejó de valer`).toBe(true);
+    }
   });
 });

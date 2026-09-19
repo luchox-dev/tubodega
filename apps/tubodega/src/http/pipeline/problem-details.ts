@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { DomainError, ProblemFieldError, TraceId } from '@app/common';
-import { VersionConflictError } from '@app/persistence';
+import { InvalidCursorError, VersionConflictError } from '@app/persistence';
 
 export const ERROR_TYPE_BASE = 'https://tubodega.app/errors/';
 
@@ -48,6 +48,22 @@ export function toProblem(exception: unknown, instance: string, traceId: TraceId
       instance,
       traceId,
       ...(exception.errors ? { errors: exception.errors } : {}),
+    };
+  }
+  // Un cursor es opaco y el cliente lo va a devolver mangled tarde o temprano:
+  // copiado a medias, de otra ordenación, o de una sesión anterior. Seguir con
+  // él se saltaría o repetiría filas en silencio, así que el DAO lo rechaza —
+  // pero rechazarlo con un 500 convierte un error del cliente en un fallo del
+  // servidor. Es el `invalid-filter` que su propio docblock prometía.
+  if (exception instanceof InvalidCursorError) {
+    return {
+      type: ERROR_TYPE_BASE + 'invalid-filter',
+      title: TITLES[400]!,
+      status: 400,
+      detail: 'El cursor no se puede leer; pide la primera página sin «cursor»',
+      instance,
+      traceId,
+      errors: [{ pointer: '/cursor', code: 'invalid-filter' }],
     };
   }
   if (exception instanceof VersionConflictError) {

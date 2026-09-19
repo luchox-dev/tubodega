@@ -151,21 +151,22 @@ else
   fail "/movements no invierte — asc=[${M_ASC:0:40}…] desc=[${M_DESC:0:40}…]"
 fi
 
-# La misma pregunta a /stock. Que una colección acepte `sort` y lo tire es peor
-# que no aceptarlo: el cliente cree que ordenó.
-req GET "/stock?productId=$P_TOR&custodialOnly=false&nonZeroOnly=false&sort=nodeId&limit=50" --token "$T_JUAN" --no-cov
-S_ASC="$(jqv '[.data[].nodeId] | join(",")')"
-req GET "/stock?productId=$P_TOR&custodialOnly=false&nonZeroOnly=false&sort=-nodeId&limit=50" --token "$T_JUAN" --no-cov
-S_DESC="$(jqv '[.data[].nodeId] | join(",")')"
-S_REV="$(jqv '[.data[].nodeId] | reverse | join(",")')"
-if [[ "$S_ASC" == "$S_REV" && "$S_ASC" != "$S_DESC" ]]; then
-  pass "/stock también invierte cuando se le pide"
-else
-  fail "/stock acepta ?sort= y lo ignora — asc y desc devuelven el mismo orden"
-fi
-
+# La misma pregunta a /stock, cuya respuesta es otra: el saldo no ofrece orden.
+# Su único orden con sentido es su clave natural y ofrecer otro sería ofrecer un
+# seq scan, así que la colección no lo admite — y lo DICE. Antes lo aceptaba y
+# lo descartaba en silencio: asc y desc devolvían lo mismo y el cliente se
+# quedaba creyendo que había ordenado, que es lo único inadmisible de los tres.
+req GET "/stock?productId=$P_TOR&sort=nodeId&limit=50" --token "$T_JUAN" --no-cov
+problem "el saldo no se ordena, y no finge que sí" 400 invalid-filter
+pointer "señalando el parámetro" /sort
+req GET "/stock?sort=-nodeId" --token "$T_JUAN" --no-cov
+problem "tampoco al revés" 400 invalid-filter
 req GET "/stock?sort=inventado" --token "$T_JUAN" --no-cov
-problem "y un orden que no existe se rechaza" 400 invalid-filter
+problem "ni por un campo inventado" 400 invalid-filter
+
+req GET "/stock?productId=$P_TOR&custodialOnly=false&nonZeroOnly=false&limit=50" --token "$T_JUAN" --no-cov
+ok "y sin pedir orden, sigue listando" 200
+body "con sus filas" '.data | length >= 2' 'true' 
 
 # ─────────────────────────────────────────────────────────────────────────────
 step "9 · el cierre"

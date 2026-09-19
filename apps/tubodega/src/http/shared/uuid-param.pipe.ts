@@ -15,7 +15,9 @@ export class ResourceNotFoundError extends DomainError {
   }
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** La forma de un UUID, compartida con los filtros de query: el mismo error
+ * del cliente escrito en la ruta o en la query merece la misma respuesta. */
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class UuidParam implements PipeTransform<string, string> {

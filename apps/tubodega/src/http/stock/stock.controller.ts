@@ -4,15 +4,17 @@ import type { BatchId, ProductId } from '@app/catalog';
 import { GetOpenCustodies, GetStock, type NodeId } from '@app/inventory';
 import type { RequestContext } from '@app/tenancy';
 import { Ctx } from '../pipeline/params.decorators.js';
-import { InvalidFilterError, parsePage } from '../shared/cursor-query.js';
+import { InvalidFilterError, idFilter, parsePage } from '../shared/cursor-query.js';
 import { ProblemDetailsView } from '../shared/shared.dto.js';
 import { custodyView, pageView, stockPositionView } from '../shared/views.js';
 import { OpenCustodyPageView, StockPageView } from './stock.dto.js';
 
 const STOCK_PAGE = {
   // A balance has no meaningful order beyond its natural key, and offering one
-  // would be offering a seq scan.
-  sortable: ['nodeId'],
+  // would be offering a seq scan. Antes esto decía `['nodeId']` y el orden
+  // resuelto no llegaba al caso de uso: `?sort=-nodeId` devolvía exactamente lo
+  // mismo que `?sort=nodeId`. La lista vacía dice lo que de verdad pasa.
+  sortable: [],
   defaultSort: 'nodeId',
   filters: ['productId', 'nodeId', 'batchId', 'under', 'custodialOnly', 'nonZeroOnly'],
 } as const;
@@ -28,13 +30,6 @@ const flag = (query: Record<string, unknown>, key: string): boolean | undefined 
   if (raw === undefined) return undefined;
   if (raw !== 'true' && raw !== 'false') throw new InvalidFilterError(key, `"${key}" debe ser true o false`);
   return raw === 'true';
-};
-
-const id = (query: Record<string, unknown>, key: string): string | undefined => {
-  const raw = query[key];
-  if (raw === undefined) return undefined;
-  if (typeof raw !== 'string' || raw === '') throw new InvalidFilterError(key, `"${key}" debe ser un id`);
-  return raw;
 };
 
 @ApiTags('inventory')
@@ -63,10 +58,10 @@ export class StockController {
     const found = await this.stock.execute(
       ctx,
       {
-        ...(id(query, 'productId') !== undefined ? { productId: id(query, 'productId') as ProductId } : {}),
-        ...(id(query, 'nodeId') !== undefined ? { nodeId: id(query, 'nodeId') as NodeId } : {}),
-        ...(id(query, 'batchId') !== undefined ? { batchId: id(query, 'batchId') as BatchId } : {}),
-        ...(id(query, 'under') !== undefined ? { under: id(query, 'under') as NodeId } : {}),
+        ...(idFilter(query, 'productId') !== undefined ? { productId: idFilter(query, 'productId') as ProductId } : {}),
+        ...(idFilter(query, 'nodeId') !== undefined ? { nodeId: idFilter(query, 'nodeId') as NodeId } : {}),
+        ...(idFilter(query, 'batchId') !== undefined ? { batchId: idFilter(query, 'batchId') as BatchId } : {}),
+        ...(idFilter(query, 'under') !== undefined ? { under: idFilter(query, 'under') as NodeId } : {}),
         ...(custodialOnly !== undefined ? { custodialOnly } : {}),
         ...(nonZeroOnly !== undefined ? { nonZeroOnly } : {}),
       },
@@ -94,7 +89,7 @@ export class StockController {
     const found = await this.custodies.execute(
       ctx,
       {
-        ...(id(query, 'nodeId') !== undefined ? { nodeId: id(query, 'nodeId') as NodeId } : {}),
+        ...(idFilter(query, 'nodeId') !== undefined ? { nodeId: idFilter(query, 'nodeId') as NodeId } : {}),
         ...(overdueOnly !== undefined ? { overdueOnly } : {}),
       },
       { ...page, sort: page.sort as { field: 'occurredAt'; dir: 'asc' | 'desc' } },
