@@ -112,7 +112,17 @@ export class MovementDao extends AbstractOrgAppendDao<'movement', string> {
     return { rows: hasMore ? found.rows.slice(0, page.limit) : found.rows, hasMore };
   }
 
-  /** The cursor `openCustodies` reads back, built from the same two columns it orders by. */
+  /**
+   * The cursor `openCustodies` reads back, built from the same two columns it
+   * orders by.
+   *
+   * The second keyset of the system, and so the second place that truncates a
+   * timestamp to the millisecond a JS `Date` can hold. Safe only while D-68
+   * keeps `movement.occurred_at` at `timestamptz(3)` — D-67 left this column
+   * out, reasoning that clients always send the instant through
+   * `new Date(iso)`, which is a fact about today's writers and not about the
+   * column.
+   */
   static custodyCursor(row: OpenCustodyModel): Cursor {
     return encodeCursor([new Date(row.occurredAt as unknown as string).toISOString(), row.id]);
   }

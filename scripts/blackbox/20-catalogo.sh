@@ -123,6 +123,43 @@ UNIQUE="$(printf '%s' "$SEEN" | grep . | sort -u | wc -l)"
   && pass "veinticinco SKU, ni repetidos ni saltados" \
   || fail "vio $DISTINCT SKU, $UNIQUE distintos; esperaba 25 y 25"
 
+step "4a · y por createdAt, que es la que se rompía (D-67, D-68)"
+# El par exacto del defecto, por el socket y no por inject: el import escribe
+# sus veinticinco filas en UNA transacción, así que las veinticinco comparten
+# el mismo now(). Con created_at en microsegundos el cursor salía truncado por
+# debajo del valor guardado y este recorrido no cerraba — descendente se
+# saltaba las filas del milisegundo, ascendente repetía las ya vistas. Estuvo
+# publicado desde el plan 3 y la caja negra no lo miraba, porque el único
+# recorrido que había ordena por sku.
+SEEN=''; CURSOR=''; PAGES=0; VACIA=0
+while :; do
+  url="/products?q=IMP-$SLUG&limit=10&sort=createdAt"
+  [[ -n "$CURSOR" ]] && url="$url&cursor=$(jq -rn --arg c "$CURSOR" '$c|@uri')"
+  req GET "$url" --token "$T_DIEGO"
+  [[ "$ST" == 200 ]] || { fail "la página $((PAGES + 1)) por createdAt devolvió $ST"; break; }
+  [[ "$(jqv '.data | length')" == 0 ]] && VACIA=1
+  SEEN="$SEEN$(jqv '.data[].sku')"$'\n'
+  CURSOR="$(jqv '.page.nextCursor // ""')"
+  PAGES=$((PAGES + 1))
+  [[ -z "$CURSOR" || $PAGES -ge 10 ]] && break
+done
+CD_TOTAL="$(printf '%s' "$SEEN" | grep -c . )"
+CD_UNIQUE="$(printf '%s' "$SEEN" | grep . | sort -u | wc -l)"
+[[ "$VACIA" == 0 ]] && pass "ninguna página vino vacía" || fail "una página por createdAt vino vacía"
+[[ "$PAGES" == 3 ]] && pass "tres páginas de diez, también por createdAt" \
+  || fail "esperaba 3 páginas por createdAt, dio $PAGES"
+[[ "$CD_TOTAL" == 25 && "$CD_UNIQUE" == 25 ]] \
+  && pass "veinticinco SKU con un solo now(), ni repetidos ni saltados" \
+  || fail "vio $CD_TOTAL SKU por createdAt, $CD_UNIQUE distintos; esperaba 25 y 25"
+
+# Y descendente, que es como se reportó: «la segunda página venía vacía».
+req GET "/products?q=IMP-$SLUG&limit=10&sort=-createdAt" --token "$T_DIEGO"
+body "descendente, la primera página trae diez" '.data | length' 10
+CURSOR="$(jqv '.page.nextCursor // ""')"
+req GET "/products?q=IMP-$SLUG&limit=10&sort=-createdAt&cursor=$(jq -rn --arg c "$CURSOR" '$c|@uri')" \
+  --token "$T_DIEGO"
+body "y la segunda no viene vacía" '.data | length' 10
+
 req POST /products --token "$T_DIEGO" \
   --body "$(jq -nc --arg s "$SLUG" '{sku:"IMP-\($s)-100", name:"Repetido", trackingMode:"QUANTITY", uom:"UNIT"}')"
 problem "un SKU ya importado no se crea otra vez (C-1)" 409 sku-taken
