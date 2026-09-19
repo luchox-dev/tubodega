@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 import { v7 } from 'uuid';
-import type { OrgId, TraceId, UserId } from '@app/common';
+import type { Cursor, OrgId, TraceId, UserId } from '@app/common';
 import type { BatchId, ProductId } from '@app/catalog';
 import {
   InsufficientStockSignal, Movement, NodeKind, Quantity,
@@ -8,7 +8,7 @@ import {
 } from '@app/inventory';
 import { KyselyMovementRepository, KyselyStockBalanceRepository } from '@app/persistence';
 import { createPersistenceHarness } from '../../../../../test/support/db.js';
-import { seedWorld } from '../../support/raw-rows.js';
+import { rawMovement, seedWorld } from '../../support/raw-rows.js';
 
 /**
  * The ledger against Postgres. This is where the savepoint of spec 12 §4.2 is
@@ -72,6 +72,17 @@ describe('el ledger en Postgres', () => {
     await h.uow.runAs({ pool: 'system' }, () =>
       h.ctx.current().insertInto('node')
         .values({ id, orgId: w.orgId, kind: 'INTERNAL', code, name: code, path: code })
+        .execute(),
+    );
+    return id as NodeId;
+  }
+
+  /** The custody twin of `aBin`, so the open-loan walks do not see other suites' loans. */
+  async function aCustody(code: string): Promise<NodeId> {
+    const id = v7();
+    await h.uow.runAs({ pool: 'system' }, () =>
+      h.ctx.current().insertInto('node')
+        .values({ id, orgId: w.orgId, kind: 'CUSTODY', code, name: code, path: code })
         .execute(),
     );
     return id as NodeId;
@@ -389,4 +400,95 @@ describe('el ledger en Postgres', () => {
       });
     });
   });
+
+  /**
+   * D-67 fixed three cursor columns by naming them one by one, and the list was
+   * short: `movement.occurred_at` is a fourth, reachable from
+   * `GET /v1/movements` and from `GET /v1/stock/custodies`. It was called safe
+   * because every writer today happens to go through `new Date(iso)` — safe by
+   * convention, not by type. The column still accepts what Postgres `now()`
+   * writes, and these rows are inserted the way any writer that is not today's
+   * code would do it: in raw SQL, in one statement, so `now()` is identical for
+   * all of them down to the microsecond.
+   *
+   * `movement` carries `REVOKE UPDATE, DELETE`, so the microsecond cannot be
+   * put there afterwards. It goes in at insert time or not at all.
+   *
+   * Both walks go over a cursor built from a JavaScript `Date`, which only
+   * reaches the millisecond — so it comes out **below** the stored value and
+   * the comparison drops every row of that microsecond. Two walks and not one
+   * because `/v1/stock/custodies` has its own hand-written keyset
+   * (`movement.dao.ts`), with its own truncation.
+   */
+  describe('el cursor y los microsegundos (D-67, D-68)', () => {
+    /** Five rows, one statement, one `now()`: the shape `POST /v1/products/import` has. */
+    const cincoEnUnNow = async (rows: readonly Record<string, unknown>[]) => {
+      await h.uow.runAs({ pool: 'system' }, () =>
+        h.ctx.current().insertInto('movement')
+          .values(rows.map((r) => ({ ...r, occurredAt: sql`now()` })) as never)
+          .execute(),
+      );
+    };
+
+    /** Walks a page function to exhaustion, asserting no page comes back empty. */
+    const recorrer = async (
+      fetch: (cursor?: Cursor) => Promise<{ data: readonly { id: string }[]; nextCursor?: Cursor }>,
+    ): Promise<string[]> => {
+      const vistos: string[] = [];
+      let cursor: Cursor | undefined;
+      for (let vuelta = 0; vuelta < 10; vuelta++) {
+        const page: { data: readonly { id: string }[]; nextCursor?: Cursor } = await fetch(cursor);
+        // Without the fix this page came back empty and the walk ended early,
+        // with 2 of the 5 rows and nobody saying anything.
+        expect(page.data.length).toBeGreaterThan(0);
+        vistos.push(...page.data.map((r) => r.id));
+        if (page.nextCursor === undefined) break;
+        cursor = page.nextCursor;
+      }
+      return vistos;
+    };
+
+    it('GET /v1/movements pagina aunque las cinco filas compartan un now()', async () => {
+      const bin = await aBin(`us-mov-${v7().slice(-8)}`);
+      const esperados = Array.from({ length: 5 }, () => v7());
+      await cincoEnUnNow(
+        esperados.map((id) => rawMovement(w, { id, toNodeId: bin })),
+      );
+
+      const vistos = await recorrer((cursor) =>
+        asTenant(() =>
+          movements.list(
+            w.orgId, { nodeId: bin as NodeId },
+            { limit: 2, sort: { field: 'occurredAt', dir: 'desc' }, ...(cursor ? { cursor } : {}) },
+          ),
+        ),
+      );
+      expect([...vistos].sort()).toEqual([...esperados].sort());
+    });
+
+    it('las custodias abiertas paginan con su cursor propio, con el mismo now()', async () => {
+      const custodia = await aCustody(`us-cus-${v7().slice(-8)}`);
+      const esperados = Array.from({ length: 5 }, () => v7());
+      await cincoEnUnNow(
+        esperados.map((id) =>
+          rawMovement(w, {
+            id, fromNodeId: w.binNodeId, toNodeId: custodia,
+            fromNodeKind: 'INTERNAL', toNodeKind: 'CUSTODY', quantity: '5.000',
+          }),
+        ),
+      );
+
+      const vistos = await recorrer(async (cursor) => {
+        const page = await asTenant(() =>
+          movements.listOpenCustodies(
+            w.orgId, { nodeId: custodia as NodeId },
+            { limit: 2, sort: { field: 'occurredAt', dir: 'desc' }, ...(cursor ? { cursor } : {}) },
+          ),
+        );
+        return { data: page.data.map((r) => ({ id: r.checkOut.id })), ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+      });
+      expect([...vistos].sort()).toEqual([...esperados].sort());
+    });
+  });
+
 });

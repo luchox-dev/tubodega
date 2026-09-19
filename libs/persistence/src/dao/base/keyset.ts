@@ -18,7 +18,16 @@ export interface Keyset {
   cursorOf(row: Record<string, unknown>): Cursor;
 }
 
-/** Cursor parts must survive base64 + JSON: dates travel as ISO strings. */
+/**
+ * Cursor parts must survive base64 + JSON: dates travel as ISO strings.
+ *
+ * That ISO string carries three decimals, and it is only lossless because
+ * D-68 holds every timestamp column at `timestamptz(3)`. Widen a column back
+ * to microseconds and this truncates below the stored value: descending, the
+ * keyset then skips every row of that millisecond; ascending, it re-includes
+ * the ones already seen and the walk never ends. That was D-67, live on two
+ * published endpoints since plan 3. Fix it in the column, not here.
+ */
 const toPart = (value: unknown): string | number | null => {
   if (value === null || value === undefined) return null;
   if (value instanceof Date) return value.toISOString();

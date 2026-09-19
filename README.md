@@ -226,7 +226,7 @@ hacia abajo, solo se importan barriles, nadie importa `persistence`.
 | `pnpm db:migrate` | `prisma migrate dev` (desarrollo; usa la shadow database) |
 | `pnpm db:deploy` | `prisma migrate deploy` (despliegue) |
 | `pnpm db:generate` | regenera `libs/persistence/src/generated/db.ts` |
-| `pnpm db:check` | el historial de migraciones reproduce `schema.prisma` |
+| `pnpm db:check` | el historial de migraciones reproduce `schema.prisma` (no mira precisiones: eso lo exige `test/schema/timestamp-precision.int-spec.ts`, D-68) |
 | `pnpm test` | dominio + aplicación, sin infraestructura |
 | `pnpm test:e2e` | integración + e2e contra Postgres; migra `tubodega_test` sola |
 | `pnpm test:cov` | cobertura |

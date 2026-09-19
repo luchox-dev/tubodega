@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 import { v7 } from 'uuid';
-import { unwrap, type OrgId } from '@app/common';
+import { unwrap, type Cursor, type OrgId } from '@app/common';
 import { Node, NodeCode, NodeKind, type NodeId, type NodePath } from '@app/inventory';
 import { KyselyNodeRepository, KyselyStockBalanceRepository } from '@app/persistence';
 import { createPersistenceHarness } from '../../../../../test/support/db.js';
@@ -255,6 +255,52 @@ describe('node repository', () => {
       );
       expect(next.data.map((n) => n.id)).not.toContain(page.data[0]!.id);
     });
+  });
+
+  /**
+   * `node.created_at` went to `timestamptz(3)` with D-67 and nothing held it
+   * there: reverting that ALTER by hand turned no test red, because the only
+   * paginating case in this suite orders by `path`. This is that test.
+   *
+   * The five children are saved inside **one** transaction, so Postgres hands
+   * all five the same `now()` — the shape `POST /v1/products/import` has, and
+   * the only shape in which the defect shows. With a microsecond column the
+   * cursor, which travels as an ISO string a JS Date can hold, comes out below
+   * the stored value and the walk ends after page one with 2 of the 5.
+   */
+  it('pagina por createdAt aunque los cinco compartan un now() (D-67, D-68)', async () => {
+    const raiz = await h.uow.runAs({ pool: 'tenant', orgId }, async () => {
+      const n = mk(`ms-${v7().slice(-8)}`);
+      await nodes.save(n);
+      return n;
+    });
+    const hijos = await h.uow.runAs({ pool: 'tenant', orgId }, async () => {
+      const creados: Node[] = [];
+      for (let n = 0; n < 5; n += 1) {
+        const hijo = mk(`${raiz.code}-H${n}`, raiz);
+        await nodes.save(hijo);
+        creados.push(hijo);
+      }
+      return creados;
+    });
+
+    const vistos: string[] = [];
+    await h.uow.runAs({ pool: 'tenant', orgId }, async () => {
+      let cursor: Cursor | undefined;
+      for (let vuelta = 0; vuelta < 10; vuelta += 1) {
+        const page = await nodes.list(
+          orgId,
+          { underPath: raiz.path },
+          { limit: 2, sort: { field: 'createdAt', dir: 'asc' }, ...(cursor ? { cursor } : {}) },
+        );
+        // Without the fix this page came back empty and the walk stopped at 2 of 5.
+        expect(page.data.length).toBeGreaterThan(0);
+        vistos.push(...page.data.map((n) => n.id));
+        if (page.nextCursor === undefined) break;
+        cursor = page.nextCursor;
+      }
+    });
+    expect([...vistos].sort()).toEqual(hijos.map((n) => n.id).sort());
   });
 
   it('save con la versión vieja es un conflicto de versión', async () => {

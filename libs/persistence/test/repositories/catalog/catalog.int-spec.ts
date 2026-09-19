@@ -297,9 +297,15 @@ describe('catalogue repositories', () => {
     vistos.push(...first.data.map((p) => p.sku as string));
     cursor = first.nextCursor;
 
-    while (cursor) {
+    // El tope de vueltas no es adorno: ascendente, un cursor truncado cae **por
+    // debajo** del valor guardado y `(created_at, id) > (cursor)` vuelve a
+    // incluir las filas ya vistas, así que sin tope el bucle no termina — con
+    // la columna revertida a mano esta prueba tardaba 30 s en morir de timeout
+    // en vez de fallar en su aserción. Descendente el mismo truncamiento se
+    // salta filas; la dirección decide cuál de los dos síntomas sale.
+    for (let vuelta = 0; cursor && vuelta < 10; vuelta++) {
       const page = await inOwn(() => products.list(own, {}, { limit: 2, sort, cursor: cursor! }));
-      // Sin el arreglo esta página venía vacía y el bucle terminaba con 2 de 5.
+      // Sin el arreglo esta página repetía lo ya visto y el recorrido no cerraba.
       expect(page.data.length).toBeGreaterThan(0);
       vistos.push(...page.data.map((p) => p.sku as string));
       cursor = page.nextCursor;

@@ -30,8 +30,8 @@ model Organization {
   name      String
   slug      String   @unique @db.VarChar(64)
   active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
   version   Int      @default(1)
   users     AppUser[]
 
@@ -45,8 +45,8 @@ model AppUser {
   passwordHash String   @map("password_hash")
   name         String
   active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
   version      Int      @default(1)
 
   organization Organization   @relation(fields: [orgId], references: [id])
@@ -78,9 +78,9 @@ model RefreshToken {
   orgId     String    @map("org_id") @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   tokenHash String    @unique @map("token_hash") @db.VarChar(64)
-  expiresAt DateTime  @map("expires_at") @db.Timestamptz
-  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user AppUser @relation(fields: [orgId, userId], references: [orgId, id])
 
@@ -96,8 +96,8 @@ model OutboxEvent {
   type        String    @db.VarChar(64)
   payload     Json
   traceId     String    @map("trace_id") @db.Uuid
-  occurredAt  DateTime  @default(now()) @map("occurred_at") @db.Timestamptz
-  publishedAt DateTime? @map("published_at") @db.Timestamptz
+  occurredAt  DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
 
   // Partial (WHERE published_at IS NULL); predicate added by hand in the migration.
   @@index([publishedAt, occurredAt])
@@ -121,8 +121,8 @@ model IdempotencyKey {
   status       IdemStatus
   responseCode Int?       @map("response_code")
   responseBody Json?      @map("response_body")
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  expiresAt    DateTime   @map("expires_at") @db.Timestamptz
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz(3)
 
   @@id([orgId, key])
   @@index([expiresAt])
@@ -181,12 +181,14 @@ model Product {
   uom          String       @db.VarChar(16)
   active       Boolean      @default(true)
   customFields Json         @default("{}") @map("custom_fields")
-  /// Milliseconds, and it is load-bearing: this column is a cursor sort key, and a
-  /// JS Date cannot hold the microseconds `now()` puts in a bare timestamptz. The
-  /// cursor would then carry a truncated value and the keyset predicate would
-  /// silently skip every row of the same millisecond (decision D-67).
+  /// Milliseconds, like every timestamp in this schema (decision D-68): a JS Date
+  /// cannot hold the microseconds `now()` puts in a bare timestamptz, so a value
+  /// stored at that precision cannot be read back. On a cursor sort key such as
+  /// this one it was a live defect — the cursor carried a truncated value and the
+  /// keyset predicate silently skipped every row of the same millisecond (D-67).
+  /// `test/schema/timestamp-precision.int-spec.ts` holds the rule for all of them.
   createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  updatedAt    DateTime     @default(now()) @map("updated_at") @db.Timestamptz(3)
   version      Int          @default(1)
 
   codes     ProductCode[]
@@ -209,7 +211,7 @@ model ProductCode {
   productId String   @map("product_id") @db.Uuid
   value     String   @db.VarChar(128)
   kind      CodeKind
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   product Product @relation(fields: [orgId, productId], references: [orgId, id])
 
@@ -227,7 +229,7 @@ model ProductMedia {
   contentType String   @map("content_type") @db.VarChar(64)
   byteSize    BigInt   @map("byte_size")
   position    Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   product Product @relation(fields: [orgId, productId], references: [orgId, id])
 
@@ -245,8 +247,8 @@ model MediaUpload {
   contentType String    @map("content_type") @db.VarChar(64)
   byteSize    BigInt    @map("byte_size")
   uploadedBy  String    @map("uploaded_by") @db.Uuid
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  claimedAt   DateTime? @map("claimed_at") @db.Timestamptz(3)
 
   uploader AppUser @relation(fields: [orgId, uploadedBy], references: [orgId, id])
 
@@ -264,9 +266,9 @@ model Batch {
   productId    String    @map("product_id") @db.Uuid
   lotCode      String?   @map("lot_code") @db.VarChar(64)
   serial       String?   @db.VarChar(128)
-  expiresAt    DateTime? @map("expires_at") @db.Timestamptz
+  expiresAt    DateTime? @map("expires_at") @db.Timestamptz(3)
   customFields Json      @default("{}") @map("custom_fields")
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   product   Product    @relation(fields: [orgId, productId], references: [orgId, id])
   movements Movement[]
@@ -292,8 +294,8 @@ model CustomFieldDefinition {
   options   Json?
   required  Boolean      @default(false)
   position  Int          @default(0)
-  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime     @default(now()) @map("updated_at") @db.Timestamptz(3)
   version   Int          @default(1)
 
   @@unique([orgId, entity, key])
@@ -331,7 +333,7 @@ model Node {
   /// cursor would then carry a truncated value and the keyset predicate would
   /// silently skip every row of the same millisecond (decision D-67).
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
   version      Int      @default(1)
 
   parent        Node?          @relation("NodeTree", fields: [orgId, parentId], references: [orgId, id])
@@ -361,11 +363,11 @@ model Movement {
   fromNodeId        String       @map("from_node_id") @db.Uuid
   toNodeId          String       @map("to_node_id") @db.Uuid
   quantity          Decimal      @db.Decimal(18, 3)
-  occurredAt        DateTime     @map("occurred_at") @db.Timestamptz
-  recordedAt        DateTime     @default(now()) @map("recorded_at") @db.Timestamptz
+  occurredAt        DateTime     @map("occurred_at") @db.Timestamptz(3)
+  recordedAt        DateTime     @default(now()) @map("recorded_at") @db.Timestamptz(3)
   actorId           String       @map("actor_id") @db.Uuid
   reason            String?
-  dueAt             DateTime?    @map("due_at") @db.Timestamptz
+  dueAt             DateTime?    @map("due_at") @db.Timestamptz(3)
   reversesId        String?      @map("reverses_id") @db.Uuid
   settlesId         String?      @map("settles_id") @db.Uuid
   processInstanceId String?      @map("process_instance_id") @db.Uuid
@@ -408,7 +410,7 @@ model StockBalance {
   batchId   String?  @map("batch_id") @db.Uuid
   nodeKind  NodeKind @map("node_kind")
   quantity  Decimal  @db.Decimal(18, 3)
-  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
 
   node    Node    @relation(fields: [orgId, nodeId], references: [orgId, id])
   product Product @relation(fields: [orgId, productId], references: [orgId, id])
@@ -442,7 +444,7 @@ model ProcessTemplate {
   version   Int
   steps     Json
   active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   instances ProcessInstance[]
 
@@ -465,7 +467,7 @@ model ProcessInstance {
   /// cursor would then carry a truncated value and the keyset predicate would
   /// silently skip every row of the same millisecond (decision D-67).
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime     @default(now()) @map("updated_at") @db.Timestamptz
+  updatedAt       DateTime     @default(now()) @map("updated_at") @db.Timestamptz(3)
   version         Int          @default(1)
 
   // The composite key is what guarantees the recorded version really existed.
@@ -490,7 +492,7 @@ model StepCompletion {
   stepId      String   @map("step_id") @db.VarChar(64)
   actorId     String   @map("actor_id") @db.Uuid
   payload     Json
-  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz
+  completedAt DateTime @default(now()) @map("completed_at") @db.Timestamptz(3)
 
   instance ProcessInstance @relation(fields: [orgId, instanceId], references: [orgId, id])
 
@@ -516,9 +518,9 @@ model Alert {
   kind        AlertKind
   subjectType String    @map("subject_type") @db.VarChar(32)
   subjectId   String    @map("subject_id") @db.Uuid
-  dueAt       DateTime  @map("due_at") @db.Timestamptz
-  raisedAt    DateTime  @default(now()) @map("raised_at") @db.Timestamptz
-  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz
+  dueAt       DateTime  @map("due_at") @db.Timestamptz(3)
+  raisedAt    DateTime  @default(now()) @map("raised_at") @db.Timestamptz(3)
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz(3)
 
   // Both partial (WHERE resolved_at IS NULL); predicates added by hand.
   @@unique([orgId, kind, subjectType, subjectId])
@@ -532,7 +534,7 @@ model AlertRule {
   kind          AlertKind
   thresholdDays Int       @map("threshold_days")
   enabled       Boolean   @default(true)
-  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
 
   @@id([orgId, kind])
   @@map("alert_rule")
