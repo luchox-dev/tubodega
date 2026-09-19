@@ -123,6 +123,15 @@ problem "un cursor ilegible es culpa del cliente, no del servidor" 400 invalid-f
 req GET "/products?cursor=$(printf '%s' '["otra","ordenacion"]' | base64 -w0)" --token "$T_JUAN"
 problem "y un cursor de otra ordenación, igual" 400 invalid-filter
 
+# Y lo mismo con un identificador: el cliente que escribe mal un filtro, o que
+# manda el literal «null» porque su variable venía vacía, está haciendo una
+# petición inválida. Que un UUID mal escrito en la ruta dé 404 y en la query
+# reviente el servidor es la misma pregunta con dos respuestas distintas.
+req GET "/stock?productId=no-soy-uuid" --token "$T_JUAN" --no-cov
+problem "un identificador que no lo es, tampoco" 400 invalid-filter
+req GET "/movements?productId=null" --token "$T_JUAN" --no-cov
+problem "ni el literal «null» de una variable vacía" 400 invalid-filter
+
 req GET "/movements?limit=0" --token "$T_JUAN" --no-cov
 problem "un límite de cero no es un límite" 400 invalid-filter
 req GET "/movements?limit=500" --token "$T_JUAN" --no-cov
