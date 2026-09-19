@@ -365,13 +365,13 @@ process-instances.dto.ts}`; `apps/tubodega/src/http/process-templates/*` (M);
 
 **Files:** `apps/tubodega/test/e2e/w4-operar-con-procesos.e2e-spec.ts`
 
-- [ ] **Step 1:** los **14 casos** de la tabla «E2E WAVE 4» del maestro, en orden y
+- [x] **Step 1:** los **14 casos** de la tabla «E2E WAVE 4» del maestro, en orden y
       encadenados como w3 (los saldos se arrastran). Narrativa: Juan opera con el teléfono
       siguiendo lo que el servidor le indica y **nunca consulta la plantilla** — cada
       `complete` usa el `nextStep` de la respuesta anterior. Solo el contrato público: ni
       una consulta a la base ([06 §6]).
-- [ ] **Step 2: Run** → verde en < 20 s.
-- [ ] **Step 3: Commit** `test(e2e): operar con procesos — el cierre de la WAVE 4`
+- [x] **Step 2: Run** → verde en < 20 s.
+- [x] **Step 3: Commit** `test(e2e): operar con procesos — el cierre de la WAVE 4`
 
 ---
 
