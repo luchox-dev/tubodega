@@ -252,17 +252,17 @@ get-process-instance,list-process-instances}.ts` + specs
 
 **Files:** `libs/process/src/application/use-cases/complete-step.ts` + spec
 
-- [ ] **Step 1: spec primero:** paso equivocado → `409 wrong-step` con el actual en
+- [x] **Step 1: spec primero:** paso equivocado → `409 wrong-step` con el actual en
       `extensions`; repetido → `409 step-already-completed`; cerrada → `409
       instance-closed`; **P-6**: ningún espía recibe nada hasta `CONFIRM`; el
       `step_completion` guarda el payload **enriquecido** que devolvió `validate` (D-56), y
       un paso omitido guarda el literal JSON `null`.
-- [ ] **Step 2: Run** → **FAIL**, anotar.
-- [ ] **Step 3: implementar** la secuencia de [13 §7] en orden. Devuelve
+- [x] **Step 2: Run** → **FAIL**, anotar.
+- [x] **Step 3: implementar** la secuencia de [13 §7] en orden. Devuelve
       `{ instance, nextStep?, movements? }`. Publica `process.step_completed` y, al cerrar,
       `process.completed`.
-- [ ] **Step 4: Run** → PASS, y `pnpm test:cov` para ver `application/**` por encima de 90.
-- [ ] **Step 5: Commit** `feat(process): completar un paso, y los doce pasos de la spec 13 §7`
+- [x] **Step 4: Run** → PASS, y `pnpm test:cov` para ver `application/**` por encima de 90.
+- [x] **Step 5: Commit** `feat(process): completar un paso, y los doce pasos de la spec 13 §7`
 
 ---
 

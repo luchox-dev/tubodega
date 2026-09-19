@@ -32,6 +32,7 @@ export * from './application/events.js';
 export * from './application/handler-deps.factory.js';
 export * from './application/effect-applier.js';
 export * from './application/use-cases/start-process.js';
+export * from './application/use-cases/complete-step.js';
 export * from './application/use-cases/cancel-process.js';
 export * from './application/use-cases/get-process-instance.js';
 export * from './application/use-cases/list-process-instances.js';

@@ -5,6 +5,26 @@ import {
 } from '@app/process';
 
 /**
+ * Lo que hace el repositorio de verdad al leer: la `version` de la entidad es
+ * la de la **fila**, no la que traía el objeto que se guardó. Sin esto el doble
+ * mentiría justo en lo que el bloqueo optimista mide, y dos escrituras
+ * seguidas en la misma prueba se darían de bruces con una versión obsoleta que
+ * en Postgres no existiría.
+ */
+const conVersion = (instance: ProcessInstance, version: number): ProcessInstance =>
+  ProcessInstance.rehydrate({
+    id: instance.id,
+    orgId: instance.orgId,
+    templateCode: instance.templateCode,
+    templateVersion: instance.templateVersion,
+    state: instance.state,
+    ...(instance.currentStepId !== undefined ? { currentStepId: instance.currentStepId } : {}),
+    context: instance.context,
+    actorId: instance.actorId,
+    version,
+  });
+
+/**
  * Con comportamiento, no un mock: respeta el bloqueo optimista y choca contra
  * el id repetido. Un doble que no muerda deja probando nada a las pruebas que
  * existen justo para ver que muerde.
@@ -47,7 +67,7 @@ export class InMemoryInstanceRepository implements ProcessInstanceRepository {
     if (!previa) {
       if (expectedVersion !== undefined) return Promise.reject(new Error('no existe la fila que se pretende actualizar'));
       this.reloj += 1;
-      this.rows.set(instance.id, { instance, version: 1, createdAt: this.reloj });
+      this.rows.set(instance.id, { instance: conVersion(instance, 1), version: 1, createdAt: this.reloj });
       return Promise.resolve(1);
     }
     if (previa.instance.orgId !== instance.orgId) {
@@ -57,7 +77,7 @@ export class InMemoryInstanceRepository implements ProcessInstanceRepository {
       return Promise.reject(new Error(`versión obsoleta: esperaba ${expectedVersion}, hay ${previa.version}`));
     }
     const version = previa.version + 1;
-    this.rows.set(instance.id, { ...previa, instance, version });
+    this.rows.set(instance.id, { ...previa, instance: conVersion(instance, version), version });
     return Promise.resolve(version);
   }
 
